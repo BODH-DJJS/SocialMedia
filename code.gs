@@ -601,10 +601,8 @@ function createTasksForPost(postNo) {
           var newDocFile = DriveApp.getFileById(newDoc.getId());
           newDocFile.moveTo(dateFolder);
           newDocFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.EDIT);
-          newDoc.getBody().appendParagraph('Post: ' + postNo + ' | Content Document')
-            .setHeading(DocumentApp.ParagraphHeading.HEADING1);
-          newDoc.getBody().appendParagraph('Date: ' + dateStr);
-          newDoc.getBody().appendParagraph('---');
+          var body = newDoc.getBody();
+          body.appendParagraph('Post: ' + postNo).setHeading(DocumentApp.ParagraphHeading.HEADING1);
           newDoc.saveAndClose();
           docLinks['Writing'] = newDocFile.getUrl();
         }
@@ -694,7 +692,7 @@ function handleGetPhotos(payload) {
           mimeType: mime,
           thumbnailUrl: 'https://drive.google.com/thumbnail?id=' + id + '&sz=w400',
           viewUrl: 'https://drive.google.com/file/d/' + id + '/view',
-          downloadUrl: 'https://drive.google.com/uc?export=view&id=' + id
+        downloadUrl: 'https://drive.google.com/uc?export=view&id=' + id
         });
         count++;
       }
@@ -705,138 +703,60 @@ function handleGetPhotos(payload) {
 
 function handleGetMediaFolders(payload) {
   var monthLink = payload.monthLink;
-  var dateStr = payload.dateStr || '';
-  var stage = (payload.stage || '').toLowerCase();
-  var result = { raw: '', selected: '', edited: '', rawFolderId: '', writingDoc: '', debug: '' };
+  var dateStr = payload.dateStr;
+  var result = { raw: '', edited: '' };
   
   if (!monthLink || monthLink.indexOf('drive.google.com') === -1) {
-    result.debug = 'No valid monthLink provided';
     return { success: true, folders: result };
   }
   
   var match = monthLink.match(/[-\w]{25,}/);
-  if (!match) {
-    result.debug = 'Could not extract folder ID from link';
-    return { success: true, folders: result };
-  }
+  if (!match) return { success: true, folders: result };
   
   var monthFolderId = match[0];
   try {
     var monthFolder = DriveApp.getFolderById(monthFolderId);
-    var monthFolderName = monthFolder.getName();
     
-    // List ALL subfolders in the month folder
-    var allSubFolders = monthFolder.getFolders();
-    var subFolderNames = [];
-    var dateFolder = null;
+    var dateFoldersFound = [];
+    var folders = monthFolder.getFolders();
+    var dateStrLower = dateStr.toLowerCase();
     
-    // Normalize the date string for comparison
-    var dateStrLower = dateStr.toLowerCase().trim();
-    var dateSpacedLower = dateStrLower.replace(/-/g, ' ');
-    
-    while (allSubFolders.hasNext()) {
-      var sf = allSubFolders.next();
-      var sfName = sf.getName();
-      subFolderNames.push(sfName);
-      
-      var sfNameLower = sfName.toLowerCase().trim();
-      
-      // Check if this IS the date folder
-      if (sfNameLower === dateStrLower || 
-          sfNameLower === dateSpacedLower ||
-          sfNameLower.indexOf(dateStrLower) !== -1 || 
-          sfNameLower.indexOf(dateSpacedLower) !== -1) {
-        dateFolder = sf;
-      }
-      
-      // Also check if the folder name is "Raw" - means the link itself IS the date folder
-      if (sfNameLower === 'raw') {
-        result.raw = sf.getUrl();
-        result.rawFolderId = sf.getId();
+    while (folders.hasNext()) {
+      var f = folders.next();
+      var fn = f.getName().toLowerCase();
+      // Match exact Date or "Date - Venue"
+      if (fn === dateStrLower || fn.indexOf(dateStrLower + ' -') === 0 || fn.indexOf(dateStrLower + ' ') === 0) {
+        dateFoldersFound.push(f);
       }
     }
     
-    // If we found "Raw" directly in monthFolder, it means the link IS the date folder
-    if (result.raw !== '') {
-      var subFolders2 = monthFolder.getFolders();
-      while (subFolders2.hasNext()) {
-        var sf2 = subFolders2.next();
-        var sf2Name = sf2.getName().toLowerCase().trim();
-        if (sf2Name === 'selected') {
-          result.selected = sf2.getUrl();
-        } else if (sf2Name === 'selected (edited)') {
-          result.edited = sf2.getUrl();
-        }
-      }
-      var docs = monthFolder.getFiles();
-      while (docs.hasNext()) {
-        var doc = docs.next();
-        var mime = doc.getMimeType();
-        var name = doc.getName().toLowerCase();
-        var isDoc = mime === 'application/vnd.google-apps.document' || 
-                    mime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || 
-                    mime === 'application/msword';
-        if (isDoc) {
-          if (stage && name.indexOf(stage) !== -1) {
-            result.writingDoc = doc.getUrl();
-            break; // Found exact stage doc
-          } else if (!result.writingDoc) {
-            result.writingDoc = doc.getUrl(); // Fallback to first doc
+    if (dateFoldersFound.length > 0) {
+      // For Selected (Edited), first one is sufficient as requested
+      var firstDateFolder = dateFoldersFound[0];
+      var sfs = firstDateFolder.getFolders();
+      var firstRawUrl = '';
+      
+      while (sfs.hasNext()) {
+        var sub = sfs.next();
+        var subName = sub.getName().toLowerCase();
+        if (subName === 'raw') {
+          firstRawUrl = sub.getUrl();
+        } else if (subName.indexOf('edited') !== -1 || subName === 'selected (edited)') {
+          if (sub.getFiles().hasNext() || sub.getFolders().hasNext()) {
+            result.edited = sub.getUrl();
           }
         }
       }
-      result.debug = 'Link itself is date folder. Found Raw directly. MonthFolder: ' + monthFolderName;
-      return { success: true, folders: result };
-    }
-    
-    // If no date folder found, return debug info
-    if (!dateFolder) {
-      result.debug = 'Date folder NOT found. Searched for: "' + dateStr + '". MonthFolder: "' + monthFolderName + '". Subfolders found: [' + subFolderNames.join(', ') + ']';
-      return { success: true, folders: result };
-    }
-    
-    // We found the date folder! Now search inside it
-    result.debug = 'Date folder found: "' + dateFolder.getName() + '". MonthFolder: "' + monthFolderName + '"';
-    
-    var dateSubs = dateFolder.getFolders();
-    while (dateSubs.hasNext()) {
-      var ds = dateSubs.next();
-      var dsName = ds.getName().toLowerCase().trim();
       
-      if (dsName === 'raw') {
-        result.raw = ds.getUrl();
-        result.rawFolderId = ds.getId();
-      }
-      if (dsName === 'selected') {
-        result.selected = ds.getUrl();
-      }
-      if (dsName === 'selected (edited)') {
-        result.edited = ds.getUrl();
+      if (dateFoldersFound.length > 1) {
+        // Show month folder so both Date folders (and their Raws) are visible
+        result.raw = monthFolder.getUrl();
+      } else {
+        result.raw = firstRawUrl || firstDateFolder.getUrl();
       }
     }
-    
-    // Search for Document inside date folder
-    var dateFiles = dateFolder.getFiles();
-    while (dateFiles.hasNext()) {
-      var file = dateFiles.next();
-      var mime = file.getMimeType();
-      var name = file.getName().toLowerCase();
-      var isDoc = mime === 'application/vnd.google-apps.document' || 
-                  mime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || 
-                  mime === 'application/msword';
-      if (isDoc) {
-        if (stage && name.indexOf(stage) !== -1) {
-          result.writingDoc = file.getUrl();
-          break; // Found exact stage doc
-        } else if (!result.writingDoc) {
-          result.writingDoc = file.getUrl(); // Fallback to first doc
-        }
-      }
-    }
-    
-  } catch (e) {
-    result.debug = 'Error: ' + e.toString();
-  }
+  } catch (e) {}
+  
   return { success: true, folders: result };
 }
 
@@ -866,6 +786,7 @@ function handleGetUsers() {
     
     if (email) {
       users.push({
+        email: email,
         username: email,
         name: name || email,
         role: role,
@@ -971,8 +892,8 @@ function createTasksForPostV2(payload) {
   var taskHeaders = existingTasks[0];
   
   var postNo = payload.postNo;
-  var assignees = payload.assignees || {}; // { Writing: 'email', Editing: 'email', ... }
-  var dueDates = payload.dueDates || {}; // { Writing: '2026-07-20', ... }
+  var assignees = payload.assignees || {}; 
+  var dueDates = payload.dueDates || {}; 
   var description = payload.description || '';
   var publishPlatform = payload.publishPlatform || '';
   var postType = payload.postType || 'Individual';
@@ -985,106 +906,141 @@ function createTasksForPostV2(payload) {
     }
   }
   
-  // Find the post row (either by exact PostNo or first post with matching GroupID)
-  var postRow = null;
-  var postRowIdx = -1;
+  // Find all posts in the group (or just the single post)
+  var groupPosts = [];
+  var groupId = null;
+  
   for (var p = 1; p < postsData.length; p++) {
-    if (postsData[p][0] == postNo || postsData[p][37] == postNo) { 
-      postRow = postsData[p]; 
-      postRowIdx = p + 1; 
-      break; 
+    if (postsData[p][0] == postNo) {
+      groupId = postsData[p][37]; // GroupID column is AL (index 37)
+      break;
     }
   }
   
-  // Update post metadata
-  if (postRowIdx > 0) {
-    var postsSheet = ss.getSheetByName(POSTS_SHEET);
-    if (publishPlatform) postsSheet.getRange(postRowIdx, 36).setValue(publishPlatform);
-    if (postType) postsSheet.getRange(postRowIdx, 37).setValue(postType);
-    if (mediaMode) postsSheet.getRange(postRowIdx, 39).setValue(mediaMode);
-    if (description) postsSheet.getRange(postRowIdx, 40).setValue(description);
+  if (groupId) {
+    for (var p = 1; p < postsData.length; p++) {
+      if (postsData[p][37] == groupId || postsData[p][0] == groupId) {
+        groupPosts.push(postsData[p]);
+      }
+    }
+  } else {
+    for (var p = 1; p < postsData.length; p++) {
+      if (postsData[p][0] == postNo) {
+        groupPosts.push(postsData[p]);
+        break;
+      }
+    }
   }
   
-  var dateStr = '';
-  var monthFolderLink = '';
-  if (postRow) {
-    dateStr = formatDate(postRow[6]);
-    monthFolderLink = postRow[21] || postRow[20] || '';
+  // Update post metadata for all posts in group
+  for (var gp = 0; gp < groupPosts.length; gp++) {
+    var pNo = groupPosts[gp][0];
+    for (var i = 1; i < postsData.length; i++) {
+      if (postsData[i][0] == pNo) {
+        var rIdx = i + 1;
+        var postsSheet = ss.getSheetByName(POSTS_SHEET);
+        if (publishPlatform) postsSheet.getRange(rIdx, 36).setValue(publishPlatform);
+        if (postType) postsSheet.getRange(rIdx, 37).setValue(postType);
+        if (mediaMode) postsSheet.getRange(rIdx, 39).setValue(mediaMode);
+        if (description) postsSheet.getRange(rIdx, 40).setValue(description);
+        break;
+      }
+    }
   }
   
-  // ── Drive: create folders + docs (same logic as existing, but creates 3 docs) ──
+  // ── Drive: create folders + docs for EACH post in the group ──
   var docLinks = {};
   
-  if (monthFolderLink && monthFolderLink.indexOf('drive.google.com') !== -1) {
-    var match = monthFolderLink.match(/[-\w]{25,}/);
-    if (match) {
-      try {
-        var monthFolder = DriveApp.getFolderById(match[0]);
-        
-        // Find or create date folder
-        var dateFolder = null;
-        var dateFolders = monthFolder.getFolders();
-        var dateStrLower = dateStr.toLowerCase();
-        while (dateFolders.hasNext()) {
-          var df = dateFolders.next();
-          var fn = df.getName().toLowerCase();
-          if (fn === dateStrLower || fn.indexOf(dateStrLower) === 0) { 
-            dateFolder = df; 
-            break; 
-          }
-        }
-        if (!dateFolder) dateFolder = monthFolder.createFolder(dateStr);
-        
-        // Create subfolders
-        var subfolderNames = ['Raw', 'Selected', 'Selected (Edited)'];
-        for (var s = 0; s < subfolderNames.length; s++) {
-          var sfName = subfolderNames[s];
-          var exists = false;
-          var sfs = dateFolder.getFolders();
-          while (sfs.hasNext()) {
-            if (sfs.next().getName() === sfName) { exists = true; break; }
-          }
-          if (!exists) {
-            var newSf = dateFolder.createFolder(sfName);
-            newSf.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.EDIT);
-          }
-        }
-        
-        // Create Google Docs for specific stages
-        var docStages = ['Writing', 'Editing', 'Proofreading', 'Crosscheck'];
-        for (var d = 0; d < docStages.length; d++) {
-          var docStageName = docStages[d];
-          var docName = docStageName;
-          var docFound = false;
-          var existingFiles = dateFolder.getFiles();
-          while (existingFiles.hasNext()) {
-            var ef = existingFiles.next();
-            if (ef.getName().toLowerCase() === docName.toLowerCase() || 
-                ef.getName().toLowerCase() === (docName + '.docx').toLowerCase()) {
-              docLinks[docStageName] = ef.getUrl();
-              docFound = true;
-              break;
+  if (groupPosts.length > 0) {
+    var leaderPost = groupPosts[0];
+    var monthFolderLink = leaderPost[21] || leaderPost[20] || '';
+    
+    if (monthFolderLink && monthFolderLink.indexOf('drive.google.com') !== -1) {
+      var match = monthFolderLink.match(/[-\w]{25,}/);
+      if (match) {
+        try {
+          var monthFolder = DriveApp.getFolderById(match[0]);
+          
+          for (var gp = 0; gp < groupPosts.length; gp++) {
+            var currPost = groupPosts[gp];
+            var cDateStr = formatDate(currPost[6]);
+            var cVenue = currPost[4] || '';
+            // Only append venue if this is a grouped post (more than 1 post in group)
+            var cDateFolderTitle = (groupPosts.length > 1 && cVenue) ? (cDateStr + ' - ' + cVenue) : cDateStr;
+            
+            // Find or create date folder for this specific venue/post
+            var dateFolder = null;
+            var dateFolders = monthFolder.getFolders();
+            var searchStr = cDateFolderTitle.toLowerCase();
+            while (dateFolders.hasNext()) {
+              var df = dateFolders.next();
+              var fn = df.getName().toLowerCase();
+              if (fn === searchStr) { 
+                dateFolder = df; 
+                break; 
+              }
+            }
+            if (!dateFolder) dateFolder = monthFolder.createFolder(cDateFolderTitle);
+            
+            // Create subfolders inside this post's folder
+            var subfolderNames = ['Raw', 'Selected', 'Selected (Edited)'];
+            for (var s = 0; s < subfolderNames.length; s++) {
+              var sfName = subfolderNames[s];
+              var exists = false;
+              var sfs = dateFolder.getFolders();
+              while (sfs.hasNext()) {
+                if (sfs.next().getName().toLowerCase() === sfName.toLowerCase()) { exists = true; break; }
+              }
+              if (!exists) {
+                var newSf = dateFolder.createFolder(sfName);
+                newSf.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.EDIT);
+              }
+            }
+            
+            // Create Google Docs for specific stages in this post's folder
+            var docStages = ['Writing', 'Editing', 'Proofreading', 'Crosscheck'];
+            for (var d = 0; d < docStages.length; d++) {
+              var docStageName = docStages[d];
+              var docName = currPost[0] + ' - ' + docStageName;
+              var docFound = false;
+              var existingFiles = dateFolder.getFiles();
+              var foundDocUrl = '';
+              while (existingFiles.hasNext()) {
+                var ef = existingFiles.next();
+                if (ef.getName().toLowerCase() === docName.toLowerCase() || 
+                    ef.getName().toLowerCase() === (docName + '.docx').toLowerCase() ||
+                    ef.getName().toLowerCase() === docStageName.toLowerCase()) {
+                  foundDocUrl = ef.getUrl();
+                  docFound = true;
+                  break;
+                }
+              }
+              if (!docFound) {
+                try {
+                  var newDoc = DocumentApp.create(docName);
+                  var newDocFile = DriveApp.getFileById(newDoc.getId());
+                  newDocFile.moveTo(dateFolder);
+                  newDocFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.EDIT);
+                  var body = newDoc.getBody();
+                  
+                  body.appendParagraph('Post: ' + currPost[0] + ' | ' + docStageName + ' Document').setHeading(DocumentApp.ParagraphHeading.HEADING1);
+                  newDoc.saveAndClose();
+                  foundDocUrl = newDocFile.getUrl();
+                } catch (docErr) {
+                  foundDocUrl = '';
+                }
+              }
+              
+              // ONLY SAVE docLinks for the leader post (gp === 0) 
+              // so the tasks for the group use the first post's doc!
+              if (gp === 0) {
+                docLinks[docStageName] = foundDocUrl;
+              }
             }
           }
-          if (!docFound) {
-            try {
-              var newDoc = DocumentApp.create(docName);
-              var newDocFile = DriveApp.getFileById(newDoc.getId());
-              newDocFile.moveTo(dateFolder);
-              newDocFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.EDIT);
-              newDoc.getBody().appendParagraph('Post: ' + postNo + ' | ' + docStageName + ' Document')
-                .setHeading(DocumentApp.ParagraphHeading.HEADING1);
-              newDoc.getBody().appendParagraph('Date: ' + dateStr);
-              newDoc.getBody().appendParagraph('---');
-              newDoc.saveAndClose();
-              docLinks[docStageName] = newDocFile.getUrl();
-            } catch (docErr) {
-              docLinks[docStageName] = '';
-            }
-          }
+        } catch (driveErr) {
+          // Drive failed, continue without docs
         }
-      } catch (driveErr) {
-        // Drive failed, continue without docs
       }
     }
   }
