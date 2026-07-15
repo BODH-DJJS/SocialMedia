@@ -499,15 +499,38 @@ function copyForwardDocument(rowIndex, headers, taskSheet) {
         var body = currentDoc.getBody();
         var nextBody = nextDoc.getBody();
         
-        nextBody.appendParagraph('\n--- Content inherited from ' + currentStage + ' ---\n').setHeading(DocumentApp.ParagraphHeading.HEADING2);
+        // Clear out the next doc (in case of re-run) except for the very first paragraph
+        var numNextChildren = nextBody.getNumChildren();
+        while (numNextChildren > 1) {
+          nextBody.removeChild(nextBody.getChild(numNextChildren - 1));
+          numNextChildren--;
+        }
         
+        // Add some blank space for the user to write their new content at the top
+        nextBody.appendParagraph('\n\n\n');
+        
+        // Add a page break and heading for the inherited content
+        nextBody.appendPageBreak();
+        nextBody.appendParagraph('--- Content inherited from ' + currentStage + ' ---').setHeading(DocumentApp.ParagraphHeading.HEADING2);
+        
+        // Copy everything from the current doc
         var numChildren = body.getNumChildren();
         for (var i = 0; i < numChildren; i++) {
           var child = body.getChild(i);
+          var newElement;
           if (child.getType() === DocumentApp.ElementType.PARAGRAPH) {
-            nextBody.appendParagraph(child.copy());
+            newElement = nextBody.appendParagraph(child.copy());
           } else if (child.getType() === DocumentApp.ElementType.LIST_ITEM) {
-            nextBody.appendListItem(child.copy());
+            newElement = nextBody.appendListItem(child.copy());
+          } else if (child.getType() === DocumentApp.ElementType.TABLE) {
+            newElement = nextBody.appendTable(child.copy());
+          }
+          
+          // If the copied element was the title of the previous doc, downgrade it to a smaller heading so it doesn't clash
+          if (newElement && newElement.getType() === DocumentApp.ElementType.PARAGRAPH) {
+             if (newElement.getHeading() === DocumentApp.ParagraphHeading.HEADING1) {
+               newElement.setHeading(DocumentApp.ParagraphHeading.HEADING3);
+             }
           }
         }
         nextDoc.saveAndClose();
