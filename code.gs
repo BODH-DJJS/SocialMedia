@@ -1,0 +1,1159 @@
+var POSTS_SHEET = 'Events';
+var TASKS_SHEET = 'Tasks';
+var USERS_SHEET = 'Users';
+var PIPELINE_SHEET = 'Pipeline Config';
+var BRANCH_SPOC_SHEET = 'Branch SPOC';
+
+function ensureSheets() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  
+  if (!ss.getSheetByName(USERS_SHEET)) {
+    var users = ss.insertSheet(USERS_SHEET);
+    users.appendRow(['Email', 'Name', 'Role']);
+  }
+  var usersSheet = ss.getSheetByName(USERS_SHEET);
+  // Seed test users if sheet only has header row (no data)
+  if (usersSheet.getLastRow() <= 1) {
+    var roles = [
+      {role: 'Writer', prefix: 'writer'},
+      {role: 'Editor', prefix: 'editor'},
+      {role: 'Proofreader', prefix: 'proofreader'},
+      {role: 'CrossChecker', prefix: 'crosscheck'},
+      {role: 'Thumbnail Designer', prefix: 'thumbnail'},
+      {role: 'Photo Selector', prefix: 'photoselect'},
+      {role: 'Photo Editor', prefix: 'photoedit'},
+      {role: 'Video Editor', prefix: 'videoedit'},
+      {role: 'Media CrossChecker', prefix: 'mediacheck'}
+    ];
+    for (var r = 0; r < roles.length; r++) {
+      for (var n = 1; n <= 3; n++) { // Changed to 3 users per role to avoid huge list
+        usersSheet.appendRow([roles[r].prefix + n, 'pass123', roles[r].role]);
+      }
+    }
+    // Add admin
+    usersSheet.appendRow(['admin', 'admin123', 'Admin']);
+  }
+  
+  var pipeSheet = ss.getSheetByName(PIPELINE_SHEET);
+  if (!pipeSheet) {
+    pipeSheet = ss.insertSheet(PIPELINE_SHEET);
+    pipeSheet.appendRow(['Stage Name', 'Required Role', 'Depends On']);
+  }
+  
+  // Ensure all stages exist in the config
+  var requiredStages = [
+    {stage: 'Writing', role: 'Writer', dep: ''},
+    {stage: 'Editing', role: 'Editor', dep: 'Writing'},
+    {stage: 'Proofreading', role: 'Proofreader', dep: 'Editing'},
+    {stage: 'Crosscheck', role: 'CrossChecker', dep: 'Proofreading'},
+    {stage: 'Thumbnail', role: 'Thumbnail Designer', dep: ''},
+    {stage: 'Photos Selection', role: 'Photo Selector', dep: ''},
+    {stage: 'Photos Editing', role: 'Photo Editor', dep: 'Photos Selection'},
+    {stage: 'Videos Editing', role: 'Video Editor', dep: ''},
+    {stage: 'Media Crosscheck', role: 'Media CrossChecker', dep: 'Photos Editing'}
+  ];
+  
+  var existingPipeData = pipeSheet.getDataRange().getValues();
+  var existingStages = [];
+  for (var i = 1; i < existingPipeData.length; i++) {
+    existingStages.push((existingPipeData[i][0] || '').toString().toLowerCase());
+  }
+  
+  for (var r = 0; r < requiredStages.length; r++) {
+    if (existingStages.indexOf(requiredStages[r].stage.toLowerCase()) === -1) {
+      pipeSheet.appendRow([requiredStages[r].stage, requiredStages[r].role, requiredStages[r].dep]);
+    }
+  }
+  
+  if (!ss.getSheetByName(TASKS_SHEET)) {
+    var tasks = ss.insertSheet(TASKS_SHEET);
+    tasks.appendRow(['TaskID', 'PostNo', 'Stage', 'Assignee', 'Status', 'StartedAt', 'CompletedAt', 'DocLink']);
+  }
+
+  if (!ss.getSheetByName(BRANCH_SPOC_SHEET)) {
+    var spoc = ss.insertSheet(BRANCH_SPOC_SHEET);
+    spoc.appendRow(['Branch', 'SPOCName', 'SPOCEmail']);
+  }
+  
+  // Ensure Tasks sheet has new columns
+  var tasksSheet = ss.getSheetByName(TASKS_SHEET);
+  var taskHeaders = tasksSheet.getRange(1, 1, 1, tasksSheet.getLastColumn()).getValues()[0];
+  if (taskHeaders.indexOf('AllottedDate') === -1) tasksSheet.getRange(1, taskHeaders.length + 1).setValue('AllottedDate');
+  if (taskHeaders.indexOf('DueDate') === -1) tasksSheet.getRange(1, taskHeaders.length + 2).setValue('DueDate');
+  if (taskHeaders.indexOf('Notes') === -1) tasksSheet.getRange(1, taskHeaders.length + 3).setValue('Notes');
+}
+
+function formatDate(dateVal) {
+  if (!dateVal) return '';
+  var d;
+  if (dateVal instanceof Date) {
+    d = dateVal;
+  } else {
+    d = new Date(dateVal);
+    if (isNaN(d.getTime())) return String(dateVal);
+  }
+  return Utilities.formatDate(d, "Asia/Kolkata", "dd-MMM-yyyy");
+}
+
+function safeNum(val) {
+  var n = Number(val);
+  return isNaN(n) ? 0 : n;
+}
+
+function doPost(e) {
+  try {
+    ensureSheets();
+    var payload = JSON.parse(e.postData.contents);
+    var action = payload.action;
+
+    if (action === 'login') {
+      return respond(handleLogin(payload));
+    } else if (action === 'getTasks') {
+      return respond(handleGetTasks(payload));
+    } else if (action === 'getPosts') {
+      return respond(handleGetPosts(payload));
+    } else if (action === 'getMediaFolders') {
+      return respond(handleGetMediaFolders(payload));
+    } else if (action === 'getPhotos') {
+      return respond(handleGetPhotos(payload));
+    } else if (action === 'updateTask') {
+      var lock = LockService.getScriptLock();
+      lock.waitLock(10000);
+      try {
+        var res = handleUpdateTask(payload);
+        return respond(res);
+      } finally {
+        lock.releaseLock();
+      }
+    } else if (action === 'createTasksForPost') {
+      var lock = LockService.getScriptLock();
+      lock.waitLock(15000);
+      try {
+        var res = createTasksForPost(payload.postNo);
+        return respond(res);
+      } finally {
+        lock.releaseLock();
+      }
+    } else if (action === 'getDashboardStats') {
+      return respond(handleGetDashboardStats());
+    } else if (action === 'getUsers') {
+      return respond(handleGetUsers());
+    } else if (action === 'getBranchSPOCs') {
+      return respond(handleGetBranchSPOCs());
+    } else if (action === 'updateBranchSPOC') {
+      return respond(handleUpdateBranchSPOC(payload));
+    } else if (action === 'updatePostMeta') {
+      return respond(handleUpdatePostMeta(payload));
+    } else if (action === 'groupPosts') {
+      return respond(handleGroupPosts(payload));
+    } else if (action === 'ungroupPost') {
+      return respond(handleUngroupPost(payload));
+    } else if (action === 'createTasksForPostV2') {
+      var lock = LockService.getScriptLock();
+      lock.waitLock(15000);
+      try {
+        var res = createTasksForPostV2(payload);
+        return respond(res);
+      } finally {
+        lock.releaseLock();
+      }
+    } else {
+      return respond({success: false, message: 'Unknown action'});
+    }
+  } catch (error) {
+    return respond({success: false, message: 'App Script Error: ' + error.toString()});
+  }
+}
+
+function respond(data) {
+  return ContentService.createTextOutput(JSON.stringify(data)).setMimeType(ContentService.MimeType.JSON);
+}
+
+function handleLogin(payload) {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(USERS_SHEET);
+  var data = sheet.getDataRange().getValues();
+  for (var i = 1; i < data.length; i++) {
+    var userEmail = data[i][0].toString().toLowerCase();
+    
+    // Login via Google (uses email) or manual (uses username which is actually email)
+    var inputIdentifier = payload.email || payload.username;
+    
+    if (inputIdentifier && userEmail === inputIdentifier.toLowerCase()) {
+      if (payload.displayName && data[i][1] !== payload.displayName) {
+        sheet.getRange(i + 1, 2).setValue(payload.displayName);
+      }
+      return { success: true, role: data[i][2], username: data[i][0] };
+    }
+  }
+  return { success: false, message: 'Account not found or unauthorized. Ask admin to add your email.' };
+}
+
+function buildPostObj(pRow) {
+  var male = safeNum(pRow[8]);
+  var female = safeNum(pRow[9]);
+  var children = safeNum(pRow[10]);
+  return {
+    'PostNo': pRow[0] || '',
+    'Program': pRow[1] || '',
+    'Branch': pRow[2] || '',
+    'State': pRow[3] || '',
+    'Venue': pRow[4] || '',
+    'Theme': pRow[5] || '',
+    'Date': formatDate(pRow[6]),
+    'Timings': pRow[7] || '',
+    'Male': male,
+    'Female': female,
+    'Children': children,
+    'TotalBeneficiary': male + female + children,
+    'Organizers': pRow[11] || '',
+    'Partners': pRow[12] || '',
+    'GuestType': pRow[14] || '',
+    'GuestName': pRow[15] || '',
+    'GuestDesignation': pRow[16] || '',
+    'GuestOrg': pRow[17] || '',
+    'ImportantInfo': pRow[19] || '',
+    'FolderLink': pRow[21] || pRow[20] || '',
+    'ActivityType': pRow[22] || '',
+    'ActivitiesConducted': pRow[19] || '',
+    'AnyInformation': pRow[20] || '',
+    'MOP': pRow[23] || '',
+    'DataUploaded': pRow[24] || '',
+    'InProcess': pRow[25] || '',
+    'DesignDone': pRow[26] || '',
+    'WritingDone': pRow[27] || '',
+    'EditingDone': pRow[28] || '',
+    'ProofReadingDone': pRow[29] || '',
+    'ThumbnailDone': pRow[30] || '',
+    'ReadyToBePosted': pRow[31] || '',
+    'PostUploaded': pRow[32] || '',
+    'PublishPlatform': pRow[35] || '',
+    'PostType': pRow[36] || '',
+    'GroupID': pRow[37] || '',
+    'MediaMode': pRow[38] || '',
+    'Description': pRow[39] || ''
+  };
+}
+
+function handleGetTasks(payload) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var tasksData = ss.getSheetByName(TASKS_SHEET).getDataRange().getValues();
+  var postsData = ss.getSheetByName(POSTS_SHEET).getDataRange().getValues();
+  var usersData = ss.getSheetByName(USERS_SHEET).getDataRange().getValues();
+  
+  var userMap = {};
+  for (var u = 1; u < usersData.length; u++) {
+    if (usersData[u][0]) {
+      userMap[usersData[u][0].toString().trim().toLowerCase()] = usersData[u][1] || usersData[u][0];
+    }
+  }
+  
+  if (tasksData.length < 2 || postsData.length < 2) return { success: true, tasks: [] };
+  
+  var taskHeaders = tasksData[0];
+  var resultTasks = [];
+  
+  for (var i = 1; i < tasksData.length; i++) {
+    var trow = tasksData[i];
+    var tObj = {};
+    for (var j = 0; j < taskHeaders.length; j++) {
+      var val = trow[j];
+      var headerName = taskHeaders[j].toString();
+      
+      if (val instanceof Date || (headerName === 'DueDate' && val) || (headerName === 'AllottedDate' && val) || (headerName === 'Date' && val)) {
+        tObj[taskHeaders[j]] = formatDate(val);
+      } else {
+        tObj[taskHeaders[j]] = val;
+      }
+    }
+    tObj['rowIndex'] = i + 1;
+    tObj['AssigneeName'] = userMap[(tObj['Assignee'] || '').toString().trim().toLowerCase()] || tObj['Assignee'];
+    
+    if (payload.role === 'Admin' || tObj['Assignee'] === payload.username) {
+      var matchedRows = postsData.filter(function(r, idx) { 
+        return idx > 0 && (r[0] == tObj['PostNo'] || r[37] == tObj['PostNo']); 
+      });
+
+      if (matchedRows.length == 1) {
+        var postObj = buildPostObj(matchedRows[0]);
+        for (var key in postObj) tObj[key] = postObj[key];
+      } else if (matchedRows.length > 1) {
+        var totalMale = 0, totalFemale = 0, totalChildren = 0;
+        var combinedPosts = [];
+        for (var k = 0; k < matchedRows.length; k++) {
+          var po = buildPostObj(matchedRows[k]);
+          totalMale += po.Male;
+          totalFemale += po.Female;
+          totalChildren += po.Children;
+          combinedPosts.push(po);
+        }
+        var firstPost = combinedPosts[0];
+        
+        // Populate standard fields for the task card using the first post as a base, but aggregate totals
+        tObj['Theme'] = 'Combined Group (' + matchedRows.length + ' posts)';
+        tObj['Date'] = firstPost.Date;
+        tObj['Branch'] = firstPost.Branch;
+        tObj['State'] = firstPost.State;
+        tObj['PublishPlatform'] = firstPost.PublishPlatform;
+        tObj['PostType'] = firstPost.PostType;
+        tObj['Male'] = totalMale;
+        tObj['Female'] = totalFemale;
+        tObj['Children'] = totalChildren;
+        tObj['TotalBeneficiary'] = totalMale + totalFemale + totalChildren;
+        tObj['CombinedPosts'] = combinedPosts; // Pass all combined posts down for the UI
+        tObj['isCombined'] = true;
+      }
+      
+      resultTasks.push(tObj);
+    }
+  }
+  return { success: true, tasks: resultTasks.reverse() };
+}
+
+function handleGetPosts(payload) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var postsData = ss.getSheetByName(POSTS_SHEET).getDataRange().getValues();
+  if (postsData.length < 2) return { success: true, posts: [] };
+  
+  var posts = [];
+  for (var i = 1; i < postsData.length; i++) {
+    var pRow = postsData[i];
+    if (!pRow[0]) continue;
+    posts.push(buildPostObj(pRow));
+  }
+  return { success: true, posts: posts.reverse() };
+}
+
+function handleGetDashboardStats() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var tasksData = ss.getSheetByName(TASKS_SHEET).getDataRange().getValues();
+  var postsData = ss.getSheetByName(POSTS_SHEET).getDataRange().getValues();
+  
+  var totalPosts = 0;
+  for (var i = 1; i < postsData.length; i++) {
+    if (postsData[i][0]) totalPosts++;
+  }
+  
+  var stageCounts = {};
+  var assigneeCounts = {};
+  var doneTasks = 0;
+  var pendingTasks = 0;
+  
+  for (var i = 1; i < tasksData.length; i++) {
+    var stage = tasksData[i][2] || 'Unknown';
+    var assignee = tasksData[i][3] || 'Unassigned';
+    var status = tasksData[i][4] || 'Not Started';
+    
+    stageCounts[stage] = (stageCounts[stage] || 0) + 1;
+    assigneeCounts[assignee] = (assigneeCounts[assignee] || 0) + 1;
+    
+    if (status === 'Done') doneTasks++;
+    else pendingTasks++;
+  }
+  
+  return {
+    success: true,
+    stats: {
+      totalPosts: totalPosts,
+      totalTasks: tasksData.length - 1,
+      doneTasks: doneTasks,
+      pendingTasks: pendingTasks,
+      stageCounts: stageCounts,
+      assigneeCounts: assigneeCounts
+    }
+  };
+}
+
+function handleUpdateTask(payload) {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(TASKS_SHEET);
+  var headers = sheet.getDataRange().getValues()[0];
+  var rowIndex = payload.rowIndex;
+  var updates = payload.updates;
+  
+  if (updates['Status'] === 'Done') {
+    updates['CompletedAt'] = new Date().toLocaleString();
+    try {
+      copyForwardDocument(rowIndex, headers, sheet);
+    } catch(e) {
+      // Drive logic failed, still save status
+    }
+    
+    // Unlock any task that depends on this one
+    try {
+      unlockDependentTasks(rowIndex, headers, sheet);
+    } catch (e) {
+      // Fail silently if unlocking fails
+    }
+  }
+
+  for (var key in updates) {
+    var colIndex = headers.indexOf(key);
+    if (colIndex !== -1) {
+      sheet.getRange(rowIndex, colIndex + 1).setValue(updates[key]);
+    }
+  }
+  return { success: true, message: 'Task updated successfully' };
+}
+
+function unlockDependentTasks(rowIndex, headers, taskSheet) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var pipe = ss.getSheetByName(PIPELINE_SHEET).getDataRange().getValues();
+  var data = taskSheet.getDataRange().getValues();
+  
+  var currentStage = data[rowIndex - 1][headers.indexOf('Stage')];
+  var postNo = data[rowIndex - 1][headers.indexOf('PostNo')];
+  
+  var dependentStages = [];
+  var currentStageLower = (currentStage || '').replace(/\s+/g, '').toLowerCase();
+  
+  // Find all stages that depend on currentStage
+  for (var i = 1; i < pipe.length; i++) {
+    var depOnLower = (pipe[i][2] || '').toString().replace(/\s+/g, '').toLowerCase();
+    if (depOnLower === currentStageLower) {
+      dependentStages.push((pipe[i][0] || '').replace(/\s+/g, '').toLowerCase());
+    }
+  }
+  
+  if (dependentStages.length === 0) return;
+  
+  var stageCol = headers.indexOf('Stage');
+  var postNoCol = headers.indexOf('PostNo');
+  var statusCol = headers.indexOf('Status');
+  
+  for (var i = 1; i < data.length; i++) {
+    var iterStageLower = (data[i][stageCol] || '').replace(/\s+/g, '').toLowerCase();
+    if (data[i][postNoCol] == postNo && dependentStages.indexOf(iterStageLower) !== -1) {
+      var currentStatus = data[i][statusCol];
+      if (currentStatus === 'Waiting' || !currentStatus) {
+        taskSheet.getRange(i + 1, statusCol + 1).setValue('Ready');
+      }
+    }
+  }
+}
+
+function copyForwardDocument(rowIndex, headers, taskSheet) {
+  var data = taskSheet.getDataRange().getValues();
+  var row = data[rowIndex - 1];
+  var docLinkCol = headers.indexOf('DocLink');
+  var postNoCol = headers.indexOf('PostNo');
+  var stageCol = headers.indexOf('Stage');
+  
+  var currentDocUrl = row[docLinkCol];
+  var postNo = row[postNoCol];
+  var currentStage = row[stageCol];
+  
+  if (!currentDocUrl || currentDocUrl.indexOf('document/d/') === -1) return;
+  var currentDocId = currentDocUrl.match(/[-\w]{25,}/);
+  if (!currentDocId) return;
+  
+  var stageOrder = ['Writing', 'Editing', 'Proofreading', 'Crosscheck'];
+  var stageOrderLower = ['writing', 'editing', 'proofreading', 'crosscheck'];
+  var currentStageLower = (currentStage || '').replace(/\s+/g, '').toLowerCase();
+  var currentIdx = stageOrderLower.indexOf(currentStageLower);
+  if (currentIdx === -1 || currentIdx >= stageOrderLower.length - 1) return;
+  var nextStage = stageOrder[currentIdx + 1];
+  
+  // Find the next stage row and get its document link
+  var nextDocUrl = '';
+  var nextRowIdx = -1;
+  var nextStageLower = nextStage.replace(/\s+/g, '').toLowerCase(); // Normalize
+  for (var i = 1; i < data.length; i++) {
+    var iterStageLower = (data[i][stageCol] || '').replace(/\s+/g, '').toLowerCase();
+    if (data[i][postNoCol] == postNo && iterStageLower === nextStageLower) {
+      nextDocUrl = data[i][docLinkCol] || '';
+      nextRowIdx = i + 1;
+      break;
+    }
+  }
+  
+  // Fallback: If next doc is MISSING but the next stage task exists, create it!
+  if ((!nextDocUrl || nextDocUrl.indexOf('document/d/') === -1) && nextRowIdx !== -1) {
+    try {
+      var currentFile = DriveApp.getFileById(currentDocId[0]);
+      var parents = currentFile.getParents();
+      if (parents.hasNext()) {
+        var parentFolder = parents.next();
+        var newDoc = DocumentApp.create(nextStage);
+        var newDocFile = DriveApp.getFileById(newDoc.getId());
+        newDocFile.moveTo(parentFolder);
+        newDocFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.EDIT);
+        newDoc.getBody().appendParagraph('Post: ' + postNo + ' | ' + nextStage + ' Document')
+          .setHeading(DocumentApp.ParagraphHeading.HEADING1);
+        newDoc.saveAndClose();
+        
+        nextDocUrl = newDocFile.getUrl();
+        taskSheet.getRange(nextRowIdx, docLinkCol + 1).setValue(nextDocUrl);
+      }
+    } catch (e) {
+      // Failed to create fallback doc
+    }
+  }
+  
+  // If next doc exists (or was just created), copy content over
+  if (nextDocUrl && nextDocUrl.indexOf('document/d/') !== -1) {
+    var nextDocIdMatch = nextDocUrl.match(/[-\w]{25,}/);
+    if (nextDocIdMatch) {
+      try {
+        var currentDoc = DocumentApp.openById(currentDocId[0]);
+        var nextDoc = DocumentApp.openById(nextDocIdMatch[0]);
+        
+        var body = currentDoc.getBody();
+        var nextBody = nextDoc.getBody();
+        
+        nextBody.appendParagraph('\n--- Content inherited from ' + currentStage + ' ---\n').setHeading(DocumentApp.ParagraphHeading.HEADING2);
+        
+        var numChildren = body.getNumChildren();
+        for (var i = 0; i < numChildren; i++) {
+          var child = body.getChild(i);
+          if (child.getType() === DocumentApp.ElementType.PARAGRAPH) {
+            nextBody.appendParagraph(child.copy());
+          } else if (child.getType() === DocumentApp.ElementType.LIST_ITEM) {
+            nextBody.appendListItem(child.copy());
+          }
+        }
+        nextDoc.saveAndClose();
+      } catch (e) {
+        // Drive operations failed
+      }
+    }
+  }
+  
+  // Automatically change next task status to Ready if it was Waiting
+  if (nextRowIdx !== -1) {
+    var statusCol = headers.indexOf('Status');
+    var currentStatus = data[nextRowIdx - 1][statusCol];
+    if (currentStatus === 'Waiting' || !currentStatus) {
+      taskSheet.getRange(nextRowIdx, statusCol + 1).setValue('Ready');
+    }
+  }
+}
+
+// ───── DRIVE AUTOMATION: Create folders + docs inside date folder ─────
+function createTasksForPost(postNo) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var tasks = ss.getSheetByName(TASKS_SHEET);
+  var pipe = ss.getSheetByName(PIPELINE_SHEET).getDataRange().getValues();
+  var usersData = ss.getSheetByName(USERS_SHEET).getDataRange().getValues();
+  var postsData = ss.getSheetByName(POSTS_SHEET).getDataRange().getValues();
+  var existingTasks = tasks.getDataRange().getValues();
+  
+  // Check duplicates
+  for (var t = 1; t < existingTasks.length; t++) {
+    if (existingTasks[t][1] == postNo) {
+      return {success: false, message: 'Tasks already exist for ' + postNo};
+    }
+  }
+  
+  // Find the post row to get FolderLink and Date
+  var postRow = null;
+  for (var p = 1; p < postsData.length; p++) {
+    if (postsData[p][0] == postNo) { postRow = postsData[p]; break; }
+  }
+  
+  var dateStr = '';
+  var monthFolderLink = '';
+  if (postRow) {
+    dateStr = formatDate(postRow[6]);
+    monthFolderLink = postRow[21] || postRow[20] || '';
+  }
+  
+  // ── Drive: find/create date folder and subfolders ──
+  var docLinks = {};
+  var rawFolderUrl = '';
+  
+  if (monthFolderLink && monthFolderLink.indexOf('drive.google.com') !== -1) {
+    var match = monthFolderLink.match(/[-\w]{25,}/);
+    if (match) {
+      try {
+        var monthFolder = DriveApp.getFolderById(match[0]);
+        
+        // Find or create date folder
+        var dateFolder = null;
+        var dateFolders = monthFolder.searchFolders("title = '" + dateStr + "'");
+        if (dateFolders.hasNext()) {
+          dateFolder = dateFolders.next();
+        } else {
+          dateFolder = monthFolder.createFolder(dateStr);
+        }
+        
+        // Create subfolders if not exist
+        var subfolderNames = ['Raw', 'Selected', 'Selected (Edited)'];
+        for (var s = 0; s < subfolderNames.length; s++) {
+          var sfName = subfolderNames[s];
+          var sfSearch = dateFolder.searchFolders("title = '" + sfName + "'");
+          if (!sfSearch.hasNext()) {
+            var newSf = dateFolder.createFolder(sfName);
+            newSf.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.EDIT);
+            if (sfName === 'Raw') rawFolderUrl = newSf.getUrl();
+          } else {
+            if (sfName === 'Raw') rawFolderUrl = sfSearch.next().getUrl();
+          }
+        }
+        
+        // Create a single collaborative doc if not exist
+        var docName = postNo + ' - Content Doc';
+        var docSearch = dateFolder.searchFiles("title = '" + docName + "' and mimeType = 'application/vnd.google-apps.document'");
+        if (docSearch.hasNext()) {
+          var existingDoc = docSearch.next();
+          existingDoc.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.EDIT);
+          docLinks['Writing'] = existingDoc.getUrl();
+        } else {
+          var newDoc = DocumentApp.create(docName);
+          var newDocFile = DriveApp.getFileById(newDoc.getId());
+          newDocFile.moveTo(dateFolder);
+          newDocFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.EDIT);
+          newDoc.getBody().appendParagraph('Post: ' + postNo + ' | Content Document')
+            .setHeading(DocumentApp.ParagraphHeading.HEADING1);
+          newDoc.getBody().appendParagraph('Date: ' + dateStr);
+          newDoc.getBody().appendParagraph('---');
+          newDoc.saveAndClose();
+          docLinks['Writing'] = newDocFile.getUrl();
+        }
+      } catch (driveErr) {
+        // Don't store error string as DocLink - leave empty so app uses backend search
+        docLinks['Writing'] = '';
+      }
+    }
+  }
+  
+  // ── Round-robin auto-assignment ──
+  var userPools = {};
+  for (var u = 1; u < usersData.length; u++) {
+    var role = usersData[u][2];
+    if (!userPools[role]) userPools[role] = [];
+    userPools[role].push(usersData[u][0]);
+  }
+  
+  var assignCounts = {};
+  for (var t = 1; t < existingTasks.length; t++) {
+    var a = existingTasks[t][3];
+    if (a) assignCounts[a] = (assignCounts[a] || 0) + 1;
+  }
+  
+  // ── Create task rows ──
+  for (var i = 1; i < pipe.length; i++) {
+    var stage = pipe[i][0];
+    var requiredRole = pipe[i][1];
+    var assignee = '';
+    
+    // ONLY assign the FIRST stage (Writing)
+    if (i === 1) {
+      var pool = userPools[requiredRole] || [];
+      if (pool.length > 0) {
+        var minCount = Infinity;
+        var picked = pool[0];
+        for (var p = 0; p < pool.length; p++) {
+          var cnt = assignCounts[pool[p]] || 0;
+          if (cnt < minCount) {
+            minCount = cnt;
+            picked = pool[p];
+          }
+        }
+        assignee = picked;
+        assignCounts[picked] = (assignCounts[picked] || 0) + 1;
+      }
+    }
+    
+    var docUrl = docLinks[stage] || '';
+    var initialStatus = (i === 1) ? 'Ready' : 'Waiting'; // Only first stage is Ready
+    
+    tasks.appendRow([
+      postNo + '-' + stage,
+      postNo,
+      stage,
+      assignee,
+      initialStatus,
+      new Date().toLocaleString(),
+      '',
+      docUrl
+    ]);
+  }
+  
+  return {success: true, message: 'Tasks created for ' + postNo + ' with Drive folders, docs, and auto-assignment'};
+}
+
+// ───── Get photo thumbnails from a Drive folder ─────
+function handleGetPhotos(payload) {
+  var folderUrl = payload.folderUrl;
+  if (!folderUrl) return { success: true, photos: [] };
+  
+  var match = folderUrl.match(/[-\w]{25,}/);
+  if (!match) return { success: true, photos: [] };
+  
+  var photos = [];
+  try {
+    var folder = DriveApp.getFolderById(match[0]);
+    var files = folder.getFiles();
+    var count = 0;
+    while (files.hasNext() && count < 50) {
+      var file = files.next();
+      var mime = file.getMimeType();
+      if (mime.indexOf('image') !== -1 || mime.indexOf('video') !== -1) {
+        var id = file.getId();
+        photos.push({
+          name: file.getName(),
+          mimeType: mime,
+          thumbnailUrl: 'https://drive.google.com/thumbnail?id=' + id + '&sz=w400',
+          viewUrl: 'https://drive.google.com/file/d/' + id + '/view',
+          downloadUrl: 'https://drive.google.com/uc?export=view&id=' + id
+        });
+        count++;
+      }
+    }
+  } catch (e) {}
+  return { success: true, photos: photos };
+}
+
+function handleGetMediaFolders(payload) {
+  var monthLink = payload.monthLink;
+  var dateStr = payload.dateStr || '';
+  var stage = (payload.stage || '').toLowerCase();
+  var result = { raw: '', selected: '', edited: '', rawFolderId: '', writingDoc: '', debug: '' };
+  
+  if (!monthLink || monthLink.indexOf('drive.google.com') === -1) {
+    result.debug = 'No valid monthLink provided';
+    return { success: true, folders: result };
+  }
+  
+  var match = monthLink.match(/[-\w]{25,}/);
+  if (!match) {
+    result.debug = 'Could not extract folder ID from link';
+    return { success: true, folders: result };
+  }
+  
+  var monthFolderId = match[0];
+  try {
+    var monthFolder = DriveApp.getFolderById(monthFolderId);
+    var monthFolderName = monthFolder.getName();
+    
+    // List ALL subfolders in the month folder
+    var allSubFolders = monthFolder.getFolders();
+    var subFolderNames = [];
+    var dateFolder = null;
+    
+    // Normalize the date string for comparison
+    var dateStrLower = dateStr.toLowerCase().trim();
+    var dateSpacedLower = dateStrLower.replace(/-/g, ' ');
+    
+    while (allSubFolders.hasNext()) {
+      var sf = allSubFolders.next();
+      var sfName = sf.getName();
+      subFolderNames.push(sfName);
+      
+      var sfNameLower = sfName.toLowerCase().trim();
+      
+      // Check if this IS the date folder
+      if (sfNameLower === dateStrLower || 
+          sfNameLower === dateSpacedLower ||
+          sfNameLower.indexOf(dateStrLower) !== -1 || 
+          sfNameLower.indexOf(dateSpacedLower) !== -1) {
+        dateFolder = sf;
+      }
+      
+      // Also check if the folder name is "Raw" - means the link itself IS the date folder
+      if (sfNameLower === 'raw') {
+        result.raw = sf.getUrl();
+        result.rawFolderId = sf.getId();
+      }
+    }
+    
+    // If we found "Raw" directly in monthFolder, it means the link IS the date folder
+    if (result.raw !== '') {
+      var subFolders2 = monthFolder.getFolders();
+      while (subFolders2.hasNext()) {
+        var sf2 = subFolders2.next();
+        var sf2Name = sf2.getName().toLowerCase().trim();
+        if (sf2Name === 'selected') {
+          result.selected = sf2.getUrl();
+        } else if (sf2Name === 'selected (edited)') {
+          result.edited = sf2.getUrl();
+        }
+      }
+      var docs = monthFolder.getFiles();
+      while (docs.hasNext()) {
+        var doc = docs.next();
+        var mime = doc.getMimeType();
+        var name = doc.getName().toLowerCase();
+        var isDoc = mime === 'application/vnd.google-apps.document' || 
+                    mime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || 
+                    mime === 'application/msword';
+        if (isDoc) {
+          if (stage && name.indexOf(stage) !== -1) {
+            result.writingDoc = doc.getUrl();
+            break; // Found exact stage doc
+          } else if (!result.writingDoc) {
+            result.writingDoc = doc.getUrl(); // Fallback to first doc
+          }
+        }
+      }
+      result.debug = 'Link itself is date folder. Found Raw directly. MonthFolder: ' + monthFolderName;
+      return { success: true, folders: result };
+    }
+    
+    // If no date folder found, return debug info
+    if (!dateFolder) {
+      result.debug = 'Date folder NOT found. Searched for: "' + dateStr + '". MonthFolder: "' + monthFolderName + '". Subfolders found: [' + subFolderNames.join(', ') + ']';
+      return { success: true, folders: result };
+    }
+    
+    // We found the date folder! Now search inside it
+    result.debug = 'Date folder found: "' + dateFolder.getName() + '". MonthFolder: "' + monthFolderName + '"';
+    
+    var dateSubs = dateFolder.getFolders();
+    while (dateSubs.hasNext()) {
+      var ds = dateSubs.next();
+      var dsName = ds.getName().toLowerCase().trim();
+      
+      if (dsName === 'raw') {
+        result.raw = ds.getUrl();
+        result.rawFolderId = ds.getId();
+      }
+      if (dsName === 'selected') {
+        result.selected = ds.getUrl();
+      }
+      if (dsName === 'selected (edited)') {
+        result.edited = ds.getUrl();
+      }
+    }
+    
+    // Search for Document inside date folder
+    var dateFiles = dateFolder.getFiles();
+    while (dateFiles.hasNext()) {
+      var file = dateFiles.next();
+      var mime = file.getMimeType();
+      var name = file.getName().toLowerCase();
+      var isDoc = mime === 'application/vnd.google-apps.document' || 
+                  mime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || 
+                  mime === 'application/msword';
+      if (isDoc) {
+        if (stage && name.indexOf(stage) !== -1) {
+          result.writingDoc = file.getUrl();
+          break; // Found exact stage doc
+        } else if (!result.writingDoc) {
+          result.writingDoc = file.getUrl(); // Fallback to first doc
+        }
+      }
+    }
+    
+  } catch (e) {
+    result.debug = 'Error: ' + e.toString();
+  }
+  return { success: true, folders: result };
+}
+
+// ───── NEW API HANDLERS (Phase 2) ─────
+
+function handleGetUsers() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var usersData = ss.getSheetByName(USERS_SHEET).getDataRange().getValues();
+  var tasksData = ss.getSheetByName(TASKS_SHEET).getDataRange().getValues();
+  
+  // Count active tasks per user
+  var activeCounts = {};
+  for (var t = 1; t < tasksData.length; t++) {
+    var assignee = tasksData[t][3];
+    var status = tasksData[t][4];
+    if (assignee && status !== 'Done') {
+      activeCounts[assignee] = (activeCounts[assignee] || 0) + 1;
+    }
+  }
+  
+  var users = [];
+  for (var i = 1; i < usersData.length; i++) {
+    var email = usersData[i][0] || '';
+    var name = usersData[i][1] || '';
+    var role = usersData[i][2] || ''; 
+    var activeTasks = activeCounts[email] || 0;
+    
+    if (email) {
+      users.push({
+        username: email,
+        name: name || email,
+        role: role,
+        status: activeTasks > 0 ? 'Engaged' : 'Available',
+        activeTasks: activeTasks
+      });
+    }
+  }
+  return { success: true, users: users };
+}
+
+function handleGetBranchSPOCs() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(BRANCH_SPOC_SHEET);
+  if (!sheet || sheet.getLastRow() < 2) return { success: true, spocs: [] };
+  
+  var data = sheet.getDataRange().getValues();
+  var spocs = [];
+  for (var i = 1; i < data.length; i++) {
+    spocs.push({
+      branch: data[i][0] || '',
+      spocName: data[i][1] || '',
+      spocEmail: data[i][2] || ''
+    });
+  }
+  return { success: true, spocs: spocs };
+}
+
+function handleUpdateBranchSPOC(payload) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(BRANCH_SPOC_SHEET);
+  var data = sheet.getDataRange().getValues();
+  
+  for (var i = 1; i < data.length; i++) {
+    if (data[i][0] === payload.branch) {
+      sheet.getRange(i + 1, 2).setValue(payload.spocName);
+      sheet.getRange(i + 1, 3).setValue(payload.spocEmail);
+      return { success: true, message: 'SPOC updated for ' + payload.branch };
+    }
+  }
+  // New branch entry
+  sheet.appendRow([payload.branch, payload.spocName, payload.spocEmail]);
+  return { success: true, message: 'SPOC added for ' + payload.branch };
+}
+
+function handleUpdatePostMeta(payload) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(POSTS_SHEET);
+  var data = sheet.getDataRange().getValues();
+  var postNo = payload.postNo;
+  
+  for (var i = 1; i < data.length; i++) {
+    if (data[i][0] == postNo) {
+      var rowIdx = i + 1;
+      if (payload.publishPlatform !== undefined) sheet.getRange(rowIdx, 36).setValue(payload.publishPlatform);
+      if (payload.postType !== undefined) sheet.getRange(rowIdx, 37).setValue(payload.postType);
+      if (payload.groupId !== undefined) sheet.getRange(rowIdx, 38).setValue(payload.groupId);
+      if (payload.mediaMode !== undefined) sheet.getRange(rowIdx, 39).setValue(payload.mediaMode);
+      if (payload.description !== undefined) sheet.getRange(rowIdx, 40).setValue(payload.description);
+      return { success: true, message: 'Post metadata updated' };
+    }
+  }
+  return { success: false, message: 'Post not found' };
+}
+
+function handleGroupPosts(payload) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(POSTS_SHEET);
+  var data = sheet.getDataRange().getValues();
+  var postNos = payload.postNos; // Array of post numbers
+  var groupId = payload.groupId;
+  
+  var updated = 0;
+  for (var i = 1; i < data.length; i++) {
+    if (postNos.indexOf(data[i][0].toString()) !== -1 || postNos.indexOf(Number(data[i][0])) !== -1) {
+      sheet.getRange(i + 1, 38).setValue(groupId); // Column AL (38)
+      updated++;
+    }
+  }
+  return { success: true, message: updated + ' posts grouped under ' + groupId };
+}
+
+function handleUngroupPost(payload) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(POSTS_SHEET);
+  var data = sheet.getDataRange().getValues();
+  
+  for (var i = 1; i < data.length; i++) {
+    if (data[i][0] == payload.postNo) {
+      sheet.getRange(i + 1, 38).setValue(''); // Clear GroupID
+      return { success: true, message: 'Post ungrouped' };
+    }
+  }
+  return { success: false, message: 'Post not found' };
+}
+
+function createTasksForPostV2(payload) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var tasks = ss.getSheetByName(TASKS_SHEET);
+  var pipe = ss.getSheetByName(PIPELINE_SHEET).getDataRange().getValues();
+  var postsData = ss.getSheetByName(POSTS_SHEET).getDataRange().getValues();
+  var existingTasks = tasks.getDataRange().getValues();
+  var taskHeaders = existingTasks[0];
+  
+  var postNo = payload.postNo;
+  var assignees = payload.assignees || {}; // { Writing: 'email', Editing: 'email', ... }
+  var dueDates = payload.dueDates || {}; // { Writing: '2026-07-20', ... }
+  var description = payload.description || '';
+  var publishPlatform = payload.publishPlatform || '';
+  var postType = payload.postType || 'Individual';
+  var mediaMode = payload.mediaMode || 'Photos';
+  
+  // Check duplicates
+  for (var t = 1; t < existingTasks.length; t++) {
+    if (existingTasks[t][1] == postNo) {
+      return {success: false, message: 'Tasks already exist for ' + postNo};
+    }
+  }
+  
+  // Find the post row (either by exact PostNo or first post with matching GroupID)
+  var postRow = null;
+  var postRowIdx = -1;
+  for (var p = 1; p < postsData.length; p++) {
+    if (postsData[p][0] == postNo || postsData[p][37] == postNo) { 
+      postRow = postsData[p]; 
+      postRowIdx = p + 1; 
+      break; 
+    }
+  }
+  
+  // Update post metadata
+  if (postRowIdx > 0) {
+    var postsSheet = ss.getSheetByName(POSTS_SHEET);
+    if (publishPlatform) postsSheet.getRange(postRowIdx, 36).setValue(publishPlatform);
+    if (postType) postsSheet.getRange(postRowIdx, 37).setValue(postType);
+    if (mediaMode) postsSheet.getRange(postRowIdx, 39).setValue(mediaMode);
+    if (description) postsSheet.getRange(postRowIdx, 40).setValue(description);
+  }
+  
+  var dateStr = '';
+  var monthFolderLink = '';
+  if (postRow) {
+    dateStr = formatDate(postRow[6]);
+    monthFolderLink = postRow[21] || postRow[20] || '';
+  }
+  
+  // ── Drive: create folders + docs (same logic as existing, but creates 3 docs) ──
+  var docLinks = {};
+  
+  if (monthFolderLink && monthFolderLink.indexOf('drive.google.com') !== -1) {
+    var match = monthFolderLink.match(/[-\w]{25,}/);
+    if (match) {
+      try {
+        var monthFolder = DriveApp.getFolderById(match[0]);
+        
+        // Find or create date folder
+        var dateFolder = null;
+        var dateFolders = monthFolder.getFolders();
+        var dateStrLower = dateStr.toLowerCase();
+        while (dateFolders.hasNext()) {
+          var df = dateFolders.next();
+          var fn = df.getName().toLowerCase();
+          if (fn === dateStrLower || fn.indexOf(dateStrLower) === 0) { 
+            dateFolder = df; 
+            break; 
+          }
+        }
+        if (!dateFolder) dateFolder = monthFolder.createFolder(dateStr);
+        
+        // Create subfolders
+        var subfolderNames = ['Raw', 'Selected', 'Selected (Edited)'];
+        for (var s = 0; s < subfolderNames.length; s++) {
+          var sfName = subfolderNames[s];
+          var exists = false;
+          var sfs = dateFolder.getFolders();
+          while (sfs.hasNext()) {
+            if (sfs.next().getName() === sfName) { exists = true; break; }
+          }
+          if (!exists) {
+            var newSf = dateFolder.createFolder(sfName);
+            newSf.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.EDIT);
+          }
+        }
+        
+        // Create Google Docs for specific stages
+        var docStages = ['Writing', 'Editing', 'Proofreading', 'Crosscheck'];
+        for (var d = 0; d < docStages.length; d++) {
+          var docStageName = docStages[d];
+          var docName = docStageName;
+          var docFound = false;
+          var existingFiles = dateFolder.getFiles();
+          while (existingFiles.hasNext()) {
+            var ef = existingFiles.next();
+            if (ef.getName().toLowerCase() === docName.toLowerCase() || 
+                ef.getName().toLowerCase() === (docName + '.docx').toLowerCase()) {
+              docLinks[docStageName] = ef.getUrl();
+              docFound = true;
+              break;
+            }
+          }
+          if (!docFound) {
+            try {
+              var newDoc = DocumentApp.create(docName);
+              var newDocFile = DriveApp.getFileById(newDoc.getId());
+              newDocFile.moveTo(dateFolder);
+              newDocFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.EDIT);
+              newDoc.getBody().appendParagraph('Post: ' + postNo + ' | ' + docStageName + ' Document')
+                .setHeading(DocumentApp.ParagraphHeading.HEADING1);
+              newDoc.getBody().appendParagraph('Date: ' + dateStr);
+              newDoc.getBody().appendParagraph('---');
+              newDoc.saveAndClose();
+              docLinks[docStageName] = newDocFile.getUrl();
+            } catch (docErr) {
+              docLinks[docStageName] = '';
+            }
+          }
+        }
+      } catch (driveErr) {
+        // Drive failed, continue without docs
+      }
+    }
+  }
+  
+  // Find column indexes for new headers
+  var allottedDateCol = taskHeaders.indexOf('AllottedDate');
+  var dueDateCol = taskHeaders.indexOf('DueDate');
+  var notesCol = taskHeaders.indexOf('Notes');
+  
+  // ── Create task rows with admin-specified assignees ──
+  for (var i = 1; i < pipe.length; i++) {
+    var stage = pipe[i][0];
+    var depOn = pipe[i][2] || '';
+    
+    var normalizedStage = stage.toString().replace(/\s+/g, '').toLowerCase();
+    
+    var assignee = '';
+    for (var k in assignees) {
+      if (k.replace(/\s+/g, '').toLowerCase() === normalizedStage) { assignee = assignees[k]; break; }
+    }
+    
+    var docUrl = '';
+    for (var k in docLinks) {
+      if (k.replace(/\s+/g, '').toLowerCase() === normalizedStage) { docUrl = docLinks[k]; break; }
+    }
+    
+    var initialStatus = 'Waiting';
+    if (!depOn || depOn.toString().trim() === '') {
+      initialStatus = assignee ? 'Ready' : 'Waiting';
+    }
+    
+    var allottedDate = assignee ? new Date().toLocaleString() : '';
+    
+    var dueDate = '';
+    for (var k in dueDates) {
+      if (k.replace(/\s+/g, '').toLowerCase() === normalizedStage) { dueDate = dueDates[k]; break; }
+    }
+    
+    var rowData = [
+      postNo + '-' + stage,
+      postNo,
+      stage,
+      assignee,
+      initialStatus,
+      new Date().toLocaleString(),
+      '',
+      docUrl
+    ];
+    
+    // Extend row to include new columns
+    if (allottedDateCol !== -1) {
+      while (rowData.length <= allottedDateCol) rowData.push('');
+      rowData[allottedDateCol] = allottedDate;
+    }
+    if (dueDateCol !== -1) {
+      while (rowData.length <= dueDateCol) rowData.push('');
+      rowData[dueDateCol] = dueDate;
+    }
+    if (notesCol !== -1) {
+      while (rowData.length <= notesCol) rowData.push('');
+      rowData[notesCol] = '';
+    }
+    
+    tasks.appendRow(rowData);
+  }
+  
+  return {success: true, message: 'Tasks created for ' + postNo + ' with assignees, folders, and docs'};
+}
+
+function doGet(e) {
+  return ContentService.createTextOutput('GET requests not supported, use POST.').setMimeType(ContentService.MimeType.TEXT);
+}
