@@ -74,6 +74,16 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
             Text(isAdmin ? 'BODH Admin' : 'My Queue'),
           ],
         ),
+        bottom: eventProvider.isSyncing
+            ? const PreferredSize(
+                preferredSize: Size.fromHeight(2),
+                child: LinearProgressIndicator(
+                  minHeight: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                  backgroundColor: Colors.transparent,
+                ),
+              )
+            : null,
         actions: [
           if (!isAdmin)
             Padding(
@@ -84,11 +94,26 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                 side: BorderSide.none,
               ),
             ),
-          IconButton(
-            icon: const Icon(Icons.refresh_rounded),
-            tooltip: 'Refresh',
-            onPressed: () => eventProvider.fetchEvents(auth.role, auth.username),
-          ),
+          eventProvider.isSyncing
+              ? const SizedBox(
+                  width: 48,
+                  height: 48,
+                  child: Center(
+                    child: SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                      ),
+                    ),
+                  ),
+                )
+              : IconButton(
+                  icon: const Icon(Icons.refresh_rounded),
+                  tooltip: 'Refresh',
+                  onPressed: () => eventProvider.fetchEvents(auth.role, auth.username),
+                ),
           IconButton(
             icon: const Icon(Icons.logout_rounded),
             tooltip: 'Logout',

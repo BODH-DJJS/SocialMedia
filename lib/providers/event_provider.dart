@@ -8,45 +8,69 @@ class EventProvider with ChangeNotifier {
   List<Map<String, dynamic>> _users = [];
   List<Map<String, dynamic>> _spocs = [];
   bool _isLoading = false;
+  bool _isSyncing = false;
 
   List<Event> get events => _events;
   List<Map<String, dynamic>> get rawPosts => _rawPosts;
   List<Map<String, dynamic>> get users => _users;
   List<Map<String, dynamic>> get spocs => _spocs;
   bool get isLoading => _isLoading;
+  bool get isSyncing => _isSyncing;
 
   final ApiService _apiService = ApiService();
 
   Future<void> fetchEvents(String role, String username, {bool silent = false}) async {
-    if (!silent) {
+    final bool shouldBlock = !silent && _events.isEmpty;
+    if (shouldBlock) {
       _isLoading = true;
+      notifyListeners();
+    } else {
+      _isSyncing = true;
       notifyListeners();
     }
 
     try {
-      final response = await _apiService.postData({
-        'action': 'getTasks',
-        'role': role,
-        'username': username,
-      });
+      final isAdmin = role.toLowerCase() == 'admin';
+      if (isAdmin) {
+        final results = await Future.wait([
+          _apiService.postData({
+            'action': 'getTasks',
+            'role': role,
+            'username': username,
+          }),
+          _apiService.postData({'action': 'getPosts'}),
+        ]);
 
-      if (response['success'] == true) {
-        final List<dynamic> tasksData = response['tasks'];
-        _events = tasksData.map((json) => Event.fromJson(json)).toList();
-        
-        // If admin, also fetch all raw posts for visibility
-        if (role.toLowerCase() == 'admin') {
-          await fetchAllPosts();
+        final tasksResponse = results[0];
+        final postsResponse = results[1];
+
+        if (tasksResponse['success'] == true) {
+          final List<dynamic> tasksData = tasksResponse['tasks'];
+          _events = tasksData.map((json) => Event.fromJson(json)).toList();
+        }
+        if (postsResponse['success'] == true) {
+          final List<dynamic> postsData = postsResponse['posts'];
+          _rawPosts = postsData.map((e) => e as Map<String, dynamic>).toList();
+        }
+      } else {
+        final response = await _apiService.postData({
+          'action': 'getTasks',
+          'role': role,
+          'username': username,
+        });
+
+        if (response['success'] == true) {
+          final List<dynamic> tasksData = response['tasks'];
+          _events = tasksData.map((json) => Event.fromJson(json)).toList();
         }
       }
     } catch (e) {
       debugPrint('Error fetching events: $e');
     }
 
-    if (!silent) {
-      _isLoading = false;
-      notifyListeners();
-    }
+    _isLoading = false;
+    _isSyncing = false;
+    notifyListeners();
   }
 
   Future<void> fetchAllPosts() async {
