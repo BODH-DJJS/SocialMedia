@@ -469,7 +469,7 @@ function copyForwardDocument(rowIndex, headers, taskSheet) {
     }
   }
   
-  // Fallback: If next doc is MISSING but the next stage task exists, create it!
+  // Fallback: Create next doc if missing
   if ((!nextDocUrl || nextDocUrl.indexOf('document/d/') === -1) && nextRowIdx !== -1) {
     try {
       var currentFile = DriveApp.getFileById(currentDocId[0]);
@@ -487,63 +487,81 @@ function copyForwardDocument(rowIndex, headers, taskSheet) {
         nextDocUrl = newDocFile.getUrl();
         taskSheet.getRange(nextRowIdx, docLinkCol + 1).setValue(nextDocUrl);
       }
-    } catch (e) {
-      // Failed to create fallback doc
-    }
+    } catch (e) {}
   }
   
-  // If next doc exists (or was just created), copy content over
+  // If next doc exists, copy content over
   if (nextDocUrl && nextDocUrl.indexOf('document/d/') !== -1) {
     var nextDocIdMatch = nextDocUrl.match(/[-\w]{25,}/);
     if (nextDocIdMatch) {
       try {
-        var currentDoc = DocumentApp.openById(currentDocId[0]);
         var nextDoc = DocumentApp.openById(nextDocIdMatch[0]);
-        
-        var body = currentDoc.getBody();
         var nextBody = nextDoc.getBody();
         
-        // Clear out the next doc (in case of re-run) except for the very first paragraph
-        var numNextChildren = nextBody.getNumChildren();
-        while (numNextChildren > 1) {
-          nextBody.removeChild(nextBody.getChild(numNextChildren - 1));
-          numNextChildren--;
+        // Clear out the next doc except for the very first paragraph
+        try {
+          var numNextChildren = nextBody.getNumChildren();
+          while (numNextChildren > 1) {
+            nextBody.removeChild(nextBody.getChild(numNextChildren - 1));
+            numNextChildren--;
+          }
+        } catch(e) {}
+        
+        // Helper function to append a doc's content
+        function appendDocContent(docIdToCopy, stageNameToLog) {
+          try {
+            var copyDoc = DocumentApp.openById(docIdToCopy);
+            var copyBody = copyDoc.getBody();
+            if (stageNameToLog) {
+              nextBody.appendParagraph('\n--- Content inherited from ' + stageNameToLog + ' ---\n').setHeading(DocumentApp.ParagraphHeading.HEADING2);
+            }
+            var numChildren = copyBody.getNumChildren();
+            for (var i = 0; i < numChildren; i++) {
+              try {
+                var child = copyBody.getChild(i);
+                if (child.getType() === DocumentApp.ElementType.PARAGRAPH) {
+                  nextBody.appendParagraph(child.copy());
+                } else if (child.getType() === DocumentApp.ElementType.LIST_ITEM) {
+                  nextBody.appendListItem(child.copy());
+                } else if (child.getType() === DocumentApp.ElementType.TABLE) {
+                  nextBody.appendTable(child.copy());
+                }
+              } catch(elemErr) {}
+            }
+          } catch(err) {}
         }
         
-        // Add some blank space for the user to write their new content at the top
-        nextBody.appendParagraph('\n\n');
+        // 1. Copy the current stage doc
+        appendDocContent(currentDocId[0], null); // no inherited header for the immediate current stage
         
-        // Add a horizontal rule and heading for the inherited content
-        nextBody.appendHorizontalRule();
-        nextBody.appendParagraph('--- Content inherited from ' + currentStage + ' ---').setHeading(DocumentApp.ParagraphHeading.HEADING2);
-        
-        // Copy everything from the current doc
-        var numChildren = body.getNumChildren();
-        for (var i = 0; i < numChildren; i++) {
-          try {
-            var child = body.getChild(i);
-            var newElement = null;
-            if (child.getType() === DocumentApp.ElementType.PARAGRAPH) {
-              newElement = nextBody.appendParagraph(child.copy().asParagraph());
-            } else if (child.getType() === DocumentApp.ElementType.LIST_ITEM) {
-              newElement = nextBody.appendListItem(child.copy().asListItem());
-            } else if (child.getType() === DocumentApp.ElementType.TABLE) {
-              newElement = nextBody.appendTable(child.copy().asTable());
+        // 2. Iterate backwards through all previous stages and copy their original docs
+        for (var p = currentIdx - 1; p >= 0; p--) {
+          var prevStageName = stageOrder[p];
+          var prevStageLower = prevStageName.toLowerCase();
+          var prevDocUrl = '';
+          
+          for (var r = 1; r < data.length; r++) {
+            var iterStageLower = (data[r][stageCol] || '').replace(/\s+/g, '').toLowerCase();
+            if (data[r][postNoCol] == postNo && iterStageLower === prevStageLower) {
+              prevDocUrl = data[r][docLinkCol] || '';
+              break;
             }
-            
-            // If the copied element was the title of the previous doc, downgrade it to a smaller heading so it doesn't clash
-            if (newElement && newElement.getType() === DocumentApp.ElementType.PARAGRAPH) {
-               if (newElement.getHeading() === DocumentApp.ParagraphHeading.HEADING1) {
-                 newElement.setHeading(DocumentApp.ParagraphHeading.HEADING3);
-               }
+          }
+          
+          if (prevDocUrl && prevDocUrl.indexOf('document/d/') !== -1) {
+            var prevDocIdMatch = prevDocUrl.match(/[-\w]{25,}/);
+            if (prevDocIdMatch) {
+              appendDocContent(prevDocIdMatch[0], prevStageName);
             }
-          } catch(elemErr) {
-            // Ignore error for specific element and continue copying the rest
           }
         }
+        
         nextDoc.saveAndClose();
       } catch (e) {
-        // Drive operations failed
+        var notesCol = headers.indexOf('Notes');
+        if (notesCol !== -1 && nextRowIdx !== -1) {
+          taskSheet.getRange(nextRowIdx, notesCol + 1).setValue('Error copying history: ' + e.toString());
+        }
       }
     }
   }
