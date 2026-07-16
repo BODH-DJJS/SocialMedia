@@ -374,7 +374,11 @@ function handleUpdateTask(payload) {
     try {
       copyForwardDocument(rowIndex, headers, sheet);
     } catch(e) {
-      // Drive logic failed, still save status
+      // Drive logic failed, save error to Notes
+      var notesCol = headers.indexOf('Notes');
+      if (notesCol !== -1) {
+        sheet.getRange(rowIndex, notesCol + 1).setValue('Error in copy: ' + e.toString());
+      }
     }
     
     // Unlock any task that depends on this one
@@ -516,21 +520,25 @@ function copyForwardDocument(rowIndex, headers, taskSheet) {
         // Copy everything from the current doc
         var numChildren = body.getNumChildren();
         for (var i = 0; i < numChildren; i++) {
-          var child = body.getChild(i);
-          var newElement;
-          if (child.getType() === DocumentApp.ElementType.PARAGRAPH) {
-            newElement = nextBody.appendParagraph(child.copy());
-          } else if (child.getType() === DocumentApp.ElementType.LIST_ITEM) {
-            newElement = nextBody.appendListItem(child.copy());
-          } else if (child.getType() === DocumentApp.ElementType.TABLE) {
-            newElement = nextBody.appendTable(child.copy());
-          }
-          
-          // If the copied element was the title of the previous doc, downgrade it to a smaller heading so it doesn't clash
-          if (newElement && newElement.getType() === DocumentApp.ElementType.PARAGRAPH) {
-             if (newElement.getHeading() === DocumentApp.ParagraphHeading.HEADING1) {
-               newElement.setHeading(DocumentApp.ParagraphHeading.HEADING3);
-             }
+          try {
+            var child = body.getChild(i);
+            var newElement = null;
+            if (child.getType() === DocumentApp.ElementType.PARAGRAPH) {
+              newElement = nextBody.appendParagraph(child.copy().asParagraph());
+            } else if (child.getType() === DocumentApp.ElementType.LIST_ITEM) {
+              newElement = nextBody.appendListItem(child.copy().asListItem());
+            } else if (child.getType() === DocumentApp.ElementType.TABLE) {
+              newElement = nextBody.appendTable(child.copy().asTable());
+            }
+            
+            // If the copied element was the title of the previous doc, downgrade it to a smaller heading so it doesn't clash
+            if (newElement && newElement.getType() === DocumentApp.ElementType.PARAGRAPH) {
+               if (newElement.getHeading() === DocumentApp.ParagraphHeading.HEADING1) {
+                 newElement.setHeading(DocumentApp.ParagraphHeading.HEADING3);
+               }
+            }
+          } catch(elemErr) {
+            // Ignore error for specific element and continue copying the rest
           }
         }
         nextDoc.saveAndClose();
