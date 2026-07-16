@@ -648,8 +648,6 @@ function createTasksForPost(postNo) {
           newDocFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.EDIT);
           newDoc.getBody().appendParagraph('Post: ' + postNo + ' | Content Document')
             .setHeading(DocumentApp.ParagraphHeading.HEADING1);
-          newDoc.getBody().appendParagraph('Date: ' + dateStr);
-          newDoc.getBody().appendParagraph('---');
           newDoc.saveAndClose();
           docLinks['Writing'] = newDocFile.getUrl();
         }
@@ -1071,11 +1069,6 @@ function createTasksForPostV2(payload) {
                   var body = newDoc.getBody();
 
                   body.appendParagraph('Post: ' + currPost[0] + ' | ' + docStageName + ' Document').setHeading(DocumentApp.ParagraphHeading.HEADING1);
-                  if (currPost[5]) body.appendParagraph('Theme: ' + currPost[5]);
-                  if (currPost[19]) body.appendParagraph('Important Info: ' + currPost[19]);
-                  body.appendParagraph('Venue: ' + cVenue);
-                  body.appendParagraph('Date: ' + cDateStr);
-                  body.appendParagraph('---');
                   newDoc.saveAndClose();
                   foundDocUrl = newDocFile.getUrl();
                 } catch (docErr) {
