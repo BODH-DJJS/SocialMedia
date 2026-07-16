@@ -507,10 +507,10 @@ function copyForwardDocument(rowIndex, headers, taskSheet) {
         }
         
         // Add some blank space for the user to write their new content at the top
-        nextBody.appendParagraph('\n\n\n');
+        nextBody.appendParagraph('\n\n');
         
-        // Add a page break and heading for the inherited content
-        nextBody.appendPageBreak();
+        // Add a horizontal rule and heading for the inherited content
+        nextBody.appendHorizontalRule();
         nextBody.appendParagraph('--- Content inherited from ' + currentStage + ' ---').setHeading(DocumentApp.ParagraphHeading.HEADING2);
         
         // Copy everything from the current doc
