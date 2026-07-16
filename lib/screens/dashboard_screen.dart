@@ -21,6 +21,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
   Timer? _refreshTimer;
   final Set<String> _selectedPosts = {};
   bool _isSelectionMode = false;
+  final TextEditingController _searchController = TextEditingController();
 
   @override
   void initState() {
@@ -46,6 +47,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
   @override
   void dispose() {
     _refreshTimer?.cancel();
+    _searchController.dispose();
     super.dispose();
   }
 
@@ -523,8 +525,15 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     final filters = ['All', 'Not Started', 'In Pipeline', 'Done'];
 
     List<Map<String, dynamic>> rawFiltered = provider.rawPosts.where((post) {
-      if (_postFilter == 'All') return true;
       final postNo = post['PostNo']?.toString() ?? '';
+      
+      // Search text filter
+      final searchQuery = _searchController.text.trim();
+      if (searchQuery.isNotEmpty && !postNo.contains(searchQuery)) {
+        return false;
+      }
+
+      if (_postFilter == 'All') return true;
       // For combined, we might check tasks for the GroupID, but for now we check tasks for PostNo or GroupID
       final groupId = post['GroupID']?.toString() ?? '';
       final postTasks = provider.events.where((t) => t.postNo == postNo || (groupId.isNotEmpty && t.postNo == groupId)).toList();
@@ -585,6 +594,32 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                   _selectedPosts.clear();
                 });
               },
+            ),
+          ),
+          // Search Field
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            color: Colors.white,
+            child: TextField(
+              controller: _searchController,
+              decoration: InputDecoration(
+                hintText: 'Search by Post No...',
+                prefixIcon: const Icon(Icons.search),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
+                ),
+                filled: true,
+                fillColor: Colors.grey.shade100,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                suffixIcon: _searchController.text.isNotEmpty 
+                  ? IconButton(
+                      icon: const Icon(Icons.clear), 
+                      onPressed: () => setState(() => _searchController.clear()),
+                    ) 
+                  : null,
+              ),
+              onChanged: (value) => setState(() {}),
             ),
           ),
           // Filter chips

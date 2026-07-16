@@ -1006,12 +1006,19 @@ function createTasksForPostV2(payload) {
         try {
           var monthFolder = DriveApp.getFolderById(match[0]);
 
+          // First, count occurrences of each date in the group
+          var dateCounts = {};
+          for (var i = 0; i < groupPosts.length; i++) {
+            var dStr = formatDate(groupPosts[i][6]);
+            dateCounts[dStr] = (dateCounts[dStr] || 0) + 1;
+          }
+
           for (var gp = 0; gp < groupPosts.length; gp++) {
             var currPost = groupPosts[gp];
             var cDateStr = formatDate(currPost[6]);
             var cVenue = currPost[4] || '';
-            // Only append venue if this is a grouped post (more than 1 post in group)
-            var cDateFolderTitle = (groupPosts.length > 1 && cVenue) ? (cDateStr + ' - ' + cVenue) : cDateStr;
+            // Only append venue if this date appears more than once in the group
+            var cDateFolderTitle = (dateCounts[cDateStr] > 1 && cVenue) ? (cDateStr + ' - ' + cVenue) : cDateStr;
 
             // Find or create date folder for this specific venue/post
             var dateFolder = null;
