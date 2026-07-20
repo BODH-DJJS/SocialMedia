@@ -44,13 +44,16 @@ function ensureSheets() {
   var requiredStages = [
     {stage: 'Writing', role: 'Writer', dep: ''},
     {stage: 'Editing', role: 'Editor', dep: 'Writing'},
-    {stage: 'Proofreading', role: 'Proofreader', dep: 'Editing'},
+    {stage: 'Proofreading', role: 'Proofreader', dep: 'Editing, Media Cross Check'},
     {stage: 'Crosscheck', role: 'CrossChecker', dep: 'Proofreading'},
-    {stage: 'Thumbnail', role: 'Thumbnail Designer', dep: ''},
+    {stage: 'Thumbnail Selection', role: 'Thumbnail Designer', dep: ''},
+    {stage: 'Thumbnail Processing', role: 'Thumbnail Designer', dep: 'Thumbnail Selection'},
+    {stage: 'Thumbnail Cross checking', role: 'Thumbnail Designer', dep: 'Thumbnail Processing'},
     {stage: 'Photos Selection', role: 'Photo Selector', dep: ''},
-    {stage: 'Photos Editing', role: 'Photo Editor', dep: 'Photos Selection'},
-    {stage: 'Videos Editing', role: 'Video Editor', dep: ''},
-    {stage: 'Media Crosscheck', role: 'Media CrossChecker', dep: 'Photos Editing'}
+    {stage: 'Photos Clean', role: 'Photo Selector', dep: 'Photos Selection'},
+    {stage: 'Photo Editing', role: 'Photo Editor', dep: 'Photos Selection'},
+    {stage: 'Video Editing', role: 'Video Editor', dep: 'Photos Selection'},
+    {stage: 'Media Cross Check', role: 'Media CrossChecker', dep: 'Photo Editing, Video Editing'}
   ];
   
   var existingPipeData = pipeSheet.getDataRange().getValues();
@@ -407,9 +410,11 @@ function unlockDependentTasks(rowIndex, headers, taskSheet) {
 
   // Find all stages that depend on currentStage
   for (var i = 1; i < pipe.length; i++) {
-    var depOnLower = (pipe[i][2] || '').toString().replace(/\s+/g, '').toLowerCase();
-    if (depOnLower === currentStageLower) {
-      dependentStages.push((pipe[i][0] || '').replace(/\s+/g, '').toLowerCase());
+    var deps = (pipe[i][2] || '').toString().toLowerCase().split(',');
+    for (var d = 0; d < deps.length; d++) {
+      if (deps[d].replace(/\s+/g, '') === currentStageLower) {
+        dependentStages.push((pipe[i][0] || '').replace(/\s+/g, '').toLowerCase());
+      }
     }
   }
 
@@ -419,12 +424,68 @@ function unlockDependentTasks(rowIndex, headers, taskSheet) {
   var postNoCol = headers.indexOf('PostNo');
   var statusCol = headers.indexOf('Status');
 
+  // Find all tasks for this post
+  var postTasks = [];
   for (var i = 1; i < data.length; i++) {
-    var iterStageLower = (data[i][stageCol] || '').replace(/\s+/g, '').toLowerCase();
-    if (data[i][postNoCol] == postNo && dependentStages.indexOf(iterStageLower) !== -1) {
-      var currentStatus = data[i][statusCol];
-      if (currentStatus === 'Waiting' || !currentStatus) {
-        taskSheet.getRange(i + 1, statusCol + 1).setValue('Ready');
+    if (data[i][postNoCol] == postNo) {
+      postTasks.push({
+        rowIdx: i + 1, 
+        stage: (data[i][stageCol] || '').replace(/\s+/g, '').toLowerCase(), 
+        status: data[i][statusCol]
+      });
+    }
+  }
+
+  // For each dependent stage, check if ALL its dependencies are Done (only for tasks that exist)
+  for (var d = 0; d < dependentStages.length; d++) {
+    var depStageLower = dependentStages[d];
+    
+    // Find the task for this dependent stage
+    var targetTask = null;
+    for (var p = 0; p < postTasks.length; p++) {
+      if (postTasks[p].stage === depStageLower) {
+        targetTask = postTasks[p];
+        break;
+      }
+    }
+    
+    if (targetTask && (targetTask.status === 'Waiting' || !targetTask.status)) {
+      // Find its required dependencies from pipe
+      var requiredDeps = [];
+      for (var i = 1; i < pipe.length; i++) {
+        if ((pipe[i][0] || '').replace(/\s+/g, '').toLowerCase() === depStageLower) {
+          requiredDeps = (pipe[i][2] || '').toString().toLowerCase().split(',');
+          for (var r = 0; r < requiredDeps.length; r++) {
+            requiredDeps[r] = requiredDeps[r].replace(/\s+/g, '');
+          }
+          break;
+        }
+      }
+      
+      var allDone = true;
+      for (var r = 0; r < requiredDeps.length; r++) {
+        var reqDep = requiredDeps[r];
+        if (!reqDep) continue;
+        
+        // Does this dependency exist in the post's tasks?
+        var reqTaskExists = false;
+        var reqTaskDone = false;
+        for (var p = 0; p < postTasks.length; p++) {
+          if (postTasks[p].stage === reqDep) {
+            reqTaskExists = true;
+            if (postTasks[p].status === 'Done') reqTaskDone = true;
+            break;
+          }
+        }
+        
+        if (reqTaskExists && !reqTaskDone) {
+          allDone = false;
+          break;
+        }
+      }
+      
+      if (allDone) {
+        taskSheet.getRange(targetTask.rowIdx, statusCol + 1).setValue('Ready');
       }
     }
   }
@@ -1103,11 +1164,26 @@ function createTasksForPostV2(payload) {
   var notesCol = taskHeaders.indexOf('Notes');
   
   // ── Create task rows with admin-specified assignees ──
+  var skipStages = [];
+  var pubLower = (publishPlatform || '').toLowerCase();
+  var modLower = (mediaMode || '').toLowerCase();
+  
+  if (pubLower.indexOf('insta') === -1) {
+    skipStages.push('thumbnailselection', 'thumbnailprocessing', 'thumbnailcrosschecking');
+  }
+  if (modLower.indexOf('video') === -1) {
+    skipStages.push('videoediting');
+  }
+  if (modLower.indexOf('photo') === -1) {
+    skipStages.push('photoediting');
+  }
+
   for (var i = 1; i < pipe.length; i++) {
     var stage = pipe[i][0];
     var depOn = pipe[i][2] || '';
     
     var normalizedStage = stage.toString().replace(/\s+/g, '').toLowerCase();
+    if (skipStages.indexOf(normalizedStage) !== -1) continue;
     
     var assignee = '';
     for (var k in assignees) {

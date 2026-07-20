@@ -19,8 +19,11 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
   String? _selectedProofreader;
   String? _selectedCrosscheck;
   
-  String? _selectedThumbnail;
+  String? _selectedThumbnailSelect;
+  String? _selectedThumbnailProcess;
+  String? _selectedThumbnailCrosscheck;
   String? _selectedPhotoSelect;
+  String? _selectedPhotosClean;
   String? _selectedPhotoEdit;
   String? _selectedVideoEdit;
   String? _selectedMediaCheck;
@@ -30,8 +33,11 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
   DateTime? _proofreadingDue;
   DateTime? _crosscheckDue;
   
-  DateTime? _thumbnailDue;
+  DateTime? _thumbnailSelectDue;
+  DateTime? _thumbnailProcessDue;
+  DateTime? _thumbnailCrosscheckDue;
   DateTime? _photoSelectDue;
+  DateTime? _photosCleanDue;
   DateTime? _photoEditDue;
   DateTime? _videoEditDue;
   DateTime? _mediaCheckDue;
@@ -203,23 +209,47 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
     if (_selectedWriter != null) assignees['Writing'] = _selectedWriter!;
     if (_selectedEditor != null) assignees['Editing'] = _selectedEditor!;
     if (_selectedProofreader != null) assignees['Proofreading'] = _selectedProofreader!;
-    if (_selectedCrosscheck != null) assignees['Crosscheck'] = _selectedCrosscheck!;
-    if (_selectedThumbnail != null) assignees['Thumbnail'] = _selectedThumbnail!;
+    if (_selectedCrosscheck != null) assignees['Cross check'] = _selectedCrosscheck!;
+    
+    if (_publishPlatform.toLowerCase().contains('insta')) {
+      if (_selectedThumbnailSelect != null) assignees['Thumbnail Selection'] = _selectedThumbnailSelect!;
+      if (_selectedThumbnailProcess != null) assignees['Thumbnail Processing'] = _selectedThumbnailProcess!;
+      if (_selectedThumbnailCrosscheck != null) assignees['Thumbnail Cross checking'] = _selectedThumbnailCrosscheck!;
+    }
+
     if (_selectedPhotoSelect != null) assignees['Photos Selection'] = _selectedPhotoSelect!;
-    if (_selectedPhotoEdit != null) assignees['Photos Editing'] = _selectedPhotoEdit!;
-    if (_selectedVideoEdit != null) assignees['Video Editing'] = _selectedVideoEdit!;
-    if (_selectedMediaCheck != null) assignees['Media Crosscheck'] = _selectedMediaCheck!;
+    if (_selectedPhotosClean != null) assignees['Photos Clean'] = _selectedPhotosClean!;
+    
+    if (_mediaMode.toLowerCase().contains('photo')) {
+      if (_selectedPhotoEdit != null) assignees['Photo Editing'] = _selectedPhotoEdit!;
+    }
+    if (_mediaMode.toLowerCase().contains('video')) {
+      if (_selectedVideoEdit != null) assignees['Video Editing'] = _selectedVideoEdit!;
+    }
+    if (_selectedMediaCheck != null) assignees['Media Cross Check'] = _selectedMediaCheck!;
 
     final dueDates = <String, String>{};
     if (_writingDue != null) dueDates['Writing'] = _writingDue!.toIso8601String();
     if (_editingDue != null) dueDates['Editing'] = _editingDue!.toIso8601String();
     if (_proofreadingDue != null) dueDates['Proofreading'] = _proofreadingDue!.toIso8601String();
-    if (_crosscheckDue != null) dueDates['Crosscheck'] = _crosscheckDue!.toIso8601String();
-    if (_thumbnailDue != null) dueDates['Thumbnail'] = _thumbnailDue!.toIso8601String();
+    if (_crosscheckDue != null) dueDates['Cross check'] = _crosscheckDue!.toIso8601String();
+    
+    if (_publishPlatform.toLowerCase().contains('insta')) {
+      if (_thumbnailSelectDue != null) dueDates['Thumbnail Selection'] = _thumbnailSelectDue!.toIso8601String();
+      if (_thumbnailProcessDue != null) dueDates['Thumbnail Processing'] = _thumbnailProcessDue!.toIso8601String();
+      if (_thumbnailCrosscheckDue != null) dueDates['Thumbnail Cross checking'] = _thumbnailCrosscheckDue!.toIso8601String();
+    }
+    
     if (_photoSelectDue != null) dueDates['Photos Selection'] = _photoSelectDue!.toIso8601String();
-    if (_photoEditDue != null) dueDates['Photos Editing'] = _photoEditDue!.toIso8601String();
-    if (_videoEditDue != null) dueDates['Video Editing'] = _videoEditDue!.toIso8601String();
-    if (_mediaCheckDue != null) dueDates['Media Crosscheck'] = _mediaCheckDue!.toIso8601String();
+    if (_photosCleanDue != null) dueDates['Photos Clean'] = _photosCleanDue!.toIso8601String();
+    
+    if (_mediaMode.toLowerCase().contains('photo')) {
+      if (_photoEditDue != null) dueDates['Photo Editing'] = _photoEditDue!.toIso8601String();
+    }
+    if (_mediaMode.toLowerCase().contains('video')) {
+      if (_videoEditDue != null) dueDates['Video Editing'] = _videoEditDue!.toIso8601String();
+    }
+    if (_mediaCheckDue != null) dueDates['Media Cross Check'] = _mediaCheckDue!.toIso8601String();
 
     final success = await provider.createTasksForPostV2(
       postNo: postNo,
@@ -355,20 +385,46 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
                           const Divider(),
                           const SizedBox(height: 16),
                           const Text('Media Assignments', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                          const SizedBox(height: 20),
+                          
+                          if (_publishPlatform.toLowerCase().contains('insta')) ...[
+                            const SizedBox(height: 20),
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(flex: 2, child: _buildUserDropdown('1. Thumbnail Selection', 'Thumbnail Designer', _selectedThumbnailSelect, (v) => setState(() => _selectedThumbnailSelect = v))),
+                                const SizedBox(width: 12),
+                                Expanded(flex: 1, child: _buildDateField('Due Date', _thumbnailSelectDue, (d) => setState(() => _thumbnailSelectDue = d))),
+                              ],
+                            ),
+                            const SizedBox(height: 20),
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(flex: 2, child: _buildUserDropdown('2. Thumbnail Processing', 'Thumbnail Designer', _selectedThumbnailProcess, (v) => setState(() => _selectedThumbnailProcess = v))),
+                                const SizedBox(width: 12),
+                                Expanded(flex: 1, child: _buildDateField('Due Date', _thumbnailProcessDue, (d) => setState(() => _thumbnailProcessDue = d))),
+                              ],
+                            ),
+                            const SizedBox(height: 20),
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(flex: 2, child: _buildUserDropdown('3. Thumbnail Cross checking', 'Thumbnail Designer', _selectedThumbnailCrosscheck, (v) => setState(() => _selectedThumbnailCrosscheck = v))),
+                                const SizedBox(width: 12),
+                                Expanded(flex: 1, child: _buildDateField('Due Date', _thumbnailCrosscheckDue, (d) => setState(() => _thumbnailCrosscheckDue = d))),
+                              ],
+                            ),
+                            const Padding(
+                              padding: EdgeInsets.symmetric(vertical: 16.0),
+                              child: Divider(),
+                            ),
+                          ],
+                          
+                          const SizedBox(height: 10),
                           Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Expanded(flex: 2, child: _buildUserDropdown('1. Thumbnail', 'Thumbnail Designer', _selectedThumbnail, (v) => setState(() => _selectedThumbnail = v))),
-                              const SizedBox(width: 12),
-                              Expanded(flex: 1, child: _buildDateField('Due Date', _thumbnailDue, (d) => setState(() => _thumbnailDue = d))),
-                            ],
-                          ),
-                          const SizedBox(height: 20),
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(flex: 2, child: _buildUserDropdown('2. Photos Selection', 'Photo Selector', _selectedPhotoSelect, (v) => setState(() => _selectedPhotoSelect = v))),
+                              Expanded(flex: 2, child: _buildUserDropdown('Photos Selection', 'Photo Selector', _selectedPhotoSelect, (v) => setState(() => _selectedPhotoSelect = v))),
                               const SizedBox(width: 12),
                               Expanded(flex: 1, child: _buildDateField('Due Date', _photoSelectDue, (d) => setState(() => _photoSelectDue = d))),
                             ],
@@ -377,25 +433,41 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
                           Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Expanded(flex: 2, child: _buildUserDropdown('3. Photos Editing', 'Photo Editor', _selectedPhotoEdit, (v) => setState(() => _selectedPhotoEdit = v))),
+                              Expanded(flex: 2, child: _buildUserDropdown('Photos Clean', 'Photo Selector', _selectedPhotosClean, (v) => setState(() => _selectedPhotosClean = v))),
                               const SizedBox(width: 12),
-                              Expanded(flex: 1, child: _buildDateField('Due Date', _photoEditDue, (d) => setState(() => _photoEditDue = d))),
+                              Expanded(flex: 1, child: _buildDateField('Due Date', _photosCleanDue, (d) => setState(() => _photosCleanDue = d))),
                             ],
                           ),
+                          
+                          if (_mediaMode.toLowerCase().contains('photo')) ...[
+                            const SizedBox(height: 20),
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(flex: 2, child: _buildUserDropdown('Photo Editing', 'Photo Editor', _selectedPhotoEdit, (v) => setState(() => _selectedPhotoEdit = v))),
+                                const SizedBox(width: 12),
+                                Expanded(flex: 1, child: _buildDateField('Due Date', _photoEditDue, (d) => setState(() => _photoEditDue = d))),
+                              ],
+                            ),
+                          ],
+                          
+                          if (_mediaMode.toLowerCase().contains('video')) ...[
+                            const SizedBox(height: 20),
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(flex: 2, child: _buildUserDropdown('Video Editing', 'Video Editor', _selectedVideoEdit, (v) => setState(() => _selectedVideoEdit = v))),
+                                const SizedBox(width: 12),
+                                Expanded(flex: 1, child: _buildDateField('Due Date', _videoEditDue, (d) => setState(() => _videoEditDue = d))),
+                              ],
+                            ),
+                          ],
+                          
                           const SizedBox(height: 20),
                           Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Expanded(flex: 2, child: _buildUserDropdown('4. Video Editing', 'Video Editor', _selectedVideoEdit, (v) => setState(() => _selectedVideoEdit = v))),
-                              const SizedBox(width: 12),
-                              Expanded(flex: 1, child: _buildDateField('Due Date', _videoEditDue, (d) => setState(() => _videoEditDue = d))),
-                            ],
-                          ),
-                          const SizedBox(height: 20),
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(flex: 2, child: _buildUserDropdown('5. Media Crosscheck', 'Media CrossChecker', _selectedMediaCheck, (v) => setState(() => _selectedMediaCheck = v))),
+                              Expanded(flex: 2, child: _buildUserDropdown('Media Cross Check', 'Media CrossChecker', _selectedMediaCheck, (v) => setState(() => _selectedMediaCheck = v))),
                               const SizedBox(width: 12),
                               Expanded(flex: 1, child: _buildDateField('Due Date', _mediaCheckDue, (d) => setState(() => _mediaCheckDue = d))),
                             ],

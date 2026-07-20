@@ -22,6 +22,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
   final Set<String> _selectedPosts = {};
   bool _isSelectionMode = false;
   final TextEditingController _searchController = TextEditingController();
+  String _globalTaskFilter = 'All Tasks';
 
   @override
   void initState() {
@@ -114,6 +115,17 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                   tooltip: 'Refresh',
                   onPressed: () => eventProvider.fetchEvents(auth.role, auth.username),
                 ),
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.filter_alt),
+            tooltip: 'Filter Tasks: $_globalTaskFilter',
+            onSelected: (val) => setState(() => _globalTaskFilter = val),
+            itemBuilder: (context) => [
+              const PopupMenuItem(value: 'All Tasks', child: Text('All Tasks')),
+              const PopupMenuItem(value: 'Ready', child: Text('Ready Only')),
+              const PopupMenuItem(value: 'Waiting', child: Text('Waiting Only')),
+              const PopupMenuItem(value: 'In Progress', child: Text('In Progress Only')),
+            ],
+          ),
           IconButton(
             icon: const Icon(Icons.logout_rounded),
             tooltip: 'Logout',
@@ -382,6 +394,9 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
   }
 
   Widget _kanbanColumn(String title, List<Event> tasks, Color color, IconData icon, EventProvider provider) {
+    if (_globalTaskFilter != 'All Tasks') {
+      tasks = tasks.where((t) => t.status == _globalTaskFilter).toList();
+    }
     List<Event> notStarted = tasks.where((t) => t.status != 'Done').toList();
     final doneList = tasks.where((t) => t.status == 'Done').toList();
 
@@ -481,7 +496,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
-                      color: isDone ? Colors.green : (task.status == 'In Progress' ? Colors.blue : Colors.grey),
+                      color: isDone ? Colors.green : (task.status == 'In Progress' ? Colors.blue : (task.status == 'Ready' ? Colors.deepOrange : Colors.grey.shade400)),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
@@ -1085,7 +1100,11 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
 
   // ── USER BODY (My Queue) ──
   Widget _buildUserBody(EventProvider provider) {
-    final visibleEvents = provider.events.where((e) => e.status != 'Waiting').toList();
+    List<Event> visibleEvents = provider.events.where((e) => e.status != 'Waiting').toList();
+    if (_globalTaskFilter != 'All Tasks') {
+      visibleEvents = visibleEvents.where((e) => e.status == _globalTaskFilter).toList();
+    }
+    
     if (visibleEvents.isEmpty) {
       return Center(
         child: Column(
