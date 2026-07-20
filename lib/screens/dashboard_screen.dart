@@ -345,15 +345,18 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
       ('Writing', provider.events.where((e) => e.stage == 'Writing').toList(), const Color(0xFF42A5F5), Icons.edit_note),
       ('Editing', provider.events.where((e) => e.stage == 'Editing').toList(), const Color(0xFFFF8A65), Icons.edit),
       ('Proofreading', provider.events.where((e) => e.stage == 'Proofreading').toList(), const Color(0xFFAB47BC), Icons.spellcheck),
-      ('Crosscheck', provider.events.where((e) => e.stage == 'Crosscheck').toList(), const Color(0xFF26A69A), Icons.fact_check),
+      ('Cross check', provider.events.where((e) => e.stage == 'Cross check').toList(), const Color(0xFF26A69A), Icons.fact_check),
     ];
     
     final mediaStages = [
-      ('Thumbnail', provider.events.where((e) => e.stage == 'Thumbnail').toList(), Colors.orange, Icons.image),
+      ('Thumbnail Selection', provider.events.where((e) => e.stage == 'Thumbnail Selection').toList(), Colors.orange.shade300, Icons.image),
+      ('Thumbnail Processing', provider.events.where((e) => e.stage == 'Thumbnail Processing').toList(), Colors.orange, Icons.design_services),
+      ('Thumbnail Cross checking', provider.events.where((e) => e.stage == 'Thumbnail Cross checking').toList(), Colors.deepOrange, Icons.fact_check),
       ('Photos Selection', provider.events.where((e) => e.stage == 'Photos Selection').toList(), Colors.teal, Icons.photo_album),
-      ('Photos Editing', provider.events.where((e) => e.stage == 'Photos Editing').toList(), Colors.indigo, Icons.auto_fix_high),
+      ('Photos Clean', provider.events.where((e) => e.stage == 'Photos Clean').toList(), Colors.cyan, Icons.cleaning_services),
+      ('Photo Editing', provider.events.where((e) => e.stage == 'Photo Editing').toList(), Colors.indigo, Icons.auto_fix_high),
       ('Video Editing', provider.events.where((e) => e.stage == 'Video Editing').toList(), Colors.redAccent, Icons.video_library),
-      ('Media Crosscheck', provider.events.where((e) => e.stage == 'Media Crosscheck').toList(), Colors.blueGrey, Icons.fact_check),
+      ('Media Cross Check', provider.events.where((e) => e.stage == 'Media Cross Check').toList(), Colors.blueGrey, Icons.fact_check),
     ];
 
     return ListView(
