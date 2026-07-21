@@ -12,27 +12,41 @@ function ensureSheets() {
     users.appendRow(['Email', 'Name', 'Role']);
   }
   var usersSheet = ss.getSheetByName(USERS_SHEET);
-  // Seed test users if sheet only has header row (no data)
-  if (usersSheet.getLastRow() <= 1) {
-    var roles = [
-      {role: 'Writer', prefix: 'writer'},
-      {role: 'Editor', prefix: 'editor'},
-      {role: 'Proofreader', prefix: 'proofreader'},
-      {role: 'CrossChecker', prefix: 'crosscheck'},
-      {role: 'Thumbnail Designer', prefix: 'thumbnail'},
-      {role: 'Photo Selector', prefix: 'photoselect'},
-      {role: 'Photo Editor', prefix: 'photoedit'},
-      {role: 'Video Editor', prefix: 'videoedit'},
-      {role: 'Media CrossChecker', prefix: 'mediacheck'},
-      {role: 'Uploader', prefix: 'uploader'}
-    ];
-    for (var r = 0; r < roles.length; r++) {
-      for (var n = 1; n <= 3; n++) { // Changed to 3 users per role to avoid huge list
-        usersSheet.appendRow([roles[r].prefix + n, 'pass123', roles[r].role]);
-      }
+  var usersData = usersSheet.getDataRange().getValues();
+  var roleCounts = {};
+  for (var u = 1; u < usersData.length; u++) {
+    var role = usersData[u][2];
+    if (role) {
+      roleCounts[role] = (roleCounts[role] || 0) + 1;
     }
-    // Add admin
-    usersSheet.appendRow(['admin', 'admin123', 'Admin']);
+  }
+
+  var roles = [
+    {role: 'Writer', prefix: 'writer'},
+    {role: 'Editor', prefix: 'editor'},
+    {role: 'Proofreader', prefix: 'proofreader'},
+    {role: 'CrossChecker', prefix: 'crosscheck'},
+    {role: 'Thumbnail Designer', prefix: 'thumbnail'},
+    {role: 'Photo Selector', prefix: 'photoselect'},
+    {role: 'Photo Editor', prefix: 'photoedit'},
+    {role: 'Video Editor', prefix: 'videoedit'},
+    {role: 'Media CrossChecker', prefix: 'mediacheck'},
+    {role: 'Uploader', prefix: 'uploader'}
+  ];
+
+  for (var r = 0; r < roles.length; r++) {
+    var count = roleCounts[roles[r].role] || 0;
+    // Add users until we have at least 5 for this role
+    var suffix = count + 1;
+    while (count < 5) {
+      usersSheet.appendRow([roles[r].prefix + suffix, 'Sample ' + roles[r].role + ' ' + suffix, roles[r].role]);
+      count++;
+      suffix++;
+    }
+  }
+  
+  if (!roleCounts['Admin']) {
+    usersSheet.appendRow(['admin', 'Admin User', 'Admin']);
   }
   
   var pipeSheet = ss.getSheetByName(PIPELINE_SHEET);
@@ -239,8 +253,80 @@ function buildPostObj(pRow) {
   };
 }
 
+function backfillMissingTasks(ss) {
+  var tasksSheet = ss.getSheetByName(TASKS_SHEET);
+  var pipeSheet = ss.getSheetByName(PIPELINE_SHEET);
+  if (!tasksSheet || !pipeSheet) return false;
+  
+  var tasksData = tasksSheet.getDataRange().getValues();
+  if (tasksData.length < 2) return false;
+
+  var pipeData = pipeSheet.getDataRange().getValues();
+  
+  var requiredStages = [];
+  for (var p = 1; p < pipeData.length; p++) {
+    if (pipeData[p][0]) requiredStages.push(pipeData[p][0].toString().trim());
+  }
+  
+  var postTasks = {};
+  var postStatuses = {}; 
+  for (var i = 1; i < tasksData.length; i++) {
+    var pNo = tasksData[i][1];
+    var st = tasksData[i][2];
+    var status = tasksData[i][4];
+    if (pNo && st) {
+      pNo = pNo.toString().trim();
+      if (!postTasks[pNo]) {
+        postTasks[pNo] = [];
+        postStatuses[pNo] = { total: 0, done: 0 };
+      }
+      postTasks[pNo].push(st.toString().trim().toLowerCase());
+      postStatuses[pNo].total++;
+      if (status === 'Done') postStatuses[pNo].done++;
+    }
+  }
+  
+  var newRows = [];
+  var now = new Date().toLocaleString();
+  var headers = tasksData[0];
+  
+  for (var pNo in postTasks) {
+    if (postStatuses[pNo].total > 0 && postStatuses[pNo].total > postStatuses[pNo].done) {
+      var existingSt = postTasks[pNo];
+      for (var r = 0; r < requiredStages.length; r++) {
+        var reqStage = requiredStages[r];
+        if (existingSt.indexOf(reqStage.toLowerCase()) === -1) {
+          var rowData = [];
+          for (var h = 0; h < headers.length; h++) {
+            var headerName = headers[h].toString();
+            if (headerName === 'TaskID') rowData.push(pNo + '-' + reqStage);
+            else if (headerName === 'PostNo') rowData.push(pNo);
+            else if (headerName === 'Stage') rowData.push(reqStage);
+            else if (headerName === 'Assignee') rowData.push('');
+            else if (headerName === 'Status') rowData.push('Waiting');
+            else if (headerName === 'StartedAt') rowData.push(now);
+            else rowData.push('');
+          }
+          newRows.push(rowData);
+          existingSt.push(reqStage.toLowerCase());
+        }
+      }
+    }
+  }
+  
+  if (newRows.length > 0) {
+    tasksSheet.getRange(tasksData.length + 1, 1, newRows.length, headers.length).setValues(newRows);
+    return true;
+  }
+  return false;
+}
+
 function handleGetTasks(payload) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
+  
+  // Auto-backfill missing tasks for active posts before returning data
+  var didBackfill = backfillMissingTasks(ss);
+  
   var tasksData = ss.getSheetByName(TASKS_SHEET).getDataRange().getValues();
   var postsData = ss.getSheetByName(POSTS_SHEET).getDataRange().getValues();
   var usersData = ss.getSheetByName(USERS_SHEET).getDataRange().getValues();
