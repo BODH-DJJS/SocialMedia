@@ -334,7 +334,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
       ('Writing', provider.events.where((e) => e.stage == 'Writing').toList(), const Color(0xFF42A5F5), Icons.edit_note),
       ('Editing', provider.events.where((e) => e.stage == 'Editing').toList(), const Color(0xFFFF8A65), Icons.edit),
       ('Proofreading', provider.events.where((e) => e.stage == 'Proofreading').toList(), const Color(0xFFAB47BC), Icons.spellcheck),
-      ('Cross check', provider.events.where((e) => e.stage == 'Cross check').toList(), const Color(0xFF26A69A), Icons.fact_check),
+      ('Cross check', provider.events.where((e) => e.stage == 'Cross check' || e.stage == 'Crosscheck').toList(), const Color(0xFF26A69A), Icons.fact_check),
       ('Ready to Post', provider.events.where((e) => e.stage == 'Ready to Post').toList(), Colors.purple.shade300, Icons.upload_file),
     ];
     

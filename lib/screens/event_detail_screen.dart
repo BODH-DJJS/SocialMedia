@@ -284,7 +284,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                   const SizedBox(height: 12),
 
                   // Content Document Card
-                  if (['Writing', 'Editing', 'Proofreading', 'Cross check', 'Ready to Post'].contains(e.stage)) ...[
+                  if (['Writing', 'Editing', 'Proofreading', 'Cross check', 'Crosscheck', 'Ready to Post'].contains(e.stage)) ...[
                     Card(
                       child: Container(
                         decoration: BoxDecoration(
