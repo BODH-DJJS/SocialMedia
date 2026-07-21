@@ -22,7 +22,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
   final Set<String> _selectedPosts = {};
   bool _isSelectionMode = false;
   final TextEditingController _searchController = TextEditingController();
-  String _globalTaskFilter = 'All Tasks';
+  String _myQueueFilter = 'All Tasks';
 
   @override
   void initState() {
@@ -115,17 +115,6 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                   tooltip: 'Refresh',
                   onPressed: () => eventProvider.fetchEvents(auth.role, auth.username),
                 ),
-          PopupMenuButton<String>(
-            icon: const Icon(Icons.filter_alt),
-            tooltip: 'Filter Tasks: $_globalTaskFilter',
-            onSelected: (val) => setState(() => _globalTaskFilter = val),
-            itemBuilder: (context) => [
-              const PopupMenuItem(value: 'All Tasks', child: Text('All Tasks')),
-              const PopupMenuItem(value: 'Ready', child: Text('Ready Only')),
-              const PopupMenuItem(value: 'Waiting', child: Text('Waiting Only')),
-              const PopupMenuItem(value: 'In Progress', child: Text('In Progress Only')),
-            ],
-          ),
           IconButton(
             icon: const Icon(Icons.logout_rounded),
             tooltip: 'Logout',
@@ -397,51 +386,75 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     );
   }
 
-  Widget _kanbanColumn(String title, List<Event> tasks, Color color, IconData icon, EventProvider provider) {
-    if (_globalTaskFilter != 'All Tasks') {
-      tasks = tasks.where((t) => t.status == _globalTaskFilter).toList();
-    }
-    List<Event> notStarted = tasks.where((t) => t.status != 'Done').toList();
-    final doneList = tasks.where((t) => t.status == 'Done').toList();
+  Widget _kanbanColumn(String title, List<Event> allTasks, Color color, IconData icon, EventProvider provider) {
+    String columnFilter = 'All Tasks';
+    
+    return StatefulBuilder(
+      builder: (context, setLocalState) {
+        List<Event> tasks = allTasks;
+        if (columnFilter != 'All Tasks') {
+          tasks = tasks.where((t) => t.status == columnFilter).toList();
+        }
+        List<Event> notStarted = tasks.where((t) => t.status != 'Done').toList();
+        final doneList = tasks.where((t) => t.status == 'Done').toList();
 
-    // Sort so that "Ready" tasks appear first
-    notStarted.sort((a, b) {
-      if (a.status == 'Ready' && b.status != 'Ready') return -1;
-      if (a.status != 'Ready' && b.status == 'Ready') return 1;
-      return 0;
-    });
+        // Sort so that "Ready" tasks appear first
+        notStarted.sort((a, b) {
+          if (a.status == 'Ready' && b.status != 'Ready') return -1;
+          if (a.status != 'Ready' && b.status == 'Ready') return 1;
+          return 0;
+        });
 
-    return Container(
-      width: 300,
-      margin: const EdgeInsets.only(right: 12),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.06),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: color.withOpacity(0.2)),
-      ),
-      child: Column(
-        children: [
-          // Header
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(colors: [color.withOpacity(0.15), color.withOpacity(0.05)]),
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-            ),
-            child: Row(
-              children: [
-                Icon(icon, color: color, size: 20),
-                const SizedBox(width: 8),
-                Text(title, style: TextStyle(fontWeight: FontWeight.bold, color: color.withOpacity(0.9), fontSize: 15)),
-                const Spacer(),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(12)),
-                  child: Text('${notStarted.length}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
-                ),
-              ],
-            ),
+        return Container(
+          width: 300,
+          margin: const EdgeInsets.only(right: 12),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.06),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: color.withOpacity(0.2)),
           ),
+          child: Column(
+            children: [
+              // Header
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(colors: [color.withOpacity(0.15), color.withOpacity(0.05)]),
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                ),
+                child: Row(
+                  children: [
+                    Icon(icon, color: color, size: 20),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(title, style: TextStyle(fontWeight: FontWeight.bold, color: color.withOpacity(0.9), fontSize: 15), overflow: TextOverflow.ellipsis),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(12)),
+                      child: Text('${notStarted.length}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                    ),
+                    const SizedBox(width: 4),
+                    PopupMenuButton<String>(
+                      icon: const Icon(Icons.filter_list, size: 18),
+                      tooltip: 'Filter $title',
+                      initialValue: columnFilter,
+                      padding: EdgeInsets.zero,
+                      onSelected: (val) {
+                        setLocalState(() {
+                          columnFilter = val;
+                        });
+                      },
+                      itemBuilder: (context) => [
+                        const PopupMenuItem(value: 'All Tasks', child: Text('All Tasks')),
+                        const PopupMenuItem(value: 'Ready', child: Text('Ready Only')),
+                        const PopupMenuItem(value: 'Waiting', child: Text('Waiting Only')),
+                        const PopupMenuItem(value: 'In Progress', child: Text('In Progress Only')),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
           // Cards
           Expanded(
             child: ListView(
@@ -465,6 +478,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
         ],
       ),
     );
+    });
   }
 
   Widget _buildKanbanTaskCard(Event task, Color accentColor, EventProvider provider) {
@@ -1110,36 +1124,63 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
   // ── USER BODY (My Queue) ──
   Widget _buildUserBody(EventProvider provider) {
     List<Event> visibleEvents = provider.events.where((e) => e.status != 'Waiting').toList();
-    if (_globalTaskFilter != 'All Tasks') {
-      visibleEvents = visibleEvents.where((e) => e.status == _globalTaskFilter).toList();
+    if (_myQueueFilter != 'All Tasks') {
+      visibleEvents = visibleEvents.where((e) => e.status == _myQueueFilter).toList();
     }
     
-    if (visibleEvents.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.inbox_rounded, size: 64, color: Colors.grey.shade300),
-            const SizedBox(height: 12),
-            Text('No tasks assigned yet', style: TextStyle(fontSize: 18, color: Colors.grey.shade500)),
-          ],
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('My Queue', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+              DropdownButton<String>(
+                value: _myQueueFilter,
+                items: const [
+                  DropdownMenuItem(value: 'All Tasks', child: Text('All Tasks')),
+                  DropdownMenuItem(value: 'Ready', child: Text('Ready Only')),
+                  DropdownMenuItem(value: 'Waiting', child: Text('Waiting Only')),
+                  DropdownMenuItem(value: 'In Progress', child: Text('In Progress Only')),
+                ],
+                onChanged: (val) {
+                  if (val != null) setState(() => _myQueueFilter = val);
+                },
+              ),
+            ],
+          ),
         ),
-      );
-    }
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: visibleEvents.length,
-      itemBuilder: (context, index) {
-        final task = visibleEvents[index];
-        final stageColor = task.stage == 'Writing'
-            ? const Color(0xFF42A5F5)
-            : task.stage == 'Editing'
-                ? const Color(0xFFFF8A65)
-                : task.stage == 'Proofreading'
-                    ? const Color(0xFFAB47BC)
-                    : const Color(0xFF26A69A);
-        return _buildTaskCard(task, stageColor);
-      },
+        Expanded(
+          child: visibleEvents.isEmpty
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.inbox_rounded, size: 64, color: Colors.grey.shade300),
+                      const SizedBox(height: 12),
+                      Text('No tasks found', style: TextStyle(fontSize: 18, color: Colors.grey.shade500)),
+                    ],
+                  ),
+                )
+              : ListView.builder(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
+                  itemCount: visibleEvents.length,
+                  itemBuilder: (context, index) {
+                    final task = visibleEvents[index];
+                    final stageColor = task.stage == 'Writing'
+                        ? const Color(0xFF42A5F5)
+                        : task.stage == 'Editing'
+                            ? const Color(0xFFFF8A65)
+                            : task.stage == 'Proofreading'
+                                ? const Color(0xFFAB47BC)
+                                : const Color(0xFF26A69A);
+                    return _buildTaskCard(task, stageColor);
+                  },
+                ),
+        ),
+      ],
     );
   }
 }
