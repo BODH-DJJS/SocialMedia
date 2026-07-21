@@ -18,6 +18,7 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
   String? _selectedEditor;
   String? _selectedProofreader;
   String? _selectedCrosscheck;
+  String? _selectedUploader;
   
   String? _selectedThumbnailSelect;
   String? _selectedThumbnailProcess;
@@ -32,6 +33,7 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
   DateTime? _editingDue;
   DateTime? _proofreadingDue;
   DateTime? _crosscheckDue;
+  DateTime? _uploaderDue;
   
   DateTime? _thumbnailSelectDue;
   DateTime? _thumbnailProcessDue;
@@ -210,6 +212,7 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
     if (_selectedEditor != null) assignees['Editing'] = _selectedEditor!;
     if (_selectedProofreader != null) assignees['Proofreading'] = _selectedProofreader!;
     if (_selectedCrosscheck != null) assignees['Cross check'] = _selectedCrosscheck!;
+    if (_selectedUploader != null) assignees['Ready to Post'] = _selectedUploader!;
     
     if (_publishPlatform.toLowerCase().contains('insta')) {
       if (_selectedThumbnailSelect != null) assignees['Thumbnail Selection'] = _selectedThumbnailSelect!;
@@ -233,6 +236,7 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
     if (_editingDue != null) dueDates['Editing'] = _editingDue!.toIso8601String();
     if (_proofreadingDue != null) dueDates['Proofreading'] = _proofreadingDue!.toIso8601String();
     if (_crosscheckDue != null) dueDates['Cross check'] = _crosscheckDue!.toIso8601String();
+    if (_uploaderDue != null) dueDates['Ready to Post'] = _uploaderDue!.toIso8601String();
     
     if (_publishPlatform.toLowerCase().contains('insta')) {
       if (_thumbnailSelectDue != null) dueDates['Thumbnail Selection'] = _thumbnailSelectDue!.toIso8601String();
@@ -376,9 +380,18 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
                           Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Expanded(flex: 2, child: _buildUserDropdown('4. Crosscheck (Content)', 'CrossChecker', _selectedCrosscheck, (v) => setState(() => _selectedCrosscheck = v))),
+                              Expanded(flex: 2, child: _buildUserDropdown('4. Cross check', 'CrossChecker', _selectedCrosscheck, (v) => setState(() => _selectedCrosscheck = v))),
                               const SizedBox(width: 12),
                               Expanded(flex: 1, child: _buildDateField('Due Date', _crosscheckDue, (d) => setState(() => _crosscheckDue = d))),
+                            ],
+                          ),
+                          const SizedBox(height: 20),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(flex: 2, child: _buildUserDropdown('5. Ready to Post', 'Uploader', _selectedUploader, (v) => setState(() => _selectedUploader = v))),
+                              const SizedBox(width: 12),
+                              Expanded(flex: 1, child: _buildDateField('Due Date', _uploaderDue, (d) => setState(() => _uploaderDue = d))),
                             ],
                           ),
                           const SizedBox(height: 32),

@@ -23,7 +23,8 @@ function ensureSheets() {
       {role: 'Photo Selector', prefix: 'photoselect'},
       {role: 'Photo Editor', prefix: 'photoedit'},
       {role: 'Video Editor', prefix: 'videoedit'},
-      {role: 'Media CrossChecker', prefix: 'mediacheck'}
+      {role: 'Media CrossChecker', prefix: 'mediacheck'},
+      {role: 'Uploader', prefix: 'uploader'}
     ];
     for (var r = 0; r < roles.length; r++) {
       for (var n = 1; n <= 3; n++) { // Changed to 3 users per role to avoid huge list
@@ -53,7 +54,8 @@ function ensureSheets() {
     {stage: 'Photos Clean', role: 'Photo Selector', dep: 'Photos Selection'},
     {stage: 'Photo Editing', role: 'Photo Editor', dep: 'Photos Selection'},
     {stage: 'Video Editing', role: 'Video Editor', dep: 'Photos Selection'},
-    {stage: 'Media Cross Check', role: 'Media CrossChecker', dep: 'Photo Editing, Video Editing'}
+    {stage: 'Media Cross Check', role: 'Media CrossChecker', dep: 'Photo Editing, Video Editing'},
+    {stage: 'Ready to Post', role: 'Uploader', dep: 'Crosscheck'}
   ];
   
   var existingPipeData = pipeSheet.getDataRange().getValues();
