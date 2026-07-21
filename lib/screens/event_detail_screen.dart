@@ -284,50 +284,53 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                   const SizedBox(height: 12),
 
                   // Content Document Card
-                  Card(
-                    child: Container(
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: stageColor.withOpacity(0.4), width: 2),
-                      ),
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Icon(Icons.description, color: stageColor),
-                              const SizedBox(width: 8),
-                              Text('${e.stage} Document', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: stageColor)),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          const Text('Open this document to work on the content. Google Docs saves automatically.', style: TextStyle(color: Colors.grey, fontSize: 12)),
-                          const SizedBox(height: 12),
-                          SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton.icon(
-                              icon: const Icon(Icons.open_in_new),
-                              label: Text('Open ${e.stage} Doc'),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: stageColor,
-                                foregroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(vertical: 14),
-                              ),
-                              onPressed: () {
-                                final docUrl = _bestDocLink;
-                                if (docUrl.isNotEmpty) {
-                                  _openLink(docUrl);
-                                } else {
-                                  if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Writing doc not found in the Drive folder')));
-                                }
-                              },
+                  if (['Writing', 'Editing', 'Proofreading', 'Cross check', 'Ready to Post'].contains(e.stage)) ...[
+                    Card(
+                      child: Container(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: stageColor.withOpacity(0.4), width: 2),
+                        ),
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Icon(Icons.description, color: stageColor),
+                                const SizedBox(width: 8),
+                                Text('${e.stage} Document', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: stageColor)),
+                              ],
                             ),
-                          ),
-                        ],
+                            const SizedBox(height: 8),
+                            const Text('Open this document to work on the content. Google Docs saves automatically.', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                            const SizedBox(height: 12),
+                            SizedBox(
+                              width: double.infinity,
+                              child: ElevatedButton.icon(
+                                icon: const Icon(Icons.open_in_new),
+                                label: Text('Open ${e.stage} Doc'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: stageColor,
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(vertical: 14),
+                                ),
+                                onPressed: () {
+                                  final docUrl = _bestDocLink;
+                                  if (docUrl.isNotEmpty) {
+                                    _openLink(docUrl);
+                                  } else {
+                                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No Google Doc link available.')));
+                                  }
+                                },
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                  ),
+                    const SizedBox(height: 12),
+                  ],
                   const SizedBox(height: 24),
 
                   // Action Button

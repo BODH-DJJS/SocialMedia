@@ -46,7 +46,7 @@ function ensureSheets() {
     {stage: 'Writing', role: 'Writer', dep: ''},
     {stage: 'Editing', role: 'Editor', dep: 'Writing'},
     {stage: 'Proofreading', role: 'Proofreader', dep: 'Editing, Media Cross Check'},
-    {stage: 'Crosscheck', role: 'CrossChecker', dep: 'Proofreading'},
+    {stage: 'Cross check', role: 'CrossChecker', dep: 'Proofreading'},
     {stage: 'Thumbnail Selection', role: 'Thumbnail Designer', dep: ''},
     {stage: 'Thumbnail Processing', role: 'Thumbnail Designer', dep: 'Thumbnail Selection'},
     {stage: 'Thumbnail Cross checking', role: 'Thumbnail Designer', dep: 'Thumbnail Processing'},
@@ -55,7 +55,7 @@ function ensureSheets() {
     {stage: 'Photo Editing', role: 'Photo Editor', dep: 'Photos Selection'},
     {stage: 'Video Editing', role: 'Video Editor', dep: 'Photos Selection'},
     {stage: 'Media Cross Check', role: 'Media CrossChecker', dep: 'Photo Editing, Video Editing'},
-    {stage: 'Ready to Post', role: 'Uploader', dep: 'Crosscheck'}
+    {stage: 'Ready to Post', role: 'Uploader', dep: 'Cross check'}
   ];
   
   var existingPipeData = pipeSheet.getDataRange().getValues();
