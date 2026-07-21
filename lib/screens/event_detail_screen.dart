@@ -4,6 +4,15 @@ import 'package:url_launcher/url_launcher.dart';
 import '../models/event.dart';
 import '../providers/event_provider.dart';
 
+class GroupMediaLink {
+  final String postNo;
+  final String theme;
+  final String rawFolder;
+  final String selectedFolder;
+  final String monthLink;
+  GroupMediaLink(this.postNo, this.theme, this.rawFolder, this.selectedFolder, this.monthLink);
+}
+
 class EventDetailScreen extends StatefulWidget {
   final Event event;
   const EventDetailScreen({super.key, required this.event});
@@ -20,6 +29,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   String _editedFolderLink = '';
   String _writingDocLink = '';
   List<Map<String, dynamic>> _photos = [];
+  List<GroupMediaLink> _groupMediaLinks = [];
 
   @override
   void initState() {
@@ -29,22 +39,57 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
 
   Future<void> _fetchMediaLinks() async {
     final provider = context.read<EventProvider>();
-    final links = await provider.fetchMediaFolders(widget.event.folderLink, widget.event.date, widget.event.stage);
     
-    List<Map<String, dynamic>> fetchedPhotos = [];
-    if (links['raw'] != null && links['raw']!.isNotEmpty) {
-      fetchedPhotos = await provider.fetchPhotos(links['raw']!);
-    }
-    
-    if (mounted) {
-      setState(() {
-        _rawFolderLink = links['raw'] ?? '';
-        _selectedFolderLink = links['selected'] ?? '';
-        _editedFolderLink = links['edited'] ?? '';
-        _writingDocLink = links['writingDoc'] ?? '';
-        _photos = fetchedPhotos;
-        _isLoadingMedia = false;
-      });
+    if (widget.event.isCombined) {
+      List<GroupMediaLink> groupLinks = [];
+      String firstEdited = '';
+      String firstWriting = '';
+      
+      for (int i = 0; i < widget.event.combinedPosts.length; i++) {
+        final p = widget.event.combinedPosts[i];
+        final pDate = p['Date']?.toString() ?? '';
+        final pVenue = p['Venue']?.toString() ?? '';
+        final pMonth = p['FolderLink']?.toString() ?? '';
+        final pTheme = p['Theme']?.toString() ?? '';
+        final pNo = p['PostNo']?.toString() ?? '';
+        
+        if (pMonth.isNotEmpty) {
+           final links = await provider.fetchMediaFolders(pMonth, pDate, widget.event.stage, venue: pVenue);
+           groupLinks.add(GroupMediaLink(pNo, pTheme, links['raw'] ?? '', links['selected'] ?? '', pMonth));
+           
+           if (i == 0) {
+             firstEdited = links['edited'] ?? '';
+             firstWriting = links['writingDoc'] ?? '';
+           }
+        }
+      }
+      
+      if (mounted) {
+        setState(() {
+          _groupMediaLinks = groupLinks;
+          _editedFolderLink = firstEdited;
+          _writingDocLink = firstWriting;
+          _isLoadingMedia = false;
+        });
+      }
+    } else {
+      final links = await provider.fetchMediaFolders(widget.event.folderLink, widget.event.date, widget.event.stage, venue: widget.event.venue);
+      
+      List<Map<String, dynamic>> fetchedPhotos = [];
+      if (links['raw'] != null && links['raw']!.isNotEmpty) {
+        fetchedPhotos = await provider.fetchPhotos(links['raw']!);
+      }
+      
+      if (mounted) {
+        setState(() {
+          _rawFolderLink = links['raw'] ?? '';
+          _selectedFolderLink = links['selected'] ?? '';
+          _editedFolderLink = links['edited'] ?? '';
+          _writingDocLink = links['writingDoc'] ?? '';
+          _photos = fetchedPhotos;
+          _isLoadingMedia = false;
+        });
+      }
     }
   }
 
@@ -258,16 +303,25 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                           if (_isLoadingMedia)
                             const Center(child: Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator()))
                           else if (e.isCombined) ...[
-                            const Text('Raw Media Folders for Group:', style: TextStyle(fontSize: 12, color: Colors.grey)),
-                            const SizedBox(height: 8),
-                            ...e.combinedPosts.map((p) {
-                              final folderLink = p['FolderLink']?.toString() ?? '';
-                              if (folderLink.isEmpty) return const SizedBox.shrink();
-                              return Padding(
-                                padding: const EdgeInsets.only(bottom: 8.0),
-                                child: _mediaButton(Icons.folder, 'Post #${p['PostNo']}', p['Theme'] ?? '', Colors.blueGrey, () => _openLink(folderLink)),
+                            ..._groupMediaLinks.map((g) {
+                              return Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('Post #${g.postNo} - ${g.theme}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.indigo)),
+                                  const SizedBox(height: 6),
+                                  if (g.rawFolder.isNotEmpty)
+                                    Padding(padding: const EdgeInsets.only(bottom: 6), child: _mediaButton(Icons.photo_library, 'Raw Folder', '', Colors.blueGrey, () => _openLink(g.rawFolder))),
+                                  if (g.selectedFolder.isNotEmpty)
+                                    Padding(padding: const EdgeInsets.only(bottom: 6), child: _mediaButton(Icons.checklist, 'Selected Folder', '', Colors.teal, () => _openLink(g.selectedFolder))),
+                                  if (g.monthLink.isNotEmpty)
+                                    Padding(padding: const EdgeInsets.only(bottom: 12), child: _mediaButton(Icons.folder_shared, 'Month Archive', '', const Color(0xFFF39C12), () => _openLink(g.monthLink))),
+                                  const Divider(),
+                                ],
                               );
                             }),
+                            const SizedBox(height: 8),
+                            if (_editedFolderLink.isNotEmpty)
+                              _mediaButton(Icons.auto_fix_high, 'Selected (Edited) [Group Master]', 'Edited files for the whole group', Colors.purple, () => _openLink(_editedFolderLink)),
                           ] else ...[
                             if (_rawFolderLink.isNotEmpty)
                               _mediaButton(Icons.photo_library, 'View Photos / Videos (Raw)', 'Original unedited files', Colors.blueGrey, () => _openLink(_rawFolderLink)),

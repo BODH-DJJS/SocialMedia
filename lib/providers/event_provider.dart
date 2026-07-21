@@ -229,7 +229,7 @@ class EventProvider with ChangeNotifier {
     return true;
   }
 
-  Future<Map<String, String>> fetchMediaFolders(String monthLink, String dateStr, String stage) async {
+  Future<Map<String, String>> fetchMediaFolders(String monthLink, String dateStr, String stage, {String venue = ''}) async {
     try {
       debugPrint('=== fetchMediaFolders ===');
       debugPrint('monthLink: $monthLink');
@@ -241,6 +241,7 @@ class EventProvider with ChangeNotifier {
         'monthLink': monthLink,
         'dateStr': dateStr,
         'stage': stage,
+        'venue': venue,
       });
 
       debugPrint('getMediaFolders response: $response');
