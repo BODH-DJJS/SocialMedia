@@ -399,37 +399,39 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
                           const SizedBox(height: 16),
                           const Text('Media Assignments', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                           
-                          const SizedBox(height: 20),
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(flex: 2, child: _buildUserDropdown('1. Thumbnail Selection', 'Thumbnail Designer', _selectedThumbnailSelect, (v) => setState(() => _selectedThumbnailSelect = v))),
-                              const SizedBox(width: 12),
-                              Expanded(flex: 1, child: _buildDateField('Due Date', _thumbnailSelectDue, (d) => setState(() => _thumbnailSelectDue = d))),
-                            ],
-                          ),
-                          const SizedBox(height: 20),
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(flex: 2, child: _buildUserDropdown('2. Thumbnail Processing', 'Thumbnail Designer', _selectedThumbnailProcess, (v) => setState(() => _selectedThumbnailProcess = v))),
-                              const SizedBox(width: 12),
-                              Expanded(flex: 1, child: _buildDateField('Due Date', _thumbnailProcessDue, (d) => setState(() => _thumbnailProcessDue = d))),
-                            ],
-                          ),
-                          const SizedBox(height: 20),
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(flex: 2, child: _buildUserDropdown('3. Thumbnail Cross checking', 'Thumbnail Designer', _selectedThumbnailCrosscheck, (v) => setState(() => _selectedThumbnailCrosscheck = v))),
-                              const SizedBox(width: 12),
-                              Expanded(flex: 1, child: _buildDateField('Due Date', _thumbnailCrosscheckDue, (d) => setState(() => _thumbnailCrosscheckDue = d))),
-                            ],
-                          ),
-                          const Padding(
-                            padding: EdgeInsets.symmetric(vertical: 16.0),
-                            child: Divider(),
-                          ),
+                          if (_publishPlatform.toLowerCase().contains('insta')) ...[
+                            const SizedBox(height: 20),
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(flex: 2, child: _buildUserDropdown('1. Thumbnail Selection', 'Thumbnail Designer', _selectedThumbnailSelect, (v) => setState(() => _selectedThumbnailSelect = v))),
+                                const SizedBox(width: 12),
+                                Expanded(flex: 1, child: _buildDateField('Due Date', _thumbnailSelectDue, (d) => setState(() => _thumbnailSelectDue = d))),
+                              ],
+                            ),
+                            const SizedBox(height: 20),
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(flex: 2, child: _buildUserDropdown('2. Thumbnail Processing', 'Thumbnail Designer', _selectedThumbnailProcess, (v) => setState(() => _selectedThumbnailProcess = v))),
+                                const SizedBox(width: 12),
+                                Expanded(flex: 1, child: _buildDateField('Due Date', _thumbnailProcessDue, (d) => setState(() => _thumbnailProcessDue = d))),
+                              ],
+                            ),
+                            const SizedBox(height: 20),
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(flex: 2, child: _buildUserDropdown('3. Thumbnail Cross checking', 'Thumbnail Designer', _selectedThumbnailCrosscheck, (v) => setState(() => _selectedThumbnailCrosscheck = v))),
+                                const SizedBox(width: 12),
+                                Expanded(flex: 1, child: _buildDateField('Due Date', _thumbnailCrosscheckDue, (d) => setState(() => _thumbnailCrosscheckDue = d))),
+                              ],
+                            ),
+                            const Padding(
+                              padding: EdgeInsets.symmetric(vertical: 16.0),
+                              child: Divider(),
+                            ),
+                          ],
                           
                           const SizedBox(height: 10),
                           Row(
