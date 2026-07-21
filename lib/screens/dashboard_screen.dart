@@ -584,7 +584,12 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
       
       if (_postFilter == 'Not Started') return postTasks.isEmpty;
       if (_postFilter == 'In Pipeline') return postTasks.isNotEmpty && postTasks.any((t) => t.status != 'Done');
-      if (_postFilter == 'Done') return postTasks.isNotEmpty && postTasks.every((t) => t.status == 'Done');
+      if (_postFilter == 'Done') {
+        if (postTasks.isEmpty) return false;
+        final hasReadyDone = postTasks.any((t) => t.stage == 'Ready to Post' && t.status == 'Done');
+        if (hasReadyDone) return true;
+        return postTasks.every((t) => t.status == 'Done');
+      }
       return true;
     }).toList();
 
@@ -782,17 +787,17 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     final children = post['Children'] ?? 0;
     final totalBen = post['TotalBeneficiary'] ?? 0;
 
-    // Workflow status indicators
-    final dataUploaded = post['DataUploaded']?.toString() ?? '';
-    final writingDone = post['WritingDone']?.toString() ?? '';
-    final editingDone = post['EditingDone']?.toString() ?? '';
-    final proofDone = post['ProofReadingDone']?.toString() ?? '';
-    final designDone = post['DesignDone']?.toString() ?? '';
-    final readyToPost = post['ReadyToBePosted']?.toString() ?? '';
-    final posted = post['PostUploaded']?.toString() ?? '';
-
     final postTasks = provider.events.where((t) => t.postNo == postNo).toList();
     final isInitialized = postTasks.isNotEmpty;
+
+    // Workflow status indicators
+    final dataUploaded = post['DataUploaded']?.toString() ?? '';
+    final writingDone = postTasks.any((t) => t.stage == 'Writing' && t.status == 'Done') ? 'Yes' : (post['WritingDone']?.toString() ?? '');
+    final editingDone = postTasks.any((t) => t.stage == 'Editing' && t.status == 'Done') ? 'Yes' : (post['EditingDone']?.toString() ?? '');
+    final proofDone = postTasks.any((t) => t.stage == 'Proofreading' && t.status == 'Done') ? 'Yes' : (post['ProofReadingDone']?.toString() ?? '');
+    final designDone = postTasks.any((t) => t.stage.contains('Thumbnail') && t.status == 'Done') ? 'Yes' : (post['DesignDone']?.toString() ?? '');
+    final readyToPost = postTasks.any((t) => t.stage == 'Ready to Post' && t.status == 'Done') ? 'Yes' : (post['ReadyToBePosted']?.toString() ?? '');
+    final posted = post['PostUploaded']?.toString() ?? '';
 
     final publishPlatform = post['PublishPlatform']?.toString() ?? '';
     final groupId = post['GroupID']?.toString() ?? '';
