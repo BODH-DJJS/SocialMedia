@@ -1123,7 +1123,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
 
   // ── USER BODY (My Queue) ──
   Widget _buildUserBody(EventProvider provider) {
-    List<Event> visibleEvents = provider.events.where((e) => e.status != 'Waiting').toList();
+    List<Event> visibleEvents = provider.events;
     if (_myQueueFilter != 'All Tasks') {
       visibleEvents = visibleEvents.where((e) => e.status == _myQueueFilter).toList();
     }
