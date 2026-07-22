@@ -54,7 +54,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
         final pNo = p['PostNo']?.toString() ?? '';
         
         if (pMonth.isNotEmpty) {
-           final links = await provider.fetchMediaFolders(pMonth, pDate, widget.event.stage, venue: pVenue);
+           final links = await provider.fetchMediaFolders(pMonth, pDate, widget.event.stage, venue: pVenue, postNo: pNo);
            groupLinks.add(GroupMediaLink(pNo, pTheme, links['raw'] ?? '', links['selected'] ?? '', pMonth));
            
            if (i == 0) {
@@ -73,7 +73,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
         });
       }
     } else {
-      final links = await provider.fetchMediaFolders(widget.event.folderLink, widget.event.date, widget.event.stage, venue: widget.event.venue);
+      final links = await provider.fetchMediaFolders(widget.event.folderLink, widget.event.date, widget.event.stage, venue: widget.event.venue, postNo: widget.event.postNo.toString());
       
       List<Map<String, dynamic>> fetchedPhotos = [];
       if (links['raw'] != null && links['raw']!.isNotEmpty) {

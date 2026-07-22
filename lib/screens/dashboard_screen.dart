@@ -506,7 +506,7 @@ class _DashboardScreenState extends State<DashboardScreen>
       ),
     ];
 
-    final mediaStages = [
+    final thumbnailStages = [
       (
         'Thumbnail Selection',
         provider.events.where((e) => e.stage == 'Thumbnail Selection').toList(),
@@ -529,6 +529,9 @@ class _DashboardScreenState extends State<DashboardScreen>
         Colors.deepOrange,
         Icons.fact_check,
       ),
+    ];
+
+    final mediaStages = [
       (
         'Photos Selection',
         provider.events.where((e) => e.stage == 'Photos Selection').toList(),
@@ -586,6 +589,31 @@ class _DashboardScreenState extends State<DashboardScreen>
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children:
                   contentStages
+                      .map(
+                        (s) => _kanbanColumn(s.$1, s.$2, s.$3, s.$4, provider),
+                      )
+                      .toList(),
+            ),
+          ),
+        ),
+        const SizedBox(height: 40),
+        const Text(
+          'Thumbnail Workflow',
+          style: TextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.bold,
+            color: Color(0xFF1A1A2E),
+          ),
+        ),
+        const SizedBox(height: 12),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: SizedBox(
+            height: 500,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children:
+                  thumbnailStages
                       .map(
                         (s) => _kanbanColumn(s.$1, s.$2, s.$3, s.$4, provider),
                       )
