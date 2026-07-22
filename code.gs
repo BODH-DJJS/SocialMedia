@@ -253,6 +253,14 @@ function buildPostObj(pRow) {
   };
 }
 
+function normalizeStageName(st) {
+  if (!st) return '';
+  return st.toString().toLowerCase()
+           .replace(/[^a-z0-9]/g, '')
+           .replace(/photos/g, 'photo')
+           .replace(/videos/g, 'video');
+}
+
 function backfillMissingTasks(ss) {
   var tasksSheet = ss.getSheetByName(TASKS_SHEET);
   var pipeSheet = ss.getSheetByName(PIPELINE_SHEET);
@@ -260,6 +268,18 @@ function backfillMissingTasks(ss) {
   
   var tasksData = tasksSheet.getDataRange().getValues();
   if (tasksData.length < 2) return false;
+
+  var postsSheet = ss.getSheetByName(POSTS_SHEET);
+  var postsData = postsSheet ? postsSheet.getDataRange().getValues() : [];
+  var postMetadata = {};
+  for (var i = 1; i < postsData.length; i++) {
+    var rPNo = postsData[i][0] ? postsData[i][0].toString().trim() : '';
+    var rGId = postsData[i][37] ? postsData[i][37].toString().trim() : '';
+    var pub = postsData[i][35] ? postsData[i][35].toString().toLowerCase() : '';
+    var mod = postsData[i][38] ? postsData[i][38].toString().toLowerCase() : '';
+    if (rPNo && !postMetadata[rPNo]) postMetadata[rPNo] = { pub: pub, mod: mod };
+    if (rGId && !postMetadata[rGId]) postMetadata[rGId] = { pub: pub, mod: mod };
+  }
 
   var pipeData = pipeSheet.getDataRange().getValues();
   
@@ -269,7 +289,7 @@ function backfillMissingTasks(ss) {
     if (pipeData[p][0]) {
       var st = pipeData[p][0].toString().trim();
       requiredStages.push(st);
-      normalizedRequired.push(st.toLowerCase().replace(/[^a-z0-9]/g, ''));
+      normalizedRequired.push(normalizeStageName(st));
     }
   }
   
@@ -285,7 +305,7 @@ function backfillMissingTasks(ss) {
         postTasks[pNo] = [];
         postStatuses[pNo] = { total: 0, done: 0 };
       }
-      postTasks[pNo].push(st.toString().toLowerCase().replace(/[^a-z0-9]/g, ''));
+      postTasks[pNo].push(normalizeStageName(st));
       postStatuses[pNo].total++;
       if (status === 'Done') postStatuses[pNo].done++;
     }
@@ -298,9 +318,25 @@ function backfillMissingTasks(ss) {
   for (var pNo in postTasks) {
     if (postStatuses[pNo].total > 0 && postStatuses[pNo].total > postStatuses[pNo].done) {
       var existingSt = postTasks[pNo];
+      var meta = postMetadata[pNo] || { pub: '', mod: '' };
+      
+      var skipStages = [];
+      if (meta.pub.indexOf('insta') === -1) {
+        skipStages.push('thumbnailselection', 'thumbnailprocessing', 'thumbnailcrosschecking');
+      }
+      if (meta.mod.indexOf('video') === -1) {
+        skipStages.push('videoediting');
+      }
+      if (meta.mod.indexOf('photo') === -1) {
+        skipStages.push('photoediting');
+      }
+
       for (var r = 0; r < requiredStages.length; r++) {
         var reqStage = requiredStages[r];
         var normReq = normalizedRequired[r];
+        
+        if (skipStages.indexOf(normReq) !== -1) continue;
+
         if (existingSt.indexOf(normReq) === -1) {
           var rowData = [];
           for (var h = 0; h < headers.length; h++) {
@@ -1290,17 +1326,17 @@ function createTasksForPostV2(payload) {
     var stage = pipe[i][0];
     var depOn = pipe[i][2] || '';
     
-    var normalizedStage = stage.toString().replace(/\s+/g, '').toLowerCase();
+    var normalizedStage = normalizeStageName(stage);
     if (skipStages.indexOf(normalizedStage) !== -1) continue;
     
     var assignee = '';
     for (var k in assignees) {
-      if (k.replace(/\s+/g, '').toLowerCase() === normalizedStage) { assignee = assignees[k]; break; }
+      if (normalizeStageName(k) === normalizedStage) { assignee = assignees[k]; break; }
     }
     
     var docUrl = '';
     for (var k in docLinks) {
-      if (k.replace(/\s+/g, '').toLowerCase() === normalizedStage) { docUrl = docLinks[k]; break; }
+      if (normalizeStageName(k) === normalizedStage) { docUrl = docLinks[k]; break; }
     }
     
     var initialStatus = 'Waiting';
@@ -1312,7 +1348,7 @@ function createTasksForPostV2(payload) {
     
     var dueDate = '';
     for (var k in dueDates) {
-      if (k.replace(/\s+/g, '').toLowerCase() === normalizedStage) { dueDate = dueDates[k]; break; }
+      if (normalizeStageName(k) === normalizedStage) { dueDate = dueDates[k]; break; }
     }
     
     var rowData = [
