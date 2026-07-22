@@ -369,6 +369,14 @@ function handleGetTasks(payload) {
   // Auto-backfill missing tasks for active posts before returning data
   var didBackfill = backfillMissingTasks(ss);
   
+  var props = PropertiesService.getScriptProperties();
+  if (!props.getProperty('fixedStuckTasks_v3')) {
+    try {
+      fixStuckTasks(ss);
+    } catch(e) {}
+    props.setProperty('fixedStuckTasks_v3', 'true');
+  }
+  
   var tasksData = ss.getSheetByName(TASKS_SHEET).getDataRange().getValues();
   var postsData = ss.getSheetByName(POSTS_SHEET).getDataRange().getValues();
   var usersData = ss.getSheetByName(USERS_SHEET).getDataRange().getValues();
@@ -509,13 +517,6 @@ function handleUpdateTask(payload) {
     } catch(e) {
       // Drive logic failed, still save status
     }
-
-    // Unlock any task that depends on this one
-    try {
-      unlockDependentTasks(rowIndex, headers, sheet);
-    } catch (e) {
-      // Fail silently if unlocking fails
-    }
   }
 
   for (var key in updates) {
@@ -524,7 +525,95 @@ function handleUpdateTask(payload) {
       sheet.getRange(rowIndex, colIndex + 1).setValue(updates[key]);
     }
   }
+
+  if (updates['Status'] === 'Done') {
+    // Unlock any task that depends on this one
+    try {
+      unlockDependentTasks(rowIndex, headers, sheet);
+    } catch (e) {
+      // Fail silently if unlocking fails
+    }
+  }
+
   return { success: true, message: 'Task updated successfully' };
+}
+
+function fixStuckTasks(ss) {
+  var taskSheet = ss.getSheetByName(TASKS_SHEET);
+  var pipe = ss.getSheetByName(PIPELINE_SHEET).getDataRange().getValues();
+  var data = taskSheet.getDataRange().getValues();
+  if (data.length < 2) return;
+  var headers = data[0];
+  var statusCol = headers.indexOf('Status');
+  var stageCol = headers.indexOf('Stage');
+  var postNoCol = headers.indexOf('PostNo');
+
+  var reqMap = {};
+  for (var i = 1; i < pipe.length; i++) {
+    var stage = (pipe[i][0] || '').replace(/\s+/g, '').toLowerCase();
+    var deps = (pipe[i][2] || '').toString().toLowerCase().split(',');
+    var cleanDeps = [];
+    for (var d = 0; d < deps.length; d++) {
+      var c = deps[d].replace(/\s+/g, '');
+      if (c) cleanDeps.push(c);
+    }
+    reqMap[stage] = cleanDeps;
+  }
+
+  var posts = {};
+  for (var i = 1; i < data.length; i++) {
+    var pNo = data[i][postNoCol];
+    if (!posts[pNo]) posts[pNo] = [];
+    posts[pNo].push({
+      rowIdx: i + 1,
+      stage: (data[i][stageCol] || '').replace(/\s+/g, '').toLowerCase(),
+      status: data[i][statusCol],
+      docLink: data[i][docLinkCol]
+    });
+  }
+
+  var docLinkCol = headers.indexOf('DocLink');
+
+  for (var pNo in posts) {
+    var pTasks = posts[pNo];
+    
+    // Fix missing doc links for Ready to Post
+    var readyToPostTask = null;
+    var crosscheckDocLink = '';
+    for (var t = 0; t < pTasks.length; t++) {
+      if (pTasks[t].stage === 'readytopost') readyToPostTask = pTasks[t];
+      if (pTasks[t].stage === 'crosscheck') crosscheckDocLink = pTasks[t].docLink || '';
+    }
+    if (readyToPostTask && crosscheckDocLink && !readyToPostTask.docLink) {
+      taskSheet.getRange(readyToPostTask.rowIdx, docLinkCol + 1).setValue(crosscheckDocLink);
+    }
+    
+    for (var t = 0; t < pTasks.length; t++) {
+      var task = pTasks[t];
+      if (task.status === 'Waiting' || !task.status) {
+        var reqs = reqMap[task.stage] || [];
+        var allDone = true;
+        for (var r = 0; r < reqs.length; r++) {
+          var reqTaskExists = false;
+          var reqTaskDone = false;
+          for (var pt = 0; pt < pTasks.length; pt++) {
+            if (pTasks[pt].stage === reqs[r]) {
+              reqTaskExists = true;
+              if (pTasks[pt].status === 'Done') reqTaskDone = true;
+              break;
+            }
+          }
+          if (reqTaskExists && !reqTaskDone) {
+            allDone = false;
+            break;
+          }
+        }
+        if (allDone && reqs.length > 0) {
+          taskSheet.getRange(task.rowIdx, statusCol + 1).setValue('Ready');
+        }
+      }
+    }
+  }
 }
 
 function unlockDependentTasks(rowIndex, headers, taskSheet) {
@@ -636,9 +725,23 @@ function copyForwardDocument(rowIndex, headers, taskSheet) {
   var currentDocId = currentDocUrl.match(/[-\w]{25,}/);
   if (!currentDocId) return;
 
+  var currentStageLower = (currentStage || '').replace(/\s+/g, '').toLowerCase();
+
+  // If we just finished Cross check, share its doc link with Ready to Post
+  if (currentStageLower === 'crosscheck') {
+    var readyToPostLower = 'readytopost';
+    for (var i = 1; i < data.length; i++) {
+      var iterStageLower = (data[i][stageCol] || '').replace(/\s+/g, '').toLowerCase();
+      if (data[i][postNoCol] == postNo && iterStageLower === readyToPostLower) {
+        taskSheet.getRange(i + 1, docLinkCol + 1).setValue(currentDocUrl);
+        break;
+      }
+    }
+    return; // Do not copy the document
+  }
+
   var stageOrder = ['Writing', 'Editing', 'Proofreading', 'Crosscheck'];
   var stageOrderLower = ['writing', 'editing', 'proofreading', 'crosscheck'];
-  var currentStageLower = (currentStage || '').replace(/\s+/g, '').toLowerCase();
   var currentIdx = stageOrderLower.indexOf(currentStageLower);
   if (currentIdx === -1 || currentIdx >= stageOrderLower.length - 1) return;
   var nextStage = stageOrder[currentIdx + 1];
