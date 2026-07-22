@@ -634,7 +634,7 @@ class _DashboardScreenState extends State<DashboardScreen>
     return StatefulBuilder(
       builder: (context, setLocalState) {
         List<Event> tasks =
-            allTasks.where((t) => t.status != 'Waiting').toList();
+            allTasks.where((t) => t.status.trim().toLowerCase() != 'waiting').toList();
         if (columnFilter != 'All Tasks') {
           tasks = tasks.where((t) => t.status == columnFilter).toList();
         }
@@ -1788,7 +1788,7 @@ class _DashboardScreenState extends State<DashboardScreen>
   // ── USER BODY (My Queue) ──
   Widget _buildUserBody(EventProvider provider) {
     List<Event> visibleEvents =
-        provider.events.where((e) => e.status != 'Waiting').toList();
+        provider.events.where((e) => e.status.trim().toLowerCase() != 'waiting').toList();
     if (_myQueueFilter != 'All Tasks') {
       visibleEvents =
           visibleEvents.where((e) => e.status == _myQueueFilter).toList();
