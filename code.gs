@@ -264,8 +264,13 @@ function backfillMissingTasks(ss) {
   var pipeData = pipeSheet.getDataRange().getValues();
   
   var requiredStages = [];
+  var normalizedRequired = [];
   for (var p = 1; p < pipeData.length; p++) {
-    if (pipeData[p][0]) requiredStages.push(pipeData[p][0].toString().trim());
+    if (pipeData[p][0]) {
+      var st = pipeData[p][0].toString().trim();
+      requiredStages.push(st);
+      normalizedRequired.push(st.toLowerCase().replace(/[^a-z0-9]/g, ''));
+    }
   }
   
   var postTasks = {};
@@ -280,7 +285,7 @@ function backfillMissingTasks(ss) {
         postTasks[pNo] = [];
         postStatuses[pNo] = { total: 0, done: 0 };
       }
-      postTasks[pNo].push(st.toString().trim().toLowerCase());
+      postTasks[pNo].push(st.toString().toLowerCase().replace(/[^a-z0-9]/g, ''));
       postStatuses[pNo].total++;
       if (status === 'Done') postStatuses[pNo].done++;
     }
@@ -295,7 +300,8 @@ function backfillMissingTasks(ss) {
       var existingSt = postTasks[pNo];
       for (var r = 0; r < requiredStages.length; r++) {
         var reqStage = requiredStages[r];
-        if (existingSt.indexOf(reqStage.toLowerCase()) === -1) {
+        var normReq = normalizedRequired[r];
+        if (existingSt.indexOf(normReq) === -1) {
           var rowData = [];
           for (var h = 0; h < headers.length; h++) {
             var headerName = headers[h].toString();
@@ -308,7 +314,7 @@ function backfillMissingTasks(ss) {
             else rowData.push('');
           }
           newRows.push(rowData);
-          existingSt.push(reqStage.toLowerCase());
+          existingSt.push(normReq);
         }
       }
     }
@@ -1112,8 +1118,10 @@ function createTasksForPostV2(payload) {
   var groupId = null;
 
   for (var p = 1; p < postsData.length; p++) {
-    if (postsData[p][0] == postNo) {
-      groupId = postsData[p][37]; // GroupID column is AL (index 37)
+    if (postsData[p][0] == postNo || postsData[p][37] == postNo) {
+      if (postsData[p][37]) {
+        groupId = postsData[p][37];
+      }
       break;
     }
   }
