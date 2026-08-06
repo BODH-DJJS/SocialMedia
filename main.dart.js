@@ -41934,7 +41934,7 @@ s=n==null?o:J.aa(n)
 if(s==null)s=""
 r=a.h(0,"status")
 q=a.h(0,"activeTasks")
-p=s.length!==0&&s!==m?s+" ("+m+")":m
+p=s.length!==0&&s.toLowerCase()!==m.toLowerCase()?s:m
 return new A.fY(m,A.b5(A.b([A.bU(o,o,B.o,o,o,new A.bC(J.d(r,"Available")?B.dq:B.le,o,o,o,o,o,B.d4),o,8,o,o,o,o,8),B.dx,A.bm(A.aA(p,o,B.ag,o,o,o,o,o),1),A.aA("("+A.m(q)+" active)",o,o,o,A.bR(o,o,B.bx,o,o,o,o,o,o,o,o,12,o,o,o,o,o,!0,o,o,o,o,o,o,o,o),o,o,o)],t.p),B.v,B.l,B.m),B.bW,o,t.b7)},
 $S:258}
 A.aj3.prototype={
