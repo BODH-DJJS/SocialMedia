@@ -202,7 +202,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                       Icon(Icons.person, size: 16, color: stageColor),
                       const SizedBox(width: 4),
                       Text('Assigned to: ${e.assigneeName}', style: TextStyle(fontWeight: FontWeight.w600, color: stageColor)),
-                      if (context.read<AuthProvider>().role == 'Admin')
+                      if (context.watch<AuthProvider>().role.toLowerCase() == 'admin')
                         IconButton(
                           icon: const Icon(Icons.edit, size: 16),
                           onPressed: () => _showReassignDialog(context, e),
@@ -558,7 +558,7 @@ class _ReassignDialogState extends State<_ReassignDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final users = context.read<EventProvider>().users;
+    final users = context.watch<EventProvider>().users;
     // Map stage to role (basic mapping, can be refined)
     String expectedRole = 'User';
     final stage = widget.event.stage.toLowerCase();
