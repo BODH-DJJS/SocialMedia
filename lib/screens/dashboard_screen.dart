@@ -23,6 +23,7 @@ class _DashboardScreenState extends State<DashboardScreen>
   final Set<String> _selectedPosts = {};
   bool _isSelectionMode = false;
   final TextEditingController _searchController = TextEditingController();
+  final TextEditingController _workflowSearchController = TextEditingController();
   String _myQueueFilter = 'All Tasks';
 
   @override
@@ -36,13 +37,6 @@ class _DashboardScreenState extends State<DashboardScreen>
         provider.fetchUsers();
         provider.fetchBranchSPOCs();
       }
-
-      // Auto-refresh every 30 seconds silently
-      _refreshTimer = Timer.periodic(const Duration(seconds: 30), (_) {
-        if (mounted) {
-          provider.fetchEvents(auth.role, auth.username, silent: true);
-        }
-      });
     });
   }
 
@@ -50,6 +44,7 @@ class _DashboardScreenState extends State<DashboardScreen>
   void dispose() {
     _refreshTimer?.cancel();
     _searchController.dispose();
+    _workflowSearchController.dispose();
     super.dispose();
   }
 
@@ -139,39 +134,46 @@ class _DashboardScreenState extends State<DashboardScreen>
               : _buildUserBody(eventProvider),
       bottomNavigationBar:
           isAdmin
-              ? NavigationBar(
-                selectedIndex: _currentIndex,
-                onDestinationSelected: (i) => setState(() => _currentIndex = i),
-                backgroundColor: theme.colorScheme.primary,
-                indicatorColor: theme.colorScheme.secondary.withOpacity(0.3),
-                destinations: const [
-                  NavigationDestination(
-                    icon: Icon(
-                      Icons.space_dashboard_outlined,
-                      color: Colors.white60,
+              ? NavigationBarTheme(
+                  data: NavigationBarThemeData(
+                    labelTextStyle: MaterialStateProperty.all(
+                      const TextStyle(color: Colors.white),
                     ),
-                    selectedIcon: Icon(
-                      Icons.space_dashboard,
-                      color: Colors.white,
-                    ),
-                    label: 'Overview',
                   ),
-                  NavigationDestination(
-                    icon: Icon(
-                      Icons.view_kanban_outlined,
-                      color: Colors.white60,
-                    ),
-                    selectedIcon: Icon(Icons.view_kanban, color: Colors.white),
-                    label: 'Pipeline',
+                  child: NavigationBar(
+                    selectedIndex: _currentIndex,
+                    onDestinationSelected: (i) => setState(() => _currentIndex = i),
+                    backgroundColor: theme.colorScheme.primary,
+                    indicatorColor: theme.colorScheme.secondary.withOpacity(0.3),
+                    destinations: const [
+                      NavigationDestination(
+                        icon: Icon(
+                          Icons.space_dashboard_outlined,
+                          color: Colors.white60,
+                        ),
+                        selectedIcon: Icon(
+                          Icons.space_dashboard,
+                          color: Colors.white,
+                        ),
+                        label: 'Overview',
+                      ),
+                      NavigationDestination(
+                        icon: Icon(
+                          Icons.view_kanban_outlined,
+                          color: Colors.white60,
+                        ),
+                        selectedIcon: Icon(Icons.view_kanban, color: Colors.white),
+                        label: 'Pipeline',
+                      ),
+                      NavigationDestination(
+                        icon: Icon(Icons.list_alt_outlined, color: Colors.white60),
+                        selectedIcon: Icon(Icons.list_alt, color: Colors.white),
+                        label: 'All Posts',
+                      ),
+                    ],
+                    labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
                   ),
-                  NavigationDestination(
-                    icon: Icon(Icons.list_alt_outlined, color: Colors.white60),
-                    selectedIcon: Icon(Icons.list_alt, color: Colors.white),
-                    label: 'All Posts',
-                  ),
-                ],
-                labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-              )
+                )
               : null,
     );
   }
@@ -471,28 +473,33 @@ class _DashboardScreenState extends State<DashboardScreen>
 
   // ── KANBAN ──
   Widget _buildKanbanBoard(EventProvider provider) {
+    final wQuery = _workflowSearchController.text.trim().toLowerCase();
+    final filteredEvents = wQuery.isEmpty
+        ? provider.events
+        : provider.events.where((e) => e.postNo.toLowerCase().contains(wQuery)).toList();
+
     final contentStages = [
       (
         'Writing',
-        provider.events.where((e) => e.stage == 'Writing').toList(),
+        filteredEvents.where((e) => e.stage == 'Writing').toList(),
         const Color(0xFF42A5F5),
         Icons.edit_note,
       ),
       (
         'Editing',
-        provider.events.where((e) => e.stage == 'Editing').toList(),
+        filteredEvents.where((e) => e.stage == 'Editing').toList(),
         const Color(0xFFFF8A65),
         Icons.edit,
       ),
       (
         'Proofreading',
-        provider.events.where((e) => e.stage == 'Proofreading').toList(),
+        filteredEvents.where((e) => e.stage == 'Proofreading').toList(),
         const Color(0xFFAB47BC),
         Icons.spellcheck,
       ),
       (
         'Cross check',
-        provider.events
+        filteredEvents
             .where((e) => e.stage == 'Cross check' || e.stage == 'Crosscheck')
             .toList(),
         const Color(0xFF26A69A),
@@ -500,7 +507,7 @@ class _DashboardScreenState extends State<DashboardScreen>
       ),
       (
         'Ready to Post',
-        provider.events.where((e) => e.stage == 'Ready to Post').toList(),
+        filteredEvents.where((e) => e.stage == 'Ready to Post').toList(),
         Colors.purple.shade300,
         Icons.upload_file,
       ),
@@ -509,13 +516,13 @@ class _DashboardScreenState extends State<DashboardScreen>
     final thumbnailStages = [
       (
         'Thumbnail Selection',
-        provider.events.where((e) => e.stage == 'Thumbnail Selection').toList(),
+        filteredEvents.where((e) => e.stage == 'Thumbnail Selection').toList(),
         Colors.orange.shade300,
         Icons.image,
       ),
       (
         'Thumbnail Processing',
-        provider.events
+        filteredEvents
             .where((e) => e.stage == 'Thumbnail Processing')
             .toList(),
         Colors.orange,
@@ -523,7 +530,7 @@ class _DashboardScreenState extends State<DashboardScreen>
       ),
       (
         'Thumbnail Cross checking',
-        provider.events
+        filteredEvents
             .where((e) => e.stage == 'Thumbnail Cross checking')
             .toList(),
         Colors.deepOrange,
@@ -534,31 +541,31 @@ class _DashboardScreenState extends State<DashboardScreen>
     final mediaStages = [
       (
         'Photos Selection',
-        provider.events.where((e) => e.stage == 'Photos Selection').toList(),
+        filteredEvents.where((e) => e.stage == 'Photos Selection').toList(),
         Colors.teal,
         Icons.photo_album,
       ),
       (
         'Photos Clean',
-        provider.events.where((e) => e.stage == 'Photos Clean').toList(),
+        filteredEvents.where((e) => e.stage == 'Photos Clean').toList(),
         Colors.cyan,
         Icons.cleaning_services,
       ),
       (
         'Photo Editing',
-        provider.events.where((e) => e.stage == 'Photo Editing').toList(),
+        filteredEvents.where((e) => e.stage == 'Photo Editing').toList(),
         Colors.indigo,
         Icons.auto_fix_high,
       ),
       (
         'Video Editing',
-        provider.events.where((e) => e.stage == 'Video Editing').toList(),
+        filteredEvents.where((e) => e.stage == 'Video Editing').toList(),
         Colors.redAccent,
         Icons.video_library,
       ),
       (
         'Media Cross Check',
-        provider.events.where((e) => e.stage == 'Media Cross Check').toList(),
+        filteredEvents.where((e) => e.stage == 'Media Cross Check').toList(),
         Colors.blueGrey,
         Icons.fact_check,
       ),
@@ -576,6 +583,31 @@ class _DashboardScreenState extends State<DashboardScreen>
                 fontSize: 22,
                 fontWeight: FontWeight.bold,
                 color: Color(0xFF1A1A2E),
+              ),
+            ),
+            SizedBox(
+              width: 250,
+              height: 40,
+              child: TextField(
+                controller: _workflowSearchController,
+                decoration: InputDecoration(
+                  hintText: 'Search Post No...',
+                  prefixIcon: const Icon(Icons.search, size: 20),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide.none,
+                  ),
+                  filled: true,
+                  fillColor: Colors.grey.shade200,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  suffixIcon: _workflowSearchController.text.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.clear, size: 16),
+                          onPressed: () => setState(() => _workflowSearchController.clear()),
+                        )
+                      : null,
+                ),
+                onChanged: (_) => setState(() {}),
               ),
             ),
           ],

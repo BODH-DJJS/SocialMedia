@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models/event.dart';
 import '../providers/event_provider.dart';
+import '../providers/auth_provider.dart';
 
 class GroupMediaLink {
   final String postNo;
@@ -101,19 +102,20 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   }
 
   void _openLink(String url, {bool inApp = true}) async {
-    if (url.isEmpty || !url.startsWith('http')) {
+    final trimmedUrl = url.trim();
+    if (trimmedUrl.isEmpty || !trimmedUrl.startsWith('http')) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No valid link available')));
       return;
     }
     try {
-      final uri = Uri.parse(url);
+      final uri = Uri.parse(trimmedUrl);
       if (await canLaunchUrl(uri)) {
         await launchUrl(uri, mode: inApp ? LaunchMode.inAppBrowserView : LaunchMode.externalApplication);
       } else {
         if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Cannot open link')));
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Invalid link: ${url.substring(0, url.length > 50 ? 50 : url.length)}...')));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Invalid link: ${trimmedUrl.substring(0, trimmedUrl.length > 50 ? 50 : trimmedUrl.length)}...')));
     }
   }
 
@@ -127,6 +129,15 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       setState(() => _isSaving = false);
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to update task'), backgroundColor: Colors.red));
     }
+  }
+
+  void _showReassignDialog(BuildContext context, Event targetEvent) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return _ReassignDialog(event: targetEvent);
+      },
+    );
   }
 
   @override
@@ -191,6 +202,15 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                       Icon(Icons.person, size: 16, color: stageColor),
                       const SizedBox(width: 4),
                       Text('Assigned to: ${e.assigneeName}', style: TextStyle(fontWeight: FontWeight.w600, color: stageColor)),
+                      if (context.read<AuthProvider>().role == 'Admin')
+                        IconButton(
+                          icon: const Icon(Icons.edit, size: 16),
+                          onPressed: () => _showReassignDialog(context, e),
+                          padding: const EdgeInsets.only(left: 8),
+                          constraints: const BoxConstraints(),
+                          splashRadius: 16,
+                          color: stageColor,
+                        ),
                     ]),
                   ],
                 ],
@@ -215,6 +235,8 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                           _infoRow(Icons.place, 'Venue', e.venue),
                           _infoRow(Icons.people, 'Organizers', e.organizers),
                           _infoRow(Icons.handshake, 'Partners', e.partners),
+                          if (e.mop.isNotEmpty)
+                            _infoRow(Icons.campaign, 'Promotion (MOP)', e.mop),
                           if (e.importantInfo.isNotEmpty)
                             _infoRow(Icons.info_outline, 'Important', e.importantInfo),
                         ],
@@ -515,6 +537,133 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _ReassignDialog extends StatefulWidget {
+  final Event event;
+  const _ReassignDialog({required this.event});
+
+  @override
+  State<_ReassignDialog> createState() => _ReassignDialogState();
+}
+
+class _ReassignDialogState extends State<_ReassignDialog> {
+  String? _selectedEmail;
+  bool _isOther = false;
+  final _nameController = TextEditingController();
+  final _emailController = TextEditingController();
+  bool _isLoading = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final users = context.read<EventProvider>().users;
+    // Map stage to role (basic mapping, can be refined)
+    String expectedRole = 'User';
+    final stage = widget.event.stage.toLowerCase();
+    if (stage.contains('writ')) expectedRole = 'Writer';
+    else if (stage.contains('edit') && !stage.contains('photo') && !stage.contains('video')) expectedRole = 'Editor';
+    else if (stage.contains('proof')) expectedRole = 'Proofreader';
+    else if (stage.contains('cross check')) expectedRole = 'CrossChecker';
+    else if (stage.contains('thumb')) expectedRole = 'Thumbnail Designer';
+    else if (stage.contains('photo select')) expectedRole = 'Photo Selector';
+    else if (stage.contains('photo edit')) expectedRole = 'Photo Editor';
+    else if (stage.contains('video edit')) expectedRole = 'Video Editor';
+    else if (stage.contains('media cross')) expectedRole = 'Media CrossChecker';
+    else if (stage.contains('ready')) expectedRole = 'Uploader';
+
+    final roleUsers = users.where((u) => u['role'] == expectedRole || u['role'] == 'Admin').toList();
+
+    return AlertDialog(
+      title: const Text('Reassign Task'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            DropdownButtonFormField<String>(
+              decoration: const InputDecoration(labelText: 'Select User'),
+              value: _selectedEmail,
+              items: [
+                ...roleUsers.map((u) {
+                  return DropdownMenuItem(
+                    value: u['username'],
+                    child: Text('${u['name']} (${u['username']})'),
+                  );
+                }),
+                const DropdownMenuItem(
+                  value: 'other',
+                  child: Text('Other (Add New User)'),
+                ),
+              ],
+              onChanged: (val) {
+                setState(() {
+                  _selectedEmail = val;
+                  _isOther = val == 'other';
+                });
+              },
+            ),
+            if (_isOther) ...[
+              const SizedBox(height: 16),
+              TextField(
+                controller: _nameController,
+                decoration: const InputDecoration(labelText: 'New User Name'),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _emailController,
+                decoration: const InputDecoration(labelText: 'New User Email'),
+                keyboardType: TextInputType.emailAddress,
+              ),
+              const SizedBox(height: 8),
+              Text('Role will be set to: $expectedRole', style: const TextStyle(color: Colors.grey, fontSize: 12)),
+            ]
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _isLoading ? null : () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        ElevatedButton(
+          onPressed: _isLoading ? null : () async {
+            if (_selectedEmail == null) return;
+            
+            String targetEmail = _selectedEmail!;
+            String? newName;
+            
+            if (_isOther) {
+              targetEmail = _emailController.text.trim();
+              newName = _nameController.text.trim();
+              if (targetEmail.isEmpty || newName.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please enter name and email.')));
+                return;
+              }
+            }
+            
+            setState(() => _isLoading = true);
+            final success = await context.read<EventProvider>().reassignTask(
+              widget.event, 
+              targetEmail,
+              newName: newName,
+              role: expectedRole,
+            );
+            
+            if (mounted) {
+              setState(() => _isLoading = false);
+              if (success) {
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Task reassigned successfully.'), backgroundColor: Colors.green));
+                Navigator.pop(context); // close dialog
+                Navigator.pop(context); // go back to dashboard to see changes
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to reassign task.'), backgroundColor: Colors.red));
+              }
+            }
+          },
+          child: _isLoading ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Save'),
+        ),
+      ],
     );
   }
 }

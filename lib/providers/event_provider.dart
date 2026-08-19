@@ -103,6 +103,27 @@ class EventProvider with ChangeNotifier {
     return false;
   }
 
+  Future<bool> reassignTask(Event event, String newEmail, {String? newName, String? role}) async {
+    try {
+      final response = await _apiService.postData({
+        'action': 'reassignTasks',
+        'postNo': event.postNo,
+        'isCombined': event.isCombined,
+        'stage': event.stage,
+        'newAssigneeEmail': newEmail,
+        'newAssigneeName': newName,
+        'role': role,
+      });
+
+      if (response['success'] == true) {
+        return true;
+      }
+    } catch (e) {
+      debugPrint('Error reassigning task: $e');
+    }
+    return false;
+  }
+
   Future<bool> createTasksForPost(String postNo) async {
     _isLoading = true;
     notifyListeners();

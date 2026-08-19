@@ -6,6 +6,13 @@ var BRANCH_SPOC_SHEET = 'Branch SPOC';
 
 function ensureSheets() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheetNames = ss.getSheets().map(function(s) { return s.getName(); });
+  if (sheetNames.indexOf(USERS_SHEET) !== -1 && 
+      sheetNames.indexOf(PIPELINE_SHEET) !== -1 && 
+      sheetNames.indexOf(TASKS_SHEET) !== -1 && 
+      sheetNames.indexOf(BRANCH_SPOC_SHEET) !== -1) {
+    return;
+  }
   
   if (!ss.getSheetByName(USERS_SHEET)) {
     var users = ss.insertSheet(USERS_SHEET);
@@ -59,7 +66,7 @@ function ensureSheets() {
   var requiredStages = [
     {stage: 'Writing', role: 'Writer', dep: ''},
     {stage: 'Editing', role: 'Editor', dep: 'Writing'},
-    {stage: 'Proofreading', role: 'Proofreader', dep: 'Editing, Media Cross Check'},
+    {stage: 'Proofreading', role: 'Proofreader', dep: 'Editing'},
     {stage: 'Cross check', role: 'CrossChecker', dep: 'Proofreading'},
     {stage: 'Thumbnail Selection', role: 'Thumbnail Designer', dep: ''},
     {stage: 'Thumbnail Processing', role: 'Thumbnail Designer', dep: 'Thumbnail Selection'},
@@ -140,6 +147,15 @@ function doPost(e) {
       lock.waitLock(10000);
       try {
         var res = handleUpdateTask(payload);
+        return respond(res);
+      } finally {
+        lock.releaseLock();
+      }
+    } else if (action === 'reassignTasks') {
+      var lock = LockService.getScriptLock();
+      lock.waitLock(10000);
+      try {
+        var res = handleReassignTasks(payload);
         return respond(res);
       } finally {
         lock.releaseLock();
@@ -366,9 +382,6 @@ function backfillMissingTasks(ss) {
 function handleGetTasks(payload) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   
-  // Auto-backfill missing tasks for active posts before returning data
-  var didBackfill = backfillMissingTasks(ss);
-  
   var props = PropertiesService.getScriptProperties();
   if (!props.getProperty('fixedStuckTasks_v3')) {
     try {
@@ -390,6 +403,23 @@ function handleGetTasks(payload) {
   
   if (tasksData.length < 2 || postsData.length < 2) return { success: true, tasks: [] };
   
+  // Build Post Map for fast lookup (O(N) instead of O(N * M))
+  var postsMap = {};
+  for (var p = 1; p < postsData.length; p++) {
+    var r = postsData[p];
+    if (!r[0]) continue;
+    var pNo = r[0].toString();
+    var gId = r[37] ? r[37].toString() : '';
+    
+    if (!postsMap[pNo]) postsMap[pNo] = [];
+    postsMap[pNo].push(r);
+    
+    if (gId && gId !== pNo) {
+      if (!postsMap[gId]) postsMap[gId] = [];
+      postsMap[gId].push(r);
+    }
+  }
+  
   var taskHeaders = tasksData[0];
   var resultTasks = [];
   
@@ -400,19 +430,19 @@ function handleGetTasks(payload) {
       var val = trow[j];
       var headerName = taskHeaders[j].toString();
       
-      if (val instanceof Date || (headerName === 'DueDate' && val) || (headerName === 'AllottedDate' && val) || (headerName === 'Date' && val)) {
+      if (val instanceof Date || (headerName === 'DueDate' && val) || (headerName === 'AllottedDate' && val) || 
+(headerName === 'Date' && val)) {
         tObj[taskHeaders[j]] = formatDate(val);
       } else {
         tObj[taskHeaders[j]] = val;
       }
     }
+    tObj['PostNo'] = trow[1]; // Fallback if header is messed up
     tObj['rowIndex'] = i + 1;
     tObj['AssigneeName'] = userMap[(tObj['Assignee'] || '').toString().trim().toLowerCase()] || tObj['Assignee'];
     
     if (payload.role === 'Admin' || tObj['Assignee'] === payload.username) {
-      var matchedRows = postsData.filter(function(r, idx) { 
-        return idx > 0 && (r[0] == tObj['PostNo'] || r[37] == tObj['PostNo']); 
-      });
+      var matchedRows = postsMap[tObj['PostNo']] || [];
 
       if (matchedRows.length == 1) {
         var postObj = buildPostObj(matchedRows[0]);
@@ -504,8 +534,75 @@ function handleGetDashboardStats() {
   };
 }
 
+function handleReassignTasks(payload) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var usersSheet = ss.getSheetByName(USERS_SHEET);
+  
+  // 1. Ensure user exists
+  if (payload.newAssigneeName) {
+    var users = usersSheet.getDataRange().getValues();
+    var found = false;
+    for (var i = 1; i < users.length; i++) {
+      if (users[i][0].toString().toLowerCase() === payload.newAssigneeEmail.toLowerCase()) {
+        found = true;
+        // Optional: Update name?
+        if (users[i][1] !== payload.newAssigneeName) {
+          usersSheet.getRange(i + 1, 2).setValue(payload.newAssigneeName);
+        }
+        break;
+      }
+    }
+    if (!found) {
+      usersSheet.appendRow([payload.newAssigneeEmail, payload.newAssigneeName, payload.role]);
+    }
+  }
+
+  // 2. Update tasks
+  var taskSheet = ss.getSheetByName(TASKS_SHEET);
+  var tasks = taskSheet.getDataRange().getValues();
+  var headers = tasks[0];
+  var postNoCol = headers.indexOf('PostNo');
+  var stageCol = headers.indexOf('Stage');
+  var assigneeCol = headers.indexOf('Assignee');
+  
+  var postNosToUpdate = [payload.postNo];
+  if (payload.isCombined) {
+    var postsSheet = ss.getSheetByName(POSTS_SHEET);
+    var posts = postsSheet.getDataRange().getValues();
+    var groupId = null;
+    for(var p=1; p<posts.length; p++) {
+      if (posts[p][0] == payload.postNo || posts[p][37] == payload.postNo) {
+        groupId = posts[p][37] || payload.postNo;
+        break;
+      }
+    }
+    if (groupId) {
+      for(var p=1; p<posts.length; p++) {
+        if (posts[p][37] == groupId || posts[p][0] == groupId) {
+          if (postNosToUpdate.indexOf(posts[p][0]) === -1) {
+            postNosToUpdate.push(posts[p][0]);
+          }
+        }
+      }
+    }
+  }
+  
+  var updated = 0;
+  var targetStage = normalizeStageName(payload.stage);
+  for(var i=1; i<tasks.length; i++) {
+    var tPostNo = tasks[i][postNoCol];
+    var tStage = normalizeStageName(tasks[i][stageCol]);
+    if (postNosToUpdate.indexOf(tPostNo) !== -1 && tStage === targetStage) {
+      taskSheet.getRange(i+1, assigneeCol+1).setValue(payload.newAssigneeEmail);
+      updated++;
+    }
+  }
+  return {success: true, message: 'Reassigned ' + updated + ' tasks'};
+}
+
 function handleUpdateTask(payload) {
-  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(TASKS_SHEET);
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(TASKS_SHEET);
   var headers = sheet.getDataRange().getValues()[0];
   var rowIndex = payload.rowIndex;
   var updates = payload.updates;
@@ -533,6 +630,60 @@ function handleUpdateTask(payload) {
     } catch (e) {
       // Fail silently if unlocking fails
     }
+    
+    // Failsafe: Explicitly unlock Ready to Post when Cross check is done, ignoring media dependencies
+    try {
+      var data = sheet.getDataRange().getValues();
+      var currentStage = data[rowIndex - 1][headers.indexOf('Stage')];
+      var currentStageLower = (currentStage || '').replace(/\s+/g, '').toLowerCase();
+      var postNo = data[rowIndex - 1][headers.indexOf('PostNo')];
+      var statusCol = headers.indexOf('Status');
+      
+      if (currentStageLower === 'crosscheck') {
+        for (var i = 1; i < data.length; i++) {
+          var iterStageLower = (data[i][headers.indexOf('Stage')] || '').replace(/\s+/g, '').toLowerCase();
+          if (data[i][headers.indexOf('PostNo')] == postNo && iterStageLower === 'readytopost') {
+            var currStatus = data[i][statusCol];
+            if (currStatus === 'Waiting' || !currStatus) {
+              sheet.getRange(i + 1, statusCol + 1).setValue('Ready');
+            }
+            break;
+          }
+        }
+      }
+    } catch(e) {}
+    
+    // Sync back to POSTS_SHEET to keep old columns updated
+    try {
+      var data = sheet.getDataRange().getValues();
+      var row = data[rowIndex - 1];
+      var stage = row[headers.indexOf('Stage')];
+      var postNo = row[headers.indexOf('PostNo')];
+      
+      var postsSheet = ss.getSheetByName(POSTS_SHEET);
+      var postsData = postsSheet.getDataRange().getValues();
+      var postRowIdx = -1;
+      for (var p = 1; p < postsData.length; p++) {
+        if (postsData[p][0] == postNo) {
+          postRowIdx = p + 1;
+          break;
+        }
+      }
+      
+      if (postRowIdx !== -1) {
+        if (stage === 'Writing') postsSheet.getRange(postRowIdx, 28).setValue('Yes'); // WritingDone
+        else if (stage === 'Editing') postsSheet.getRange(postRowIdx, 29).setValue('Yes'); // EditingDone
+        else if (stage === 'Proofreading') {
+          postsSheet.getRange(postRowIdx, 30).setValue('Yes'); // ProofReadingDone
+          postsSheet.getRange(postRowIdx, 32).setValue('Ready'); // ReadyToBePosted
+        }
+        else if (stage === 'Thumbnail Cross checking' || stage === 'Media Cross Check') postsSheet.getRange(postRowIdx, 31).setValue('Yes'); // ThumbnailDone
+        else if (stage === 'Ready to Post') {
+          postsSheet.getRange(postRowIdx, 32).setValue('Ready'); // ReadyToBePosted
+          postsSheet.getRange(postRowIdx, 33).setValue('Yes'); // PostUploaded
+        }
+      }
+    } catch (e) {}
   }
 
   return { success: true, message: 'Task updated successfully' };

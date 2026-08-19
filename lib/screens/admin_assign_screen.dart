@@ -115,9 +115,13 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
               items: [
                 const DropdownMenuItem(value: null, child: Text('Auto-assign (least loaded)')),
                 ...uniqueUsers.values.map((u) {
-                  final email = u['email'];
+                  final email = u['email']?.toString() ?? '';
+                  final name = u['name']?.toString() ?? '';
                   final status = u['status'];
                   final active = u['activeTasks'];
+                  
+                  final displayName = name.isNotEmpty && name.toLowerCase() != email.toLowerCase() ? name : email;
+                  
                   return DropdownMenuItem<String>(
                     value: email,
                     child: Row(
@@ -130,7 +134,12 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
                           ),
                         ),
                         const SizedBox(width: 8),
-                        Expanded(child: Text(email)),
+                        Expanded(
+                          child: Text(
+                            displayName,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
                         Text('($active active)', style: TextStyle(color: Colors.grey.shade500, fontSize: 12)),
                       ],
                     ),
