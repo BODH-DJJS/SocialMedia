@@ -43195,7 +43195,7 @@ if(m.length!==0)o.push(j.yO(m==="Video"?B.pi:B.pd,m))
 q.push(A.w4(o,4,16))
 o=e.e
 if(o.length!==0){o=A.b([A.dt(B.kM,s,i,16),B.dy,A.au("Assigned to: "+o,i,i,i,A.bR(i,i,s,i,i,i,i,i,i,i,i,i,i,i,B.e7,i,i,!0,i,i,i,i,i,i,i,i),i,i,i)],n)
-if(A.e5(a,!1,t.W0).c.toLowerCase()==="admin")o.push(A.h5(s,B.h7,i,B.JK,i,i,new A.apr(j,a,e),B.Ip,16,i,i))
+if(A.e5(a,!0,t.W0).c.toLowerCase()==="admin")o.push(A.h5(s,B.h7,i,B.JK,i,i,new A.apr(j,a,e),B.Ip,16,i,i))
 B.b.N(q,A.b([B.dB,A.b5(o,B.v,B.l,B.m)],n))}q=A.bU(i,A.bE(q,B.N,B.l,B.m),B.o,i,i,new A.bC(i,i,i,i,i,new A.li(B.dO,B.eI,B.ck,p,i,i),B.O),i,i,i,B.aE,i,i,i)
 p=A.b([B.Zw,B.at,j.j_(B.p9,"Branch",e.Q+", "+e.as),j.j_(B.pf,"Venue",e.at),j.j_(B.Jh,"Organizers",e.dx),j.j_(B.JC,"Partners",e.dy)],n)
 o=e.R8
@@ -43336,7 +43336,7 @@ A.rs.prototype={
 ab(){var s=$.ag()
 return new A.UV(new A.hR(B.d_,s),new A.hR(B.d_,s))}}
 A.UV.prototype={
-G(a){var s,r,q,p,o,n,m=this,l=null,k={},j=A.e5(a,!1,t.py).c
+G(a){var s,r,q,p,o,n,m=this,l=null,k={},j=A.e5(a,!0,t.py).c
 k.a="User"
 s=m.a.c.c.toLowerCase()
 if(B.c.m(s,"writ"))k.a="Writer"
