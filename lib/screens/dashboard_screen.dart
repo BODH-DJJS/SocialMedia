@@ -1463,6 +1463,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                     onPressed: () => context.push('/admin-assign', extra: {
                       ...post,
                       'isInitialized': isInitialized,
+                      'existingTasks': postTasks,
                     }),
                   ),
                 ],
@@ -1655,7 +1656,9 @@ class _DashboardScreenState extends State<DashboardScreen>
                         extra: {
                           'postNo': groupId,
                           'isCombined': true,
-                          'combinedPosts': posts,
+                          'isInitialized': isInitialized,
+                          'existingTasks': postTasks,
+                          ...posts.first,
                         },
                       );
                     },

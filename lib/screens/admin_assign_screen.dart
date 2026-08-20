@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import '../providers/event_provider.dart';
+import '../models/event.dart';
 import 'package:intl/intl.dart';
 
 class AdminAssignScreen extends StatefulWidget {
@@ -55,20 +56,76 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<EventProvider>().fetchUsers();
-      
-      // Init from existing data if any
-      setState(() {
-        _publishPlatform = widget.postData['PublishPlatform']?.toString().isNotEmpty == true 
-            ? widget.postData['PublishPlatform'] 
-            : 'WhatsApp';
-        _postType = widget.postData['PostType']?.toString().isNotEmpty == true 
-            ? widget.postData['PostType'] 
-            : 'Individual';
-        _mediaMode = widget.postData['MediaMode']?.toString().isNotEmpty == true 
-            ? widget.postData['MediaMode'] 
-            : 'Photos';
-        _descController.text = widget.postData['Description']?.toString() ?? '';
-      });
+            // Init from existing data if any
+        final existingTasks = widget.postData['existingTasks'] as List<Event>? ?? [];
+        
+        setState(() {
+          _publishPlatform = widget.postData['PublishPlatform']?.toString().isNotEmpty == true 
+              ? widget.postData['PublishPlatform'] 
+              : 'WhatsApp';
+          _postType = widget.postData['PostType']?.toString().isNotEmpty == true 
+              ? widget.postData['PostType'] 
+              : 'Individual';
+          _mediaMode = widget.postData['MediaMode']?.toString().isNotEmpty == true 
+              ? widget.postData['MediaMode'] 
+              : 'Photos';
+          _descController.text = widget.postData['Description']?.toString() ?? '';
+          
+          for (final task in existingTasks) {
+            final stage = task.stage.toLowerCase().replaceAll(' ', '');
+            final assignee = task.assignee.isEmpty ? null : task.assignee;
+            DateTime? dueDate;
+            if (task.dueDate.isNotEmpty) {
+              try {
+                final format = DateFormat('d-MMM-yyyy');
+                dueDate = format.parse(task.dueDate);
+              } catch (e) {
+                // Ignore parse errors
+              }
+            }
+            
+            if (stage == 'writing') {
+              _selectedWriter = assignee;
+              _writingDue = dueDate;
+            } else if (stage == 'editing') {
+              _selectedEditor = assignee;
+              _editingDue = dueDate;
+            } else if (stage == 'proofreading') {
+              _selectedProofreader = assignee;
+              _proofreadingDue = dueDate;
+            } else if (stage == 'crosscheck') {
+              _selectedCrosscheck = assignee;
+              _crosscheckDue = dueDate;
+            } else if (stage == 'readytopost') {
+              _selectedUploader = assignee;
+              _uploaderDue = dueDate;
+            } else if (stage == 'thumbnailselection') {
+              _selectedThumbnailSelect = assignee;
+              _thumbnailSelectDue = dueDate;
+            } else if (stage == 'thumbnailprocessing') {
+              _selectedThumbnailProcess = assignee;
+              _thumbnailProcessDue = dueDate;
+            } else if (stage == 'thumbnailcrosschecking') {
+              _selectedThumbnailCrosscheck = assignee;
+              _thumbnailCrosscheckDue = dueDate;
+            } else if (stage == 'photosselection') {
+              _selectedPhotoSelect = assignee;
+              _photoSelectDue = dueDate;
+            } else if (stage == 'photosclean') {
+              _selectedPhotosClean = assignee;
+              _photosCleanDue = dueDate;
+            } else if (stage == 'photoediting') {
+              _selectedPhotoEdit = assignee;
+              _photoEditDue = dueDate;
+            } else if (stage == 'videoediting') {
+              _selectedVideoEdit = assignee;
+              _videoEditDue = dueDate;
+            } else if (stage == 'mediacrosscheck') {
+              _selectedMediaCheck = assignee;
+              _mediaCheckDue = dueDate;
+            }
+          }
+        });
     });
   }
 
