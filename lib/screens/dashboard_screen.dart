@@ -785,7 +785,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                             ),
                             const PopupMenuItem(
                               value: 'Ready',
-                              child: Text('Ready Only'),
+                              child: Text('Alloted Only'),
                             ),
                             const PopupMenuItem(
                               value: 'In Progress',
@@ -897,7 +897,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
-                      task.status.isEmpty ? 'Pending' : task.status,
+                      task.status.isEmpty ? 'Pending' : (task.status == 'Ready' ? 'Alloted' : task.status),
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 9,
@@ -1876,7 +1876,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                     value: 'All Tasks',
                     child: Text('All Tasks'),
                   ),
-                  DropdownMenuItem(value: 'Ready', child: Text('Ready Only')),
+                  DropdownMenuItem(value: 'Ready', child: Text('Alloted Only')),
                   DropdownMenuItem(
                     value: 'In Progress',
                     child: Text('In Progress Only'),

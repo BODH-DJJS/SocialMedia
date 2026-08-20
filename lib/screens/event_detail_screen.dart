@@ -164,7 +164,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
               color: isDone ? Colors.green : stageColor,
               borderRadius: BorderRadius.circular(20),
             ),
-            child: Center(child: Text(isDone ? 'Done' : (e.status.isEmpty ? 'Pending' : e.status), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold))),
+            child: Center(child: Text(isDone ? 'Done' : (e.status.isEmpty ? 'Pending' : (e.status == 'Ready' ? 'Alloted' : e.status)), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold))),
           ),
         ],
       ),
