@@ -214,6 +214,7 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
     final provider = context.read<EventProvider>();
     final isCombined = widget.postData['isCombined'] == true;
     final postNo = isCombined ? widget.postData['postNo']?.toString() : widget.postData['PostNo']?.toString();
+    final isInitialized = widget.postData['isInitialized'] == true;
     if (postNo == null) return;
 
     final assignees = <String, String>{};
@@ -276,7 +277,7 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
 
     if (mounted) {
       if (success) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Workflow setup successfully!'), backgroundColor: Colors.green));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(isInitialized ? 'Workflow updated successfully!' : 'Workflow setup successfully!'), backgroundColor: Colors.green));
         context.pop();
       } else {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to setup workflow or tasks already exist.'), backgroundColor: Colors.red));
@@ -288,6 +289,7 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isCombined = widget.postData['isCombined'] == true;
+    final isInitialized = widget.postData['isInitialized'] == true;
     final postNo = isCombined ? widget.postData['postNo'] : widget.postData['PostNo'];
     final themeName = isCombined ? 'Combined Group' : (widget.postData['Theme'] ?? 'No Theme');
     final provider = context.watch<EventProvider>();
@@ -501,8 +503,8 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
                   const SizedBox(height: 32),
 
                   ElevatedButton.icon(
-                    icon: const Icon(Icons.rocket_launch),
-                    label: const Text('Create Tasks & Folders', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                    icon: Icon(isInitialized ? Icons.update : Icons.rocket_launch),
+                    label: Text(isInitialized ? 'Update Tasks & Folders' : 'Create Tasks & Folders', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                     style: ElevatedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       backgroundColor: theme.colorScheme.secondary,

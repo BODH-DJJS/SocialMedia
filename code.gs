@@ -1396,10 +1396,14 @@ function createTasksForPostV2(payload) {
   var postType = payload.postType || 'Individual';
   var mediaMode = payload.mediaMode || 'Photos';
 
-  // Check duplicates
+  // Map existing tasks for upsert logic
+  var isUpdate = false;
+  var existingTaskRows = {};
   for (var t = 1; t < existingTasks.length; t++) {
     if (existingTasks[t][1] == postNo) {
-      return {success: false, message: 'Tasks already exist for ' + postNo};
+      isUpdate = true;
+      var st = normalizeStageName(existingTasks[t][2]);
+      existingTaskRows[st] = t + 1;
     }
   }
 
@@ -1605,35 +1609,61 @@ function createTasksForPostV2(payload) {
       if (normalizeStageName(k) === normalizedStage) { dueDate = dueDates[k]; break; }
     }
     
-    var rowData = [
-      postNo + '-' + stage,
-      postNo,
-      stage,
-      assignee,
-      initialStatus,
-      new Date().toLocaleString(),
-      '',
-      docUrl
-    ];
-    
-    // Extend row to include new columns
-    if (allottedDateCol !== -1) {
-      while (rowData.length <= allottedDateCol) rowData.push('');
-      rowData[allottedDateCol] = allottedDate;
+    var existingRowIdx = existingTaskRows[normalizedStage];
+
+    if (existingRowIdx) {
+      // Update existing task
+      var assigneeCol = taskHeaders.indexOf('Assignee');
+      var docLinkCol = taskHeaders.indexOf('DocLink');
+      
+      if (assignee && assigneeCol !== -1) {
+        tasks.getRange(existingRowIdx, assigneeCol + 1).setValue(assignee);
+        if (allottedDateCol !== -1) {
+          tasks.getRange(existingRowIdx, allottedDateCol + 1).setValue(new Date().toLocaleString());
+        }
+      }
+      if (dueDate && dueDateCol !== -1) {
+        tasks.getRange(existingRowIdx, dueDateCol + 1).setValue(dueDate);
+      }
+      if (docUrl && docLinkCol !== -1) {
+        var existingDocUrl = existingTasks[existingRowIdx - 1][docLinkCol];
+        if (!existingDocUrl) {
+          tasks.getRange(existingRowIdx, docLinkCol + 1).setValue(docUrl);
+        }
+      }
+    } else {
+      // Append new task
+      var rowData = [
+        postNo + '-' + stage,
+        postNo,
+        stage,
+        assignee,
+        initialStatus,
+        new Date().toLocaleString(),
+        '',
+        docUrl
+      ];
+      
+      // Extend row to include new columns
+      if (allottedDateCol !== -1) {
+        while (rowData.length <= allottedDateCol) rowData.push('');
+        rowData[allottedDateCol] = allottedDate;
+      }
+      if (dueDateCol !== -1) {
+        while (rowData.length <= dueDateCol) rowData.push('');
+        rowData[dueDateCol] = dueDate;
+      }
+      if (notesCol !== -1) {
+        while (rowData.length <= notesCol) rowData.push('');
+        rowData[notesCol] = '';
+      }
+      
+      tasks.appendRow(rowData);
     }
-    if (dueDateCol !== -1) {
-      while (rowData.length <= dueDateCol) rowData.push('');
-      rowData[dueDateCol] = dueDate;
-    }
-    if (notesCol !== -1) {
-      while (rowData.length <= notesCol) rowData.push('');
-      rowData[notesCol] = '';
-    }
-    
-    tasks.appendRow(rowData);
   }
   
-  return {success: true, message: 'Tasks created for ' + postNo + ' with assignees, folders, and docs'};
+  var msg = isUpdate ? 'Tasks updated for ' + postNo : 'Tasks created for ' + postNo + ' with assignees, folders, and docs';
+  return {success: true, message: msg};
 }
 
 function doGet(e) {

@@ -1458,9 +1458,12 @@ class _DashboardScreenState extends State<DashboardScreen>
                     ),
                     tooltip:
                         isInitialized
-                            ? 'Workflow Initialized'
+                            ? 'Update Setup & Assignees'
                             : 'Assign & Setup Workflow',
-                    onPressed: () => context.push('/admin-assign', extra: post),
+                    onPressed: () => context.push('/admin-assign', extra: {
+                      ...post,
+                      'isInitialized': isInitialized,
+                    }),
                   ),
                 ],
               ),
