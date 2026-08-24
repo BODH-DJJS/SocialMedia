@@ -231,23 +231,22 @@ class EventProvider with ChangeNotifier {
     required String postType,
     required String mediaMode,
   }) async {
-    // Fire-and-forget the API call. Google Drive API takes 15-30 seconds to create folders and docs.
-    // By not awaiting this, the UI stays fully responsive and pops immediately.
-    _apiService.postData({
-      'action': 'createTasksForPostV2',
-      'postNo': postNo,
-      'assignees': assignees,
-      'dueDates': dueDates,
-      'description': description,
-      'publishPlatform': publishPlatform,
-      'postType': postType,
-      'mediaMode': mediaMode,
-    }).catchError((e) {
-      debugPrint('Error creating tasks v2 (background): $e');
-    });
-
-    // Optimistically assume success and return instantly
-    return true;
+    try {
+      final res = await _apiService.postData({
+        'action': 'createTasksForPostV2',
+        'postNo': postNo,
+        'assignees': assignees,
+        'dueDates': dueDates,
+        'description': description,
+        'publishPlatform': publishPlatform,
+        'postType': postType,
+        'mediaMode': mediaMode,
+      });
+      return res['success'] == true;
+    } catch (e) {
+      debugPrint('Error creating tasks v2: $e');
+      return false;
+    }
   }
 
   Future<Map<String, String>> fetchMediaFolders(String monthLink, String dateStr, String stage, {String venue = '', String postNo = ''}) async {

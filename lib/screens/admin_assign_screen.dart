@@ -15,6 +15,7 @@ class AdminAssignScreen extends StatefulWidget {
 }
 
 class _AdminAssignScreenState extends State<AdminAssignScreen> {
+  bool _isLoading = false;
   String? _selectedWriter;
   String? _selectedEditor;
   String? _selectedProofreader;
@@ -58,6 +59,8 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
       context.read<EventProvider>().fetchUsers();
             // Init from existing data if any
         final existingTasks = widget.postData['existingTasks'] as List<Event>? ?? [];
+        debugPrint('=== AdminAssignScreen existingTasks ===');
+        debugPrint('Total existingTasks: ${existingTasks.length}');
         
         setState(() {
           _publishPlatform = widget.postData['PublishPlatform']?.toString().isNotEmpty == true 
@@ -73,7 +76,8 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
           
           for (final task in existingTasks) {
             final stage = task.stage.toLowerCase().replaceAll(' ', '');
-            final assignee = task.assignee.isEmpty ? null : task.assignee;
+            final assignee = task.assignee.isEmpty ? null : task.assignee.trim();
+            debugPrint('Task: stage="${task.stage}" -> norm="$stage", assignee="$assignee"');
             DateTime? dueDate;
             if (task.dueDate.isNotEmpty) {
               try {
@@ -140,7 +144,8 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
   }
 
   Widget _buildUserDropdown(String title, String role, String? value, Function(String?) onChanged) {
-    final users = context.watch<EventProvider>().users.where((u) => u['role'] == role).toList();
+    final allUsers = context.watch<EventProvider>().users;
+    final users = allUsers.where((u) => u['role'] == role).toList();
     final uniqueUsers = <String, Map<String, dynamic>>{};
     for (var u in users) {
       final email = u['email']?.toString() ?? '';
@@ -149,8 +154,28 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
       }
     }
     
+    if (value != null && value.isNotEmpty && !uniqueUsers.containsKey(value)) {
+      final fallbackUser = allUsers.firstWhere(
+        (u) => u['email'] == value, 
+        orElse: () => {'email': value, 'name': value, 'role': 'Unknown'}
+      );
+      uniqueUsers[value] = fallbackUser;
+    }
+    
     // Ensure the current value is in the unique list, otherwise reset it
-    final safeValue = (value == null || uniqueUsers.containsKey(value)) ? value : null;
+    final safeValue = (value == null || value.isEmpty || uniqueUsers.containsKey(value)) ? value : null;
+    
+    final isInitialized = widget.postData['isInitialized'] == true;
+    
+    // Auto-select first user if value is null AND it is a new assignment
+    if (!isInitialized && (safeValue == null || safeValue.isEmpty) && uniqueUsers.isNotEmpty) {
+      final firstEmail = uniqueUsers.keys.first;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) onChanged(firstEmail);
+      });
+    }
+    
+    final effectiveValue = safeValue ?? (!isInitialized && uniqueUsers.isNotEmpty ? uniqueUsers.keys.first : null);
     
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -160,15 +185,15 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 12),
           decoration: BoxDecoration(
-            color: Colors.grey.shade50,
-            borderRadius: BorderRadius.circular(12),
+            color: Colors.white,
             border: Border.all(color: Colors.grey.shade300),
+            borderRadius: BorderRadius.circular(8),
           ),
           child: DropdownButtonHideUnderline(
             child: DropdownButton<String>(
               isExpanded: true,
               hint: const Text('Auto-assign (least loaded)'),
-              value: safeValue,
+              value: effectiveValue,
               items: [
                 const DropdownMenuItem(value: null, child: Text('Auto-assign (least loaded)')),
                 ...uniqueUsers.values.map((u) {
@@ -273,6 +298,8 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
     final postNo = isCombined ? widget.postData['postNo']?.toString() : widget.postData['PostNo']?.toString();
     final isInitialized = widget.postData['isInitialized'] == true;
     if (postNo == null) return;
+    
+    setState(() => _isLoading = true);
 
     final assignees = <String, String>{};
     if (_selectedWriter != null) assignees['Writing'] = _selectedWriter!;
@@ -331,6 +358,8 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
       postType: _postType,
       mediaMode: _mediaMode,
     );
+
+    setState(() => _isLoading = false);
 
     if (mounted) {
       if (success) {
@@ -560,14 +589,19 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
                   const SizedBox(height: 32),
 
                   ElevatedButton.icon(
-                    icon: Icon(isInitialized ? Icons.update : Icons.rocket_launch),
-                    label: Text(isInitialized ? 'Update Tasks & Folders' : 'Create Tasks & Folders', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                    icon: _isLoading 
+                        ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                        : Icon(isInitialized ? Icons.update : Icons.rocket_launch),
+                    label: Text(
+                      _isLoading ? 'Processing...' : (isInitialized ? 'Update Tasks & Folders' : 'Create Tasks & Folders'), 
+                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)
+                    ),
                     style: ElevatedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       backgroundColor: theme.colorScheme.secondary,
                       foregroundColor: Colors.white,
                     ),
-                    onPressed: _submit,
+                    onPressed: _isLoading ? null : _submit,
                   ),
                   const SizedBox(height: 40),
                 ],

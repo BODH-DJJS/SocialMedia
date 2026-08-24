@@ -1226,16 +1226,18 @@ class _DashboardScreenState extends State<DashboardScreen>
                         ? const Center(
                           child: Text('No individual posts found.'),
                         )
-                        : ListView.builder(
-                          padding: const EdgeInsets.symmetric(horizontal: 12),
-                          itemCount: tabFiltered.length,
-                          itemBuilder:
-                              (context, index) => _buildPostCard(
-                                tabFiltered[index],
-                                provider,
-                                auth,
-                              ),
-                        ))
+                        : LayoutBuilder(
+                            builder: (context, constraints) {
+                              if (constraints.maxWidth < 800) {
+                                return ListView.builder(
+                                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                                  itemCount: tabFiltered.length,
+                                  itemBuilder: (context, index) => _buildPostCard(tabFiltered[index], provider, auth),
+                                );
+                              }
+                              return _buildPostsTable(tabFiltered, provider);
+                            },
+                          ))
                     : (combinedGroups.isEmpty
                         ? const Center(child: Text('No combined posts found.'))
                         : ListView.builder(
@@ -1296,6 +1298,135 @@ class _DashboardScreenState extends State<DashboardScreen>
               ),
             ],
           ),
+    );
+  }
+
+  Widget _buildPostsTable(List<Map<String, dynamic>> posts, EventProvider provider) {
+    const double colPost = 100;
+    const double colProg = 150;
+    const double colBranch = 150;
+    const double colVenue = 250;
+    const double colTheme = 250;
+    const double colDate = 120;
+    const double colBen = 100;
+    const double colAction = 80;
+
+    Widget buildCell(String text, double width, {bool isHeader = false}) {
+      return Container(
+        width: width,
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+        alignment: Alignment.centerLeft,
+        child: Text(
+          text,
+          style: TextStyle(
+            fontWeight: isHeader ? FontWeight.bold : FontWeight.normal,
+            fontSize: isHeader ? 14 : 13,
+          ),
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+        ),
+      );
+    }
+
+    return Center(
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: SizedBox(
+          width: 1200,
+          child: Column(
+            children: [
+              // Header
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade100,
+                  border: Border(bottom: BorderSide(color: Colors.grey.shade300)),
+                ),
+                child: Row(
+                  children: [
+                    buildCell('Post No', colPost, isHeader: true),
+                    buildCell('Program', colProg, isHeader: true),
+                    buildCell('Branch', colBranch, isHeader: true),
+                    buildCell('Venue', colVenue, isHeader: true),
+                    buildCell('Theme', colTheme, isHeader: true),
+                    buildCell('Date', colDate, isHeader: true),
+                    buildCell('Total Ben.', colBen, isHeader: true),
+                    buildCell('Action', colAction, isHeader: true),
+                  ],
+                ),
+              ),
+              // Rows
+              Expanded(
+                child: ListView.builder(
+                  itemCount: posts.length,
+                  itemBuilder: (context, index) {
+                    final post = posts[index];
+                    final postNo = post['PostNo']?.toString() ?? '';
+                    final program = post['Program']?.toString() ?? '';
+                    final branch = post['Branch']?.toString() ?? '';
+                    final venue = post['Venue']?.toString() ?? '';
+                    final theme = post['Theme']?.toString() ?? '';
+                    final date = post['Date']?.toString() ?? '';
+                    final totalBen = post['TotalBeneficiary']?.toString() ?? '0';
+
+                    final postTasks = provider.events.where((t) => t.postNo == postNo).toList();
+                    final isInitialized = postTasks.isNotEmpty;
+                    final isSelected = _isSelectionMode && _selectedPosts.contains(postNo);
+
+                    return InkWell(
+                      onTap: _isSelectionMode
+                          ? () {
+                              setState(() {
+                                if (isSelected) {
+                                  _selectedPosts.remove(postNo);
+                                } else {
+                                  _selectedPosts.add(postNo);
+                                }
+                              });
+                            }
+                          : null,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: isSelected ? Theme.of(context).colorScheme.primary.withOpacity(0.1) : Colors.transparent,
+                          border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
+                        ),
+                        child: Row(
+                          children: [
+                            buildCell('#$postNo', colPost),
+                            buildCell(program, colProg),
+                            buildCell(branch, colBranch),
+                            buildCell(venue, colVenue),
+                            buildCell(theme, colTheme),
+                            buildCell(date, colDate),
+                            buildCell(totalBen, colBen),
+                            Container(
+                              width: colAction,
+                              alignment: Alignment.center,
+                              child: IconButton(
+                                icon: Icon(
+                                  isInitialized ? Icons.settings : Icons.add_task_rounded,
+                                  color: isInitialized ? Colors.grey : Theme.of(context).colorScheme.secondary,
+                                ),
+                                tooltip: isInitialized ? 'Update Setup & Assignees' : 'Assign & Setup Workflow',
+                                onPressed: () {
+                                  context.push('/admin-assign', extra: {
+                                    ...post,
+                                    'isInitialized': isInitialized,
+                                    'existingTasks': postTasks,
+                                  });
+                                },
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
