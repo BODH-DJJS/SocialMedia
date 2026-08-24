@@ -42460,10 +42460,8 @@ if(l)s=B.cR
 else if(m==="In Progress")s=B.fx
 else s=m==="Ready"?B.vO:B.eU
 r=A.bT(8)
-if(m.length===0)m="Pending"
-else if(m==="Ready")m="Alloted"
 q=t.p
-r=A.b([A.b7(A.b([g,A.bU(n,A.as(m,n,n,n,B.XG,n,n,n),B.o,n,n,new A.bC(s,n,n,r,n,n,B.O),n,n,n,B.Is,n,n,n)],q),B.v,B.l,B.m),B.cB],q)
+r=A.b([A.b7(A.b([g,A.bU(n,A.as(m.length===0?"Pending":m,n,n,n,B.XG,n,n,n),B.o,n,n,new A.bC(s,n,n,r,n,n,B.O),n,n,n,B.Is,n,n,n)],q),B.v,B.l,B.m),B.cB],q)
 m=a.ay
 if(m.length!==0)r.push(A.as(m,1,B.ag,n,A.bR(n,n,B.bL,n,n,n,n,n,n,n,n,12,n,n,n,n,n,!0,n,n,n,n,n,n,n,n),n,n,n))
 m=a.ax
@@ -42666,7 +42664,7 @@ a7q(a){var s,r=this,q=null,p={},o=a.a,n=A.V(o).i("a1<1>"),m=p.a=A.T(new A.a1(o,n
 if(r.Q!=="All Tasks"){o=A.V(m).i("a1<1>")
 o=p.a=A.T(new A.a1(m,new A.anU(r),o),!0,o.i("v.E"))}else o=m
 n=t.p
-s=A.b7(A.b([B.ZU,A.aE9(q,!1,B.LJ,new A.anV(r),r.Q,t.N)],n),B.v,B.eb,B.m)
+s=A.b7(A.b([B.ZU,A.aE9(q,!1,B.LN,new A.anV(r),r.Q,t.N)],n),B.v,B.eb,B.m)
 o=o.length
 return A.bE(A.b([new A.aF(B.aE,s,q),A.bm(o===0?A.e2(A.bE(A.b([A.dm(B.Jw,B.by,q,64),B.at,A.as("No tasks found",q,q,q,A.bR(q,q,B.bz,q,q,q,q,q,q,q,q,18,q,q,q,q,q,!0,q,q,q,q,q,q,q,q),q,q,q)],n),B.v,B.cQ,B.m),q,q):A.aA3(new A.anW(p,r),o,B.de),1)],n),B.b8,B.l,B.m)}}
 A.aoi.prototype={
@@ -43247,8 +43245,7 @@ q=g?B.cR:s
 p=A.bT(20)
 if(g)o="Done"
 else{o=e.f
-if(o.length===0)o="Pending"
-else if(o==="Ready")o="Alloted"}n=t.p
+if(o.length===0)o="Pending"}n=t.p
 r=A.a_6(A.b([A.bU(i,A.e2(A.as(o,i,i,i,B.Bk,i,i,i),i,i),B.o,i,i,new A.bC(q,i,i,p,i,i,B.O),i,i,B.Iq,B.Ia,i,i,i)],n),i,r)
 p=A.b([A.ab(38,s.q()>>>16&255,s.q()>>>8&255,s.q()&255),A.ab(8,s.q()>>>16&255,s.q()>>>8&255,s.q()&255)],t.t_)
 q=A.b([],n)
@@ -43425,7 +43422,7 @@ r=A.V(j).i("a1<1>")
 q=A.T(new A.a1(j,new A.ata(k),r),!0,r.i("v.E"))
 r=m.d
 p=A.T(new A.a5(q,new A.atb(),A.V(q).i("a5<1,eA<j>>")),!0,t.b7)
-p.push(B.Hy)
+p.push(B.Hx)
 o=t.p
 r=A.b([A.aP5(B.K9,p,new A.atc(m),r,t.N)],o)
 if(m.e)B.b.N(r,A.b([B.cg,A.nX(!0,B.bj,!1,l,!0,B.B,l,A.rK(),m.f,l,l,l,l,l,2,B.Kb,B.X,!0,l,!0,l,!1,l,B.bq,l,l,l,l,l,l,l,1,l,l,!1,"\u2022",l,l,l,l,l,!1,l,l,!1,l,!0,l,B.bO,l,l,B.bf,B.b7,l,l,l,l,l,l,l,!0,B.ak,l,B.ci,l,l,l,l),B.dB,A.nX(!0,B.bj,!1,l,!0,B.B,l,A.rK(),m.r,l,l,l,l,l,2,B.Kd,B.X,!0,l,!0,l,!1,l,B.bq,l,l,l,B.UN,l,l,l,1,l,l,!1,"\u2022",l,l,l,l,l,!1,l,l,!1,l,!0,l,B.bO,l,l,B.bf,B.b7,l,l,l,l,l,l,l,!0,B.ak,l,B.ci,l,l,l,l),B.dB,A.as("Role will be set to: "+k.a,l,l,l,B.Bh,l,l,l)],o))
@@ -49816,7 +49813,7 @@ A.atg.prototype={
 $2(a,b){return this.a.B$.c2(a,this.b)},
 $S:13}
 A.R2.prototype={
-gDK(){return B.LM},
+gDK(){return B.LL},
 I2(a){var s
 switch(a.a){case 0:s=this.d.b
 break
@@ -55268,7 +55265,7 @@ return 28}return B.pK[b-1]},
 PR(a){if(a<10)return"0"+a
 return""+a},
 Jv(a){var s=B.i_[A.b6(a)-1]
-return B.LK[A.uK(a)-1]+", "+s+" "+A.cu(a)+", "+A.b4(a)},
+return B.LJ[A.uK(a)-1]+", "+s+" "+A.cu(a)+", "+A.b4(a)},
 Jw(a){var s=B.i.k(A.b4(a))
 return B.i_[A.b6(a)-1]+" "+s},
 Zl(a){var s,r,q,p,o,n,m=null
@@ -96717,7 +96714,7 @@ B.X=new A.KP(1,"start")
 B.Ht=new A.KR(null)
 B.Hu=new A.z6(null,null,null,null,null,null,null,null,null)
 B.ZH=new A.bc("Other (Add New User)",null,null,null,null,null,null,null,null,null)
-B.Hy=new A.eA("other",B.ZH,B.bH,null,t.b7)
+B.Hx=new A.eA("other",B.ZH,B.bH,null,t.b7)
 B.Bn=new A.bc("Auto-assign (least loaded)",null,null,null,null,null,null,null,null,null)
 B.HA=new A.eA(null,B.Bn,B.bH,null,t.b7)
 B.HB=new A.z7(null,null,null)
@@ -97131,21 +97128,21 @@ B.LF=A.b(s(["AM","PM"]),t.s)
 B.pA=A.b(s(["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"]),t.s)
 B.LH=A.b(s([B.jp,B.jq]),A.ap("B<y3>"))
 B.LI=A.b(s(["BC","AD"]),t.s)
-B.Bp=new A.bc("All Tasks",null,null,null,null,null,null,null,null,null)
-B.Hx=new A.eA("All Tasks",B.Bp,B.bH,null,t.b7)
-B.Br=new A.bc("Alloted Only",null,null,null,null,null,null,null,null,null)
-B.Hv=new A.eA("Ready",B.Br,B.bH,null,t.b7)
-B.Bq=new A.bc("In Progress Only",null,null,null,null,null,null,null,null,null)
-B.Hz=new A.eA("In Progress",B.Bq,B.bH,null,t.b7)
-B.Zk=new A.bc("Done Only",null,null,null,null,null,null,null,null,null)
-B.Hw=new A.eA("Done",B.Zk,B.bH,null,t.b7)
-B.LJ=A.b(s([B.Hx,B.Hv,B.Hz,B.Hw]),t.FG)
 B.pB=A.b(s(["Sun","Mon","Tue","Wed","Thu","Fri","Sat"]),t.s)
-B.LK=A.b(s(["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"]),t.s)
+B.LJ=A.b(s(["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"]),t.s)
 B.br=new A.kt(0,"label")
 B.b3=new A.kt(1,"avatar")
 B.cm=new A.kt(2,"deleteIcon")
-B.LM=A.b(s([B.br,B.b3,B.cm]),A.ap("B<kt>"))
+B.LL=A.b(s([B.br,B.b3,B.cm]),A.ap("B<kt>"))
+B.Bp=new A.bc("All Tasks",null,null,null,null,null,null,null,null,null)
+B.Hw=new A.eA("All Tasks",B.Bp,B.bH,null,t.b7)
+B.Bq=new A.bc("Ready Only",null,null,null,null,null,null,null,null,null)
+B.Hz=new A.eA("Ready",B.Bq,B.bH,null,t.b7)
+B.Br=new A.bc("In Progress Only",null,null,null,null,null,null,null,null,null)
+B.Hy=new A.eA("In Progress",B.Br,B.bH,null,t.b7)
+B.Zk=new A.bc("Done Only",null,null,null,null,null,null,null,null,null)
+B.Hv=new A.eA("Done",B.Zk,B.bH,null,t.b7)
+B.LN=A.b(s([B.Hw,B.Hz,B.Hy,B.Hv]),t.FG)
 B.aL=new A.eM(0,"icon")
 B.aV=new A.eM(1,"input")
 B.al=new A.eM(2,"label")
@@ -97348,7 +97345,7 @@ B.CS=new A.bt(-1,B.U,B.c1,B.ej,5)
 B.w_=new A.i(0,6)
 B.Dd=new A.bt(0,B.U,B.c2,B.w_,10)
 B.Dk=new A.bt(0,B.U,B.bM,B.ce,18)
-B.LL=A.b(s([B.CS,B.Dd,B.Dk]),t.E)
+B.LK=A.b(s([B.CS,B.Dd,B.Dk]),t.E)
 B.lp=new A.i(0,5)
 B.CX=new A.bt(-3,B.U,B.c1,B.lp,5)
 B.ih=new A.i(0,8)
@@ -97377,7 +97374,7 @@ B.PF=new A.i(0,24)
 B.Dg=new A.bt(3,B.U,B.c2,B.PF,38)
 B.Da=new A.bt(8,B.U,B.bM,B.w0,46)
 B.LZ=A.b(s([B.CZ,B.Dg,B.Da]),t.E)
-B.Oq=new A.c0([0,B.My,1,B.MM,2,B.LE,3,B.MH,4,B.KY,6,B.LL,8,B.Li,9,B.Lv,12,B.LP,16,B.LO,24,B.LZ],A.ap("c0<n,K<bt>>"))
+B.Oq=new A.c0([0,B.My,1,B.MM,2,B.LE,3,B.MH,4,B.KY,6,B.LK,8,B.Li,9,B.Lv,12,B.LP,16,B.LO,24,B.LZ],A.ap("c0<n,K<bt>>"))
 B.c9=new A.f(4294968065)
 B.lS=new A.ad(B.c9,!1,!1,!0,!1,B.r)
 B.bQ=new A.f(4294968066)
@@ -97917,7 +97914,7 @@ B.M7=A.b(s([8589934850,8589934850,8589934851,null]),t.Z)
 B.vJ=new A.c0(["*",B.Lb,"+",B.Lc,"-",B.Ld,".",B.Le,"/",B.Lf,"0",B.Lg,"1",B.Lh,"2",B.Lj,"3",B.Lk,"4",B.Ll,"5",B.Lm,"6",B.Ln,"7",B.Lo,"8",B.Lp,"9",B.Lr,"Alt",B.M4,"AltGraph",B.L0,"ArrowDown",B.L1,"ArrowLeft",B.L2,"ArrowRight",B.L3,"ArrowUp",B.L4,"Clear",B.L9,"Control",B.M5,"Delete",B.L_,"End",B.L5,"Enter",B.KZ,"Home",B.L6,"Insert",B.La,"Meta",B.M6,"PageDown",B.L7,"PageUp",B.L8,"Shift",B.M7],A.ap("c0<j,K<n?>>"))
 B.Lq=A.b(s([B.pR,null,null,B.vx]),t.L)
 B.MC=A.b(s([B.vj,null,null,B.vy]),t.L)
-B.LN=A.b(s([B.vk,null,null,B.vz]),t.L)
+B.LM=A.b(s([B.vk,null,null,B.vz]),t.L)
 B.Ma=A.b(s([B.vl,null,null,B.dn]),t.L)
 B.KT=A.b(s([B.vm,null,null,B.vA]),t.L)
 B.MN=A.b(s([B.vn,null,null,B.l6]),t.L)
@@ -97947,7 +97944,7 @@ B.LA=A.b(s([B.fs,B.fs,B.i8,null]),t.L)
 B.LW=A.b(s([B.fo,null,null,B.fu]),t.L)
 B.Mk=A.b(s([B.fp,null,null,B.fw]),t.L)
 B.LB=A.b(s([B.cP,B.cP,B.dm,null]),t.L)
-B.OH=new A.c0(["*",B.Lq,"+",B.MC,"-",B.LN,".",B.Ma,"/",B.KT,"0",B.MN,"1",B.ML,"2",B.Lx,"3",B.MR,"4",B.MK,"5",B.Lu,"6",B.KW,"7",B.LG,"8",B.MD,"9",B.ME,"Alt",B.Ly,"AltGraph",B.MO,"ArrowDown",B.LR,"ArrowLeft",B.LS,"ArrowRight",B.LT,"ArrowUp",B.MP,"Clear",B.MI,"Control",B.Lz,"Delete",B.Mg,"End",B.LU,"Enter",B.Lt,"Home",B.LV,"Insert",B.MJ,"Meta",B.LA,"PageDown",B.LW,"PageUp",B.Mk,"Shift",B.LB],A.ap("c0<j,K<f?>>"))
+B.OH=new A.c0(["*",B.Lq,"+",B.MC,"-",B.LM,".",B.Ma,"/",B.KT,"0",B.MN,"1",B.ML,"2",B.Lx,"3",B.MR,"4",B.MK,"5",B.Lu,"6",B.KW,"7",B.LG,"8",B.MD,"9",B.ME,"Alt",B.Ly,"AltGraph",B.MO,"ArrowDown",B.LR,"ArrowLeft",B.LS,"ArrowRight",B.LT,"ArrowUp",B.MP,"Clear",B.MI,"Control",B.Lz,"Delete",B.Mg,"End",B.LU,"Enter",B.Lt,"Home",B.LV,"Insert",B.MJ,"Meta",B.LA,"PageDown",B.LW,"PageUp",B.Mk,"Shift",B.LB],A.ap("c0<j,K<f?>>"))
 B.Pu={KeyA:0,KeyB:1,KeyC:2,KeyD:3,KeyE:4,KeyF:5,KeyG:6,KeyH:7,KeyI:8,KeyJ:9,KeyK:10,KeyL:11,KeyM:12,KeyN:13,KeyO:14,KeyP:15,KeyQ:16,KeyR:17,KeyS:18,KeyT:19,KeyU:20,KeyV:21,KeyW:22,KeyX:23,KeyY:24,KeyZ:25,Digit1:26,Digit2:27,Digit3:28,Digit4:29,Digit5:30,Digit6:31,Digit7:32,Digit8:33,Digit9:34,Digit0:35,Minus:36,Equal:37,BracketLeft:38,BracketRight:39,Backslash:40,Semicolon:41,Quote:42,Backquote:43,Comma:44,Period:45,Slash:46}
 B.vK=new A.bZ(B.Pu,["a","b","c","d","e","f","g","h","i","j","k","l","m","n","o","p","q","r","s","t","u","v","w","x","y","z","1","2","3","4","5","6","7","8","9","0","-","=","[","]","\\",";","'","`",",",".","/"],t.li)
 B.OT=new A.c0([B.fY,-7,B.ez,1,B.iU,7,B.dD,-1],A.ap("c0<lW,n>"))
@@ -98448,8 +98445,8 @@ B.io=new A.uD(0,"none")
 B.R6=new A.uD(1,"scroll")
 B.R7=new A.uD(3,"scale")
 B.R8=new A.uD(4,"unknown")
-B.R9=new A.qu("Ready",B.Br,null,t.wI)
-B.Ra=new A.qu("In Progress",B.Bq,null,t.wI)
+B.R9=new A.qu("Ready",B.Bq,null,t.wI)
+B.Ra=new A.qu("In Progress",B.Br,null,t.wI)
 B.Rb=new A.qu("All Tasks",B.Bp,null,t.wI)
 B.Rc=new A.uH(null,null,null,null,null,null,null,null,null,null,null,null,null)
 B.lu=new A.qw(0,"platformDefault")
