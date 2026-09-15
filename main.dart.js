@@ -41777,10 +41777,7 @@ case 4:p=3
 h=o.pop()
 l=A.a9(h)
 A.dj().$1("Error updating event: "+A.l(l))
-if(B.c.n(J.a0(l),"XMLHttpRequest error")){q="timeout"
-s=1
-break}if(b.ao("Status")){a.f=i
-n.ai()}q="Network error: Please check your connection"
+q="timeout"
 s=1
 break
 s=6
@@ -41813,6 +41810,9 @@ case 4:p=3
 f=o.pop()
 l=A.a9(f)
 A.dj().$1("Error reassigning task: "+A.l(l))
+q=!0
+s=1
+break
 s=6
 break
 case 3:s=2
