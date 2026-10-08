@@ -44896,7 +44896,7 @@ if(h==null)h=""
 i=j.h(a,"Program")
 i=i==null?k:J.a6(i)
 if(i==null)i=""
-s=A.ck("(?i)bodh",!0,!1)
+s=A.ck("bodh",!1,!1)
 r=B.c.eu(A.lj(i,s,""))
 i=j.h(a,"Branch")
 q=i==null?k:J.a6(i)
