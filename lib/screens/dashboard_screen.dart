@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:html' as html;
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import 'dart:async';
@@ -83,6 +84,37 @@ class _DashboardScreenState extends State<DashboardScreen>
                 )
                 : null,
         actions: [
+          if (isAdmin && _currentIndex == 2) ...[
+            Container(
+              width: 220,
+              height: 38,
+              margin: const EdgeInsets.symmetric(vertical: 8),
+              child: TextField(
+                controller: _workflowSearchController,
+                style: const TextStyle(color: Colors.white, fontSize: 13),
+                decoration: InputDecoration(
+                  hintText: 'Search Post No...',
+                  hintStyle: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 13),
+                  prefixIcon: const Icon(Icons.search, size: 18, color: Colors.white70),
+                  filled: true,
+                  fillColor: Colors.white.withOpacity(0.2),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide.none,
+                  ),
+                  suffixIcon: _workflowSearchController.text.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.clear, size: 16, color: Colors.white70),
+                          onPressed: () => setState(() => _workflowSearchController.clear()),
+                        )
+                      : null,
+                ),
+                onChanged: (_) => setState(() {}),
+              ),
+            ),
+            const SizedBox(width: 8),
+          ],
           if (!isAdmin)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -114,7 +146,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                 icon: const Icon(Icons.refresh_rounded),
                 tooltip: 'Refresh',
                 onPressed:
-                    () => eventProvider.fetchEvents(auth.role, auth.username),
+                    () => eventProvider.fetchEvents(auth.role, auth.username, force: true),
               ),
           IconButton(
             icon: const Icon(Icons.logout_rounded),
@@ -155,7 +187,12 @@ class _DashboardScreenState extends State<DashboardScreen>
                           Icons.space_dashboard,
                           color: Colors.white,
                         ),
-                        label: 'Overview',
+                        label: 'Dashboard',
+                      ),
+                      NavigationDestination(
+                        icon: Icon(Icons.list_alt_outlined, color: Colors.white60),
+                        selectedIcon: Icon(Icons.list_alt, color: Colors.white),
+                        label: 'All Posts',
                       ),
                       NavigationDestination(
                         icon: Icon(
@@ -164,11 +201,6 @@ class _DashboardScreenState extends State<DashboardScreen>
                         ),
                         selectedIcon: Icon(Icons.view_kanban, color: Colors.white),
                         label: 'Pipeline',
-                      ),
-                      NavigationDestination(
-                        icon: Icon(Icons.list_alt_outlined, color: Colors.white60),
-                        selectedIcon: Icon(Icons.list_alt, color: Colors.white),
-                        label: 'All Posts',
                       ),
                     ],
                     labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
@@ -184,9 +216,9 @@ class _DashboardScreenState extends State<DashboardScreen>
       case 0:
         return _buildOverview(provider);
       case 1:
-        return _buildKanbanBoard(provider);
-      case 2:
         return _buildAllPosts(provider, auth);
+      case 2:
+        return _buildKanbanBoard(provider);
       default:
         return _buildOverview(provider);
     }
@@ -475,8 +507,8 @@ class _DashboardScreenState extends State<DashboardScreen>
   Widget _buildKanbanBoard(EventProvider provider) {
     final wQuery = _workflowSearchController.text.trim().toLowerCase();
     final filteredEvents = wQuery.isEmpty
-        ? provider.events
-        : provider.events.where((e) => e.postNo.toLowerCase().contains(wQuery)).toList();
+          ? provider.events.where((e) => e.status != 'Done').toList()
+          : provider.events.where((e) => e.postNo.toLowerCase().contains(wQuery) && e.status != 'Done').toList();
 
     final contentStages = [
       (
@@ -498,9 +530,9 @@ class _DashboardScreenState extends State<DashboardScreen>
         Icons.spellcheck,
       ),
       (
-        'Cross check',
+        'Text Crosscheck',
         filteredEvents
-            .where((e) => e.stage == 'Cross check' || e.stage == 'Crosscheck')
+            .where((e) => e.stage == 'Text Crosscheck' || e.stage == 'Cross check' || e.stage == 'Crosscheck')
             .toList(),
         const Color(0xFF26A69A),
         Icons.fact_check,
@@ -510,6 +542,12 @@ class _DashboardScreenState extends State<DashboardScreen>
         filteredEvents.where((e) => e.stage == 'Ready to Post').toList(),
         Colors.purple.shade300,
         Icons.upload_file,
+      ),
+      (
+        'Photos Clean',
+        filteredEvents.where((e) => e.stage == 'Photos Clean').toList(),
+        Colors.cyan,
+        Icons.cleaning_services,
       ),
     ];
 
@@ -540,18 +578,6 @@ class _DashboardScreenState extends State<DashboardScreen>
 
     final mediaStages = [
       (
-        'Photos Selection',
-        filteredEvents.where((e) => e.stage == 'Photos Selection').toList(),
-        Colors.teal,
-        Icons.photo_album,
-      ),
-      (
-        'Photos Clean',
-        filteredEvents.where((e) => e.stage == 'Photos Clean').toList(),
-        Colors.cyan,
-        Icons.cleaning_services,
-      ),
-      (
         'Photo Editing',
         filteredEvents.where((e) => e.stage == 'Photo Editing').toList(),
         Colors.indigo,
@@ -569,15 +595,18 @@ class _DashboardScreenState extends State<DashboardScreen>
         Colors.blueGrey,
         Icons.fact_check,
       ),
+      (
+        'Media Final Cross check',
+        filteredEvents.where((e) => e.stage == 'Media Final Cross check' || e.stage == 'Media Final Crosscheck').toList(),
+        Colors.teal,
+        Icons.verified,
+      ),
     ];
 
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            const Text(
+        const Text(
               'Content Workflow',
               style: TextStyle(
                 fontSize: 22,
@@ -585,33 +614,6 @@ class _DashboardScreenState extends State<DashboardScreen>
                 color: Color(0xFF1A1A2E),
               ),
             ),
-            SizedBox(
-              width: 250,
-              height: 40,
-              child: TextField(
-                controller: _workflowSearchController,
-                decoration: InputDecoration(
-                  hintText: 'Search Post No...',
-                  prefixIcon: const Icon(Icons.search, size: 20),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide.none,
-                  ),
-                  filled: true,
-                  fillColor: Colors.grey.shade200,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  suffixIcon: _workflowSearchController.text.isNotEmpty
-                      ? IconButton(
-                          icon: const Icon(Icons.clear, size: 16),
-                          onPressed: () => setState(() => _workflowSearchController.clear()),
-                        )
-                      : null,
-                ),
-                onChanged: (_) => setState(() {}),
-              ),
-            ),
-          ],
-        ),
         const SizedBox(height: 12),
         SingleChildScrollView(
           scrollDirection: Axis.horizontal,
@@ -785,7 +787,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                             ),
                             const PopupMenuItem(
                               value: 'Ready',
-                              child: Text('Ready Only'),
+                              child: Text('Allotted Only'),
                             ),
                             const PopupMenuItem(
                               value: 'In Progress',
@@ -897,7 +899,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
-                      task.status.isEmpty ? 'Pending' : task.status,
+                      task.status.isEmpty ? 'Pending' : (task.status == 'Ready' ? 'Allotted' : task.status),
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 9,
@@ -1301,132 +1303,602 @@ class _DashboardScreenState extends State<DashboardScreen>
     );
   }
 
-  Widget _buildPostsTable(List<Map<String, dynamic>> posts, EventProvider provider) {
-    const double colPost = 100;
-    const double colProg = 150;
-    const double colBranch = 150;
-    const double colVenue = 250;
-    const double colTheme = 250;
-    const double colDate = 120;
-    const double colBen = 100;
-    const double colAction = 80;
+  int? _combinedSortColumnIndex;
+  bool _combinedSortAscending = true;
 
-    Widget buildCell(String text, double width, {bool isHeader = false}) {
-      return Container(
-        width: width,
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
-        alignment: Alignment.centerLeft,
-        child: Text(
-          text,
-          style: TextStyle(
-            fontWeight: isHeader ? FontWeight.bold : FontWeight.normal,
-            fontSize: isHeader ? 14 : 13,
-          ),
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-        ),
-      );
-    }
+  void _combinedSort<T>(Comparable<T> Function(Map<String, dynamic> g) getField, int columnIndex, bool ascending) {
+    setState(() {
+      _combinedSortColumnIndex = columnIndex;
+      _combinedSortAscending = ascending;
+    });
+  }
 
-    return Center(
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: SizedBox(
-          width: 1200,
-          child: Column(
+  int? _sortColumnIndex;
+  bool _sortAscending = true;
+
+  void _sort<T>(Comparable<T> Function(Map<String, dynamic> p) getField, int columnIndex, bool ascending) {
+    setState(() {
+      _sortColumnIndex = columnIndex;
+      _sortAscending = ascending;
+    });
+  }
+
+  void _showPostLifecycle(Map<String, dynamic> post, EventProvider provider) {
+    final postNo = post['PostNo']?.toString() ?? '';
+    final postTasks = provider.events.where((t) => t.postNo == postNo).toList();
+    final isInitialized = postTasks.isNotEmpty;
+    final folderLink = post['FolderLink']?.toString() ?? '';
+    final eventDate = post['Date']?.toString() ?? '';
+    final theme = post['Theme']?.toString() ?? '';
+    final branch = post['Branch']?.toString() ?? '';
+
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          title: Row(
             children: [
-              // Header
+              Text('Post #${postNo}'),
+              const Spacer(),
               Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: Colors.grey.shade100,
-                  border: Border(bottom: BorderSide(color: Colors.grey.shade300)),
+                  color: isInitialized ? Colors.blue.shade50 : Colors.orange.shade50,
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: isInitialized ? Colors.blue : Colors.orange),
                 ),
-                child: Row(
-                  children: [
-                    buildCell('Post No', colPost, isHeader: true),
-                    buildCell('Program', colProg, isHeader: true),
-                    buildCell('Branch', colBranch, isHeader: true),
-                    buildCell('Venue', colVenue, isHeader: true),
-                    buildCell('Theme', colTheme, isHeader: true),
-                    buildCell('Date', colDate, isHeader: true),
-                    buildCell('Total Ben.', colBen, isHeader: true),
-                    buildCell('Action', colAction, isHeader: true),
-                  ],
-                ),
-              ),
-              // Rows
-              Expanded(
-                child: ListView.builder(
-                  itemCount: posts.length,
-                  itemBuilder: (context, index) {
-                    final post = posts[index];
-                    final postNo = post['PostNo']?.toString() ?? '';
-                    final program = post['Program']?.toString() ?? '';
-                    final branch = post['Branch']?.toString() ?? '';
-                    final venue = post['Venue']?.toString() ?? '';
-                    final theme = post['Theme']?.toString() ?? '';
-                    final date = post['Date']?.toString() ?? '';
-                    final totalBen = post['TotalBeneficiary']?.toString() ?? '0';
-
-                    final postTasks = provider.events.where((t) => t.postNo == postNo).toList();
-                    final isInitialized = postTasks.isNotEmpty;
-                    final isSelected = _isSelectionMode && _selectedPosts.contains(postNo);
-
-                    return InkWell(
-                      onTap: _isSelectionMode
-                          ? () {
-                              setState(() {
-                                if (isSelected) {
-                                  _selectedPosts.remove(postNo);
-                                } else {
-                                  _selectedPosts.add(postNo);
-                                }
-                              });
-                            }
-                          : null,
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: isSelected ? Theme.of(context).colorScheme.primary.withOpacity(0.1) : Colors.transparent,
-                          border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
-                        ),
-                        child: Row(
-                          children: [
-                            buildCell('#$postNo', colPost),
-                            buildCell(program, colProg),
-                            buildCell(branch, colBranch),
-                            buildCell(venue, colVenue),
-                            buildCell(theme, colTheme),
-                            buildCell(date, colDate),
-                            buildCell(totalBen, colBen),
-                            Container(
-                              width: colAction,
-                              alignment: Alignment.center,
-                              child: IconButton(
-                                icon: Icon(
-                                  isInitialized ? Icons.settings : Icons.add_task_rounded,
-                                  color: isInitialized ? Colors.grey : Theme.of(context).colorScheme.secondary,
-                                ),
-                                tooltip: isInitialized ? 'Update Setup & Assignees' : 'Assign & Setup Workflow',
-                                onPressed: () {
-                                  context.push('/admin-assign', extra: {
-                                    ...post,
-                                    'isInitialized': isInitialized,
-                                    'existingTasks': postTasks,
-                                  });
-                                },
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
+                child: Text(
+                  isInitialized ? 'Active' : 'Inactive',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: isInitialized ? Colors.blue.shade800 : Colors.orange.shade800,
+                  ),
                 ),
               ),
             ],
           ),
-        ),
-      ),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (theme.isNotEmpty) ...[
+                    Text('Theme: $theme', style: const TextStyle(fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 4),
+                  ],
+                  if (branch.isNotEmpty) ...[
+                    Text('Branch: $branch', style: TextStyle(color: Colors.grey.shade700)),
+                    const SizedBox(height: 4),
+                  ],
+                  if (eventDate.isNotEmpty) ...[
+                    Text('Event Date: $eventDate', style: TextStyle(color: Colors.grey.shade700)),
+                    const SizedBox(height: 4),
+                  ],
+                  const SizedBox(height: 8),
+                  if (folderLink.isNotEmpty) ...[
+                    ListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.folder, color: Colors.blue),
+                      title: const Text('Open Date Folder', style: TextStyle(color: Colors.blue, decoration: TextDecoration.underline)),
+                      onTap: () {
+                        html.window.open(folderLink, '_blank');
+                      },
+                    ),
+                    const Divider(),
+                  ],
+                  if (!isInitialized) ...[
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.orange.shade50,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.orange.shade200),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.info_outline, color: Colors.orange.shade800),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Workflow has not been assigned yet. Click "Assign Workflow" below to assign users and setup deadlines.',
+                              style: TextStyle(fontSize: 13, color: Colors.orange.shade900),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ] else ...[
+                    const Text('Pipeline Status:', style: TextStyle(fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 8),
+                    ...postTasks.map((t) {
+                      final isDone = t.status.trim().toLowerCase() == 'done';
+                      final displayStatus = t.status == 'Ready' ? 'Allotted' : (t.status.isEmpty ? 'Pending' : t.status);
+                      final assigneeInfo = t.assigneeName.isNotEmpty ? ' - ' + t.assigneeName : '';
+                      return ListTile(
+                        dense: true,
+                        leading: Icon(
+                          isDone ? Icons.check_circle : Icons.pending_actions,
+                          color: isDone ? Colors.green : Colors.orange,
+                        ),
+                        title: Text(t.stage),
+                        subtitle: Text(displayStatus + assigneeInfo),
+                      );
+                    }).toList(),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx), 
+              child: const Text('Close'),
+            ),
+            ElevatedButton.icon(
+              icon: Icon(isInitialized ? Icons.tune : Icons.add_task),
+              label: Text(isInitialized ? 'Update Setup / Assignees' : 'Assign Workflow'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: isInitialized ? Colors.blue : Colors.green.shade700,
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () {
+                Navigator.pop(ctx);
+                context.push('/admin-assign', extra: {
+                  ...post,
+                  'isInitialized': isInitialized,
+                  'existingTasks': postTasks,
+                });
+              },
+            ),
+          ],
+        );
+      }
+    );
+  }
+
+
+  void _showCombinedLifecycle(Map<String, dynamic> group, EventProvider provider) {
+    final groupId = group['GroupID']?.toString() ?? '';
+    final List<Map<String, dynamic>> posts = (group['Posts'] as List<dynamic>?)?.cast<Map<String, dynamic>>() ?? [];
+    final postTasks = provider.events.where((t) => t.postNo == groupId).toList();
+    final isInitialized = postTasks.isNotEmpty;
+
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          title: Row(
+            children: [
+              Text('Group: $groupId'),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: isInitialized ? Colors.blue.shade50 : Colors.orange.shade50,
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: isInitialized ? Colors.blue : Colors.orange),
+                ),
+                child: Text(
+                  isInitialized ? 'Active' : 'Inactive',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: isInitialized ? Colors.blue.shade800 : Colors.orange.shade800,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('Combined Events (${posts.length}):', style: const TextStyle(fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 6),
+                  ...posts.map((p) {
+                    final pNo = p['PostNo']?.toString() ?? '';
+                    final pTheme = p['Theme']?.toString() ?? '';
+                    final pBranch = p['Branch']?.toString() ?? '';
+                    final pLink = p['FolderLink']?.toString() ?? '';
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 6),
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade50,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.grey.shade200),
+                      ),
+                      child: Row(
+                        children: [
+                          Text('#$pNo', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blue)),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              '$pTheme ($pBranch)',
+                              style: const TextStyle(fontSize: 12),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          if (pLink.isNotEmpty)
+                            IconButton(
+                              icon: const Icon(Icons.folder, size: 18, color: Colors.blue),
+                              tooltip: 'Open Date Folder',
+                              onPressed: () => html.window.open(pLink, '_blank'),
+                            ),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                  const Divider(height: 24),
+                  if (!isInitialized) ...[
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.orange.shade50,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.orange.shade200),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.info_outline, color: Colors.orange.shade800),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Combined workflow has not been assigned yet. Click "Assign Workflow" below to assign users.',
+                              style: TextStyle(fontSize: 13, color: Colors.orange.shade900),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ] else ...[
+                    const Text('Pipeline Status:', style: TextStyle(fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 8),
+                    ...postTasks.map((t) {
+                      final isDone = t.status.trim().toLowerCase() == 'done';
+                      final displayStatus = t.status == 'Ready' ? 'Allotted' : (t.status.isEmpty ? 'Pending' : t.status);
+                      final assigneeInfo = t.assigneeName.isNotEmpty ? ' - ' + t.assigneeName : '';
+                      return ListTile(
+                        dense: true,
+                        leading: Icon(
+                          isDone ? Icons.check_circle : Icons.pending_actions,
+                          color: isDone ? Colors.green : Colors.orange,
+                        ),
+                        title: Text(t.stage),
+                        subtitle: Text(displayStatus + assigneeInfo),
+                      );
+                    }).toList(),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Close'),
+            ),
+            ElevatedButton.icon(
+              icon: Icon(isInitialized ? Icons.tune : Icons.add_task),
+              label: Text(isInitialized ? 'Update Setup / Assignees' : 'Assign Workflow'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: isInitialized ? Colors.blue : Colors.green.shade700,
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () {
+                Navigator.pop(ctx);
+                context.push('/admin-assign', extra: {
+                  'postNo': groupId,
+                  'isCombined': true,
+                  'isInitialized': isInitialized,
+                  'existingTasks': postTasks,
+                  if (posts.isNotEmpty) ...posts.first,
+                });
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildPostsTable(List<Map<String, dynamic>> posts, EventProvider provider) {
+    if (_sortColumnIndex != null) {
+      posts.sort((a, b) {
+        dynamic valA;
+        dynamic valB;
+                switch (_sortColumnIndex) {
+          case 0: valA = a['PostNo']; valB = b['PostNo']; break;
+          case 1: valA = a['Branch']; valB = b['Branch']; break;
+          case 2: valA = a['Venue']; valB = b['Venue']; break;
+          case 3: valA = a['Theme']; valB = b['Theme']; break;
+          case 4: valA = a['Date']; valB = b['Date']; break;
+          case 5: valA = a['TotalBeneficiary']; valB = b['TotalBeneficiary']; break;
+        }
+        valA = valA?.toString() ?? '';
+        valB = valB?.toString() ?? '';
+        
+        if (_sortColumnIndex == 5) {
+          valA = int.tryParse(valA) ?? 0;
+          valB = int.tryParse(valB) ?? 0;
+          return _sortAscending ? valA.compareTo(valB) : valB.compareTo(valA);
+        }
+        return _sortAscending ? valA.compareTo(valB) : valB.compareTo(valA);
+      });
+    }
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return SingleChildScrollView(
+          scrollDirection: Axis.vertical,
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minWidth: constraints.maxWidth),
+              child: DataTable(
+                columnSpacing: 16,
+                sortColumnIndex: _sortColumnIndex,
+                sortAscending: _sortAscending,
+                headingRowColor: MaterialStateProperty.all(Colors.grey.shade100),
+                columns: [
+                  DataColumn(
+                    label: const Text('Post No'),
+                    onSort: (col, asc) => _sort((p) => p['PostNo'] ?? '', col, asc),
+                  ),
+                  
+                  DataColumn(
+                    label: const Text('Branch'),
+                    onSort: (col, asc) => _sort((p) => p['Branch'] ?? '', col, asc),
+                  ),
+                  DataColumn(
+                    label: const Text('Venue'),
+                    onSort: (col, asc) => _sort((p) => p['Venue'] ?? '', col, asc),
+                  ),
+                  DataColumn(
+                    label: const Text('Theme'),
+                    onSort: (col, asc) => _sort((p) => p['Theme'] ?? '', col, asc),
+                  ),
+                  DataColumn(
+                    label: const Text('Date'),
+                    onSort: (col, asc) => _sort((p) => p['Date'] ?? '', col, asc),
+                  ),
+                  DataColumn(
+                    label: const Text('Total Ben.', style: TextStyle(fontWeight: FontWeight.bold)),
+                    numeric: true,
+                    onSort: (col, asc) => _sort((p) => int.tryParse(p['TotalBeneficiary']?.toString() ?? '0') ?? 0, col, asc),
+                  ),
+                ],
+                rows: posts.map((post) {
+                  final postNo = post['PostNo']?.toString() ?? '';
+                  final branch = post['Branch']?.toString() ?? '';
+                  final venue = post['Venue']?.toString() ?? '';
+                  final theme = post['Theme']?.toString() ?? '';
+                  final date = post['Date']?.toString() ?? '';
+                  final totalBen = post['TotalBeneficiary']?.toString() ?? '0';
+
+                  final isSelected = _isSelectionMode && _selectedPosts.contains(postNo);
+
+                  return DataRow(
+                    selected: isSelected,
+                    onSelectChanged: _isSelectionMode
+                        ? (selected) {
+                            setState(() {
+                              if (selected == true) _selectedPosts.add(postNo);
+                              else _selectedPosts.remove(postNo);
+                            });
+                          }
+                        : null,
+                    cells: [
+                      DataCell(
+                        InkWell(
+                          onTap: () => _showPostLifecycle(post, provider),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text('#${postNo}', style: const TextStyle(color: Colors.blue, decoration: TextDecoration.underline, fontWeight: FontWeight.bold)),
+                              const SizedBox(width: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: (provider.events.any((t) => t.postNo == postNo)) ? Colors.blue.shade50 : Colors.orange.shade50,
+                                  borderRadius: BorderRadius.circular(4),
+                                  border: Border.all(
+                                    color: (provider.events.any((t) => t.postNo == postNo)) ? Colors.blue.shade300 : Colors.orange.shade300,
+                                    width: 0.8,
+                                  ),
+                                ),
+                                child: Text(
+                                  (provider.events.any((t) => t.postNo == postNo)) ? 'Active' : 'Inactive',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                    color: (provider.events.any((t) => t.postNo == postNo)) ? Colors.blue.shade700 : Colors.orange.shade800,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      
+                      DataCell(Text(branch)),
+                      DataCell(Container(
+                        constraints: const BoxConstraints(maxWidth: 200),
+                        child: Text(venue, maxLines: 2, overflow: TextOverflow.ellipsis)
+                      )),
+                      DataCell(Container(
+                        constraints: const BoxConstraints(maxWidth: 200),
+                        child: Text(theme, maxLines: 2, overflow: TextOverflow.ellipsis)
+                      )),
+                      DataCell(Text(date)),
+                      DataCell(Text(totalBen)),
+                    ],
+                  );
+                }).toList(),
+              ),
+            ),
+          ),
+        );
+      }
+    );
+  }
+
+
+  Widget _buildCombinedPostsTable(List<Map<String, dynamic>> groups, EventProvider provider) {
+    if (_combinedSortColumnIndex != null) {
+      groups.sort((a, b) {
+        dynamic valA;
+        dynamic valB;
+        final postsA = (a['Posts'] as List).cast<Map<String, dynamic>>();
+        final postsB = (b['Posts'] as List).cast<Map<String, dynamic>>();
+        final firstA = postsA.isNotEmpty ? postsA.first : <String, dynamic>{};
+        final firstB = postsB.isNotEmpty ? postsB.first : <String, dynamic>{};
+
+        switch (_combinedSortColumnIndex) {
+          case 0: valA = a['GroupID']; valB = b['GroupID']; break;
+          case 1: valA = postsA.length; valB = postsB.length; break;
+          case 2: valA = firstA['Branch']; valB = firstB['Branch']; break;
+          case 3: valA = firstA['Venue']; valB = firstB['Venue']; break;
+          case 4: valA = firstA['Theme']; valB = firstB['Theme']; break;
+          case 5: valA = firstA['Date']; valB = firstB['Date']; break;
+          case 6:
+            valA = postsA.fold<int>(0, (sum, p) => sum + (int.tryParse(p['TotalBeneficiary']?.toString() ?? '0') ?? 0));
+            valB = postsB.fold<int>(0, (sum, p) => sum + (int.tryParse(p['TotalBeneficiary']?.toString() ?? '0') ?? 0));
+            break;
+        }
+        valA = valA ?? '';
+        valB = valB ?? '';
+
+        if (_combinedSortColumnIndex == 1 || _combinedSortColumnIndex == 6) {
+          final intA = valA is int ? valA : (int.tryParse(valA.toString()) ?? 0);
+          final intB = valB is int ? valB : (int.tryParse(valB.toString()) ?? 0);
+          return _combinedSortAscending ? intA.compareTo(intB) : intB.compareTo(intA);
+        }
+        return _combinedSortAscending ? valA.toString().compareTo(valB.toString()) : valB.toString().compareTo(valA.toString());
+      });
+    }
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return SingleChildScrollView(
+          scrollDirection: Axis.vertical,
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minWidth: constraints.maxWidth),
+              child: DataTable(
+                columnSpacing: 16,
+                sortColumnIndex: _combinedSortColumnIndex,
+                sortAscending: _combinedSortAscending,
+                headingRowColor: MaterialStateProperty.all(Colors.grey.shade100),
+                columns: [
+                  DataColumn(
+                    label: const Text('Group ID'),
+                    onSort: (col, asc) => _combinedSort((g) => g['GroupID'] ?? '', col, asc),
+                  ),
+                  DataColumn(
+                    label: const Text('Events'),
+                    numeric: true,
+                    onSort: (col, asc) => _combinedSort((g) => (g['Posts'] as List).length, col, asc),
+                  ),
+                  DataColumn(
+                    label: const Text('Branch'),
+                    onSort: (col, asc) => _combinedSort((g) => (g['Posts'] as List).first['Branch'] ?? '', col, asc),
+                  ),
+                  DataColumn(
+                    label: const Text('Venue'),
+                    onSort: (col, asc) => _combinedSort((g) => (g['Posts'] as List).first['Venue'] ?? '', col, asc),
+                  ),
+                  DataColumn(
+                    label: const Text('Theme'),
+                    onSort: (col, asc) => _combinedSort((g) => (g['Posts'] as List).first['Theme'] ?? '', col, asc),
+                  ),
+                  DataColumn(
+                    label: const Text('Date'),
+                    onSort: (col, asc) => _combinedSort((g) => (g['Posts'] as List).first['Date'] ?? '', col, asc),
+                  ),
+                  DataColumn(
+                    label: const Text('Total Ben.', style: TextStyle(fontWeight: FontWeight.bold)),
+                    numeric: true,
+                    onSort: (col, asc) => _combinedSort((g) => 0, col, asc),
+                  ),
+                ],
+                rows: groups.map((group) {
+                  final groupId = group['GroupID']?.toString() ?? '';
+                  final List<Map<String, dynamic>> posts = (group['Posts'] as List<dynamic>?)?.cast<Map<String, dynamic>>() ?? [];
+                  final firstPost = posts.isNotEmpty ? posts.first : <String, dynamic>{};
+                  final branch = posts.map((p) => p['Branch']).where((b) => b != null && b.toString().isNotEmpty).toSet().join(', ');
+                  final venue = posts.map((p) => p['Venue']).where((v) => v != null && v.toString().isNotEmpty).toSet().join(', ');
+                  final theme = firstPost['Theme']?.toString() ?? '';
+                  final date = firstPost['Date']?.toString() ?? '';
+                  final totalBen = posts.fold<int>(0, (sum, p) => sum + (int.tryParse(p['TotalBeneficiary']?.toString() ?? '0') ?? 0));
+                  final isInitialized = provider.events.any((t) => t.postNo == groupId);
+
+                  return DataRow(
+                    cells: [
+                      DataCell(
+                        InkWell(
+                          onTap: () => _showCombinedLifecycle(group, provider),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(groupId, style: const TextStyle(color: Colors.purple, decoration: TextDecoration.underline, fontWeight: FontWeight.bold)),
+                              const SizedBox(width: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: isInitialized ? Colors.blue.shade50 : Colors.orange.shade50,
+                                  borderRadius: BorderRadius.circular(4),
+                                  border: Border.all(
+                                    color: isInitialized ? Colors.blue.shade300 : Colors.orange.shade300,
+                                    width: 0.8,
+                                  ),
+                                ),
+                                child: Text(
+                                  isInitialized ? 'Active' : 'Inactive',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                    color: isInitialized ? Colors.blue.shade700 : Colors.orange.shade800,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      DataCell(
+                        Tooltip(
+                          message: posts.map((p) => '#${p['PostNo']}').join(', '),
+                          child: Text('${posts.length} events (${posts.map((p) => '#${p['PostNo']}').take(2).join(', ')}${posts.length > 2 ? '...' : ''})'),
+                        ),
+                      ),
+                      DataCell(Text(branch)),
+                      DataCell(Container(
+                        constraints: const BoxConstraints(maxWidth: 180),
+                        child: Text(venue, maxLines: 2, overflow: TextOverflow.ellipsis),
+                      )),
+                      DataCell(Container(
+                        constraints: const BoxConstraints(maxWidth: 180),
+                        child: Text(theme, maxLines: 2, overflow: TextOverflow.ellipsis),
+                      )),
+                      DataCell(Text(date)),
+                      DataCell(Text(totalBen.toString())),
+                    ],
+                  );
+                }).toList(),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -1733,7 +2205,7 @@ class _DashboardScreenState extends State<DashboardScreen>
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
-        onTap: () {},
+        onTap: () => _showCombinedLifecycle(group, provider),
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(
@@ -2010,7 +2482,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                     value: 'All Tasks',
                     child: Text('All Tasks'),
                   ),
-                  DropdownMenuItem(value: 'Ready', child: Text('Ready Only')),
+                  DropdownMenuItem(value: 'Ready', child: Text('Allotted Only')),
                   DropdownMenuItem(
                     value: 'In Progress',
                     child: Text('In Progress Only'),

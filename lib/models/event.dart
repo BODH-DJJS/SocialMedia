@@ -1,10 +1,10 @@
 class Event {
   final String taskId;
   final String postNo;
-  final String stage;
-  final String assignee;
-  final String assigneeName;
-  final String status;
+  String stage;
+  String assignee;
+  String assigneeName;
+  String status;
   final String docLink;
   final String allottedDate;
   final String dueDate;

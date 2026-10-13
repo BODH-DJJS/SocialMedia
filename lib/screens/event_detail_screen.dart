@@ -120,15 +120,64 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   }
 
   void _markDone() async {
-    setState(() => _isSaving = true);
-    final success = await context.read<EventProvider>().updateEvent(widget.event, {'Status': 'Done'});
-    if (success && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Task marked Done! Next stage assigned and notified.'), backgroundColor: Colors.green));
-      Navigator.pop(context); // Go back without refreshing the whole app first
-    } else if (mounted) {
-      setState(() => _isSaving = false);
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to update task'), backgroundColor: Colors.red));
+    final stageLower = widget.event.stage.toLowerCase();
+    
+    if (stageLower.contains('editing') && (stageLower.contains('photo') || stageLower.contains('video'))) {
+      final choice = await showDialog<String>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text('Submit ${widget.event.stage}'),
+          content: const Text('Which action are you completing?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, 'Selection Only'),
+              child: const Text('Photo/Video selection As Mark Done'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, 'Selection & Editing'),
+              child: const Text('Photo/Video Editing As Mark Done'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, null),
+              child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+            ),
+          ],
+        ),
+      );
+      
+      if (choice == null) return;
+      
+      setState(() => _isSaving = true);
+      final provider = context.read<EventProvider>();
+      final notEmpty = await provider.checkFolderNotEmpty(widget.event.postNo);
+      if (!notEmpty) {
+        setState(() => _isSaving = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Error: Selected folder is empty! Please upload files first.'), backgroundColor: Colors.red),
+        );
+        return;
+      }
     }
+    
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.showSnackBar(
+      const SnackBar(
+        content: Text('Task marked as Done successfully!'),
+        backgroundColor: Colors.green,
+        duration: Duration(seconds: 2),
+      )
+    );
+    Navigator.pop(context); // Go back immediately
+
+    final provider = context.read<EventProvider>();
+    provider.invalidateCache(); 
+    provider.updateEvent(widget.event, {'Status': 'Done'}).then((error) {
+      if (error != null && error != 'timeout') {
+         messenger.showSnackBar(
+           const SnackBar(content: Text('Failed: Please resubmit task again.'), backgroundColor: Colors.red)
+         );
+      }
+    });
   }
 
   void _showReassignDialog(BuildContext context, Event targetEvent) {
@@ -138,6 +187,167 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
         return _ReassignDialog(event: targetEvent);
       },
     );
+  }
+
+
+  bool get _hasPreviousStage {
+    final s = widget.event.stage.toLowerCase().replaceAll(' ', '');
+    return s == 'editing' ||
+        s == 'proofreading' ||
+        s == 'crosscheck' ||
+        s == 'textcrosscheck' ||
+        s == 'thumbnailprocessing' ||
+        s == 'thumbnailcrosschecking' ||
+        s == 'thumbnailcrosscheck' ||
+        s == 'mediacrosscheck' ||
+        s == 'mediafinalcrosscheck' ||
+        s == 'mediafinalcrosschecking' ||
+        s == 'photosclean' ||
+        s == 'readytopost';
+  }
+
+  List<String> get _possiblePreviousStages {
+    final s = widget.event.stage.toLowerCase().replaceAll(' ', '');
+    if (s == 'thumbnailcrosschecking' || s == 'thumbnailcrosscheck') return ['Thumbnail Processing'];
+    if (s == 'thumbnailprocessing') return ['Thumbnail Selection'];
+    if (s == 'mediacrosscheck') return ['Photo Editing', 'Video Editing'];
+    if (s == 'mediafinalcrosscheck' || s == 'mediafinalcrosschecking') return ['Media Cross Check', 'Proofreading'];
+    if (s == 'photosclean') return ['Ready to Post'];
+    if (s == 'editing') return ['Writing'];
+    if (s == 'proofreading') return ['Editing', 'Media Cross Check', 'Thumbnail Cross checking'];
+    if (s == 'crosscheck' || s == 'textcrosscheck') return ['Proofreading'];
+    if (s == 'readytopost') return ['Text Crosscheck', 'Media Final Cross check'];
+    return [];
+  }
+
+  void _showReverseDialog() async {
+    final stages = _possiblePreviousStages;
+    if (stages.isEmpty) return;
+
+    String selectedStage = stages.first;
+    final reasonController = TextEditingController();
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: Row(
+            children: const [
+              Icon(Icons.replay_rounded, color: Colors.orange),
+              SizedBox(width: 8),
+              Text('Send Back for Revision'),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'This will revert the task back to the previous assignee so they can make changes and re-submit.',
+                style: TextStyle(color: Colors.grey.shade700, fontSize: 13),
+              ),
+              const SizedBox(height: 16),
+              if (stages.length > 1) ...[
+                const Text('Revert to which stage:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                const SizedBox(height: 6),
+                DropdownButtonFormField<String>(
+                  value: selectedStage,
+                  decoration: InputDecoration(
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  ),
+                  items: stages.map((st) => DropdownMenuItem(value: st, child: Text(st))).toList(),
+                  onChanged: (val) {
+                    if (val != null) setDialogState(() => selectedStage = val);
+                  },
+                ),
+                const SizedBox(height: 16),
+              ] else ...[
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.orange.shade200),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.arrow_back, size: 18, color: Colors.orange),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Will be sent back to: $selectedStage',
+                          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.orange.shade900),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+              ],
+              const Text('Revision Notes / Reason (Optional):', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+              const SizedBox(height: 6),
+              TextField(
+                controller: reasonController,
+                maxLines: 3,
+                decoration: InputDecoration(
+                  hintText: 'e.g. Please update thumbnail font color or change photo...',
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                  contentPadding: const EdgeInsets.all(10),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.orange,
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Confirm & Send Back'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (confirmed == true) {
+      setState(() => _isSaving = true);
+      final provider = context.read<EventProvider>();
+      final messenger = ScaffoldMessenger.of(context);
+      
+      final success = await provider.reverseTask(
+        postNo: widget.event.postNo,
+        currentStage: widget.event.stage,
+        targetStage: selectedStage,
+        reason: reasonController.text.trim(),
+      );
+      
+      if (mounted) {
+        setState(() => _isSaving = false);
+        if (success) {
+          messenger.showSnackBar(
+            SnackBar(
+              content: Text('Task sent back to $selectedStage for revision!'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+          Navigator.pop(context);
+        } else {
+          messenger.showSnackBar(
+            const SnackBar(
+              content: Text('Failed to reverse task. Please try again.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    }
   }
 
   @override
@@ -164,7 +374,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
               color: isDone ? Colors.green : stageColor,
               borderRadius: BorderRadius.circular(20),
             ),
-            child: Center(child: Text(isDone ? 'Done' : (e.status.isEmpty ? 'Pending' : e.status), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold))),
+            child: Center(child: Text(isDone ? 'Done' : (e.status.isEmpty ? 'Pending' : (e.status == 'Ready' ? 'Alloted' : e.status)), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold))),
           ),
         ],
       ),
@@ -222,6 +432,123 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  // Combined Events Section — show each event's details
+                  if (e.isCombined && e.combinedPosts.isNotEmpty) ...[
+                    Card(
+                      color: Colors.purple.shade50,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        side: BorderSide(color: Colors.purple.shade200),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Icon(Icons.merge_type, size: 18, color: Colors.purple.shade700),
+                                const SizedBox(width: 6),
+                                Text(
+                                  'Combined Post — ${e.combinedPosts.length} Events',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 15,
+                                    color: Colors.purple.shade700,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            ...e.combinedPosts.asMap().entries.map((entry) {
+                              final idx = entry.key;
+                              final p = entry.value;
+                              final pNo = p['PostNo']?.toString() ?? '';
+                              final pTheme = p['Theme']?.toString() ?? '';
+                              final pProgram = p['Program']?.toString() ?? '';
+                              final pDate = p['Date']?.toString() ?? '';
+                              final pVenue = p['Venue']?.toString() ?? '';
+                              final pBranch = p['Branch']?.toString() ?? '';
+                              final pState = p['State']?.toString() ?? '';
+                              final pMale = p['Male'] ?? 0;
+                              final pFemale = p['Female'] ?? 0;
+                              final pChildren = p['Children'] ?? 0;
+                              final pTotal = p['TotalBeneficiary'] ??
+                                  ((pMale is num ? pMale : 0) +
+                                      (pFemale is num ? pFemale : 0) +
+                                      (pChildren is num ? pChildren : 0));
+                              final accentColor = idx == 0 ? Colors.purple : Colors.blue;
+
+                              return Container(
+                                margin: const EdgeInsets.only(bottom: 10),
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(color: accentColor.shade200),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    // PostNo + Theme
+                                    Row(
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                          decoration: BoxDecoration(
+                                            color: accentColor.shade500,
+                                            borderRadius: BorderRadius.circular(6),
+                                          ),
+                                          child: Text(
+                                            '#$pNo',
+                                            style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: Text(
+                                            pTheme.isNotEmpty ? pTheme : pProgram,
+                                            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                                            maxLines: 2,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 8),
+                                    // Date + Branch/State
+                                    if (pDate.isNotEmpty)
+                                      _infoRow(Icons.calendar_today, 'Date', pDate),
+                                    if (pBranch.isNotEmpty)
+                                      _infoRow(Icons.location_city, 'Branch', pState.isNotEmpty ? '$pBranch, $pState' : pBranch),
+                                    if (pVenue.isNotEmpty)
+                                      _infoRow(Icons.place, 'Venue', pVenue),
+                                    // Beneficiaries
+                                    if ((pTotal as num) > 0)
+                                      Padding(
+                                        padding: const EdgeInsets.only(top: 4),
+                                        child: Row(
+                                          children: [
+                                            const Icon(Icons.people, size: 14, color: Colors.grey),
+                                            const SizedBox(width: 4),
+                                            Text(
+                                              '👨 $pMale  👩 $pFemale  🧒 $pChildren  👥 Total: $pTotal',
+                                              style: TextStyle(fontSize: 11, color: Colors.grey.shade700),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              );
+                            }).toList(),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+
                   // Event Details Card
                   Card(
                     child: Padding(
@@ -409,20 +736,65 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                   ],
                   const SizedBox(height: 24),
 
-                  // Action Button
-                  if (!isDone)
-                    SizedBox(
-                      height: 56,
-                      child: ElevatedButton.icon(
-                        icon: isSaving ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : const Icon(Icons.check_circle),
-                        label: Text(isSaving ? 'Saving...' : 'Mark Done & Handoff', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF00897B),
-                          foregroundColor: Colors.white,
-                        ),
-                        onPressed: isSaving ? null : _markDone,
+                  // Action Buttons
+                  if (!isDone) ...[
+                    if (_hasPreviousStage) ...[
+                      Row(
+                        children: [
+                          Expanded(
+                            flex: 2,
+                            child: SizedBox(
+                              height: 54,
+                              child: OutlinedButton.icon(
+                                icon: const Icon(Icons.replay_rounded, color: Colors.orange),
+                                label: const Text('Send Back', style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold)),
+                                style: OutlinedButton.styleFrom(
+                                  side: const BorderSide(color: Colors.orange, width: 1.5),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                ),
+                                onPressed: isSaving ? null : _showReverseDialog,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            flex: 3,
+                            child: SizedBox(
+                              height: 54,
+                              child: ElevatedButton.icon(
+                                icon: isSaving
+                                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                                    : const Icon(Icons.check_circle),
+                                label: Text(isSaving ? 'Saving...' : 'Mark Done & Handoff', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF00897B),
+                                  foregroundColor: Colors.white,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                ),
+                                onPressed: isSaving ? null : _markDone,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
-                    ),
+                    ] else ...[
+                      SizedBox(
+                        height: 54,
+                        child: ElevatedButton.icon(
+                          icon: isSaving
+                              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                              : const Icon(Icons.check_circle),
+                          label: Text(isSaving ? 'Saving...' : 'Mark Done & Handoff', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF00897B),
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                          onPressed: isSaving ? null : _markDone,
+                        ),
+                      ),
+                    ],
+                  ],
                   if (isDone)
                     Container(
                       padding: const EdgeInsets.all(16),
@@ -627,7 +999,7 @@ class _ReassignDialogState extends State<_ReassignDialog> {
           child: const Text('Cancel'),
         ),
         ElevatedButton(
-          onPressed: _isLoading ? null : () async {
+          onPressed: () {
             if (_selectedEmail == null) return;
             
             String targetEmail = _selectedEmail!;
@@ -642,26 +1014,37 @@ class _ReassignDialogState extends State<_ReassignDialog> {
               }
             }
             
-            setState(() => _isLoading = true);
-            final success = await context.read<EventProvider>().reassignTask(
+            final messenger = ScaffoldMessenger.of(context);
+            messenger.showSnackBar(
+              const SnackBar(
+                content: Text('Task reassigned successfully!'),
+                backgroundColor: Colors.green,
+                duration: Duration(seconds: 2),
+              )
+            );
+            
+            // Pop the dialog immediately
+            Navigator.pop(context);
+            // Optionally pop the detail screen as well to return to dashboard
+            Navigator.pop(context);
+
+            // Process in background
+            final provider = context.read<EventProvider>();
+            provider.invalidateCache(); // ensure next refresh pulls fresh data
+            provider.reassignTask(
               widget.event, 
               targetEmail,
               newName: newName,
               role: expectedRole,
-            );
-            
-            if (mounted) {
-              setState(() => _isLoading = false);
-              if (success) {
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Task reassigned successfully.'), backgroundColor: Colors.green));
-                Navigator.pop(context); // close dialog
-                Navigator.pop(context); // go back to dashboard to see changes
-              } else {
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to reassign task.'), backgroundColor: Colors.red));
+            ).then((success) {
+              if (!success) {
+                messenger.showSnackBar(
+                  const SnackBar(content: Text('Failed: Please resubmit task again.'), backgroundColor: Colors.red)
+                );
               }
-            }
+            });
           },
-          child: _isLoading ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Save'),
+          child: const Text('Save'),
         ),
       ],
     );

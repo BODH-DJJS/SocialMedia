@@ -67,26 +67,40 @@ function ensureSheets() {
     {stage: 'Writing', role: 'Writer', dep: ''},
     {stage: 'Editing', role: 'Editor', dep: 'Writing'},
     {stage: 'Proofreading', role: 'Proofreader', dep: 'Editing'},
-    {stage: 'Cross check', role: 'CrossChecker', dep: 'Proofreading'},
+    {stage: 'Text Crosscheck', role: 'CrossChecker', dep: 'Proofreading'},
     {stage: 'Thumbnail Selection', role: 'Thumbnail Designer', dep: ''},
     {stage: 'Thumbnail Processing', role: 'Thumbnail Designer', dep: 'Thumbnail Selection'},
     {stage: 'Thumbnail Cross checking', role: 'Thumbnail Designer', dep: 'Thumbnail Processing'},
-    {stage: 'Photos Selection', role: 'Photo Selector', dep: ''},
-    {stage: 'Photos Clean', role: 'Photo Selector', dep: 'Photos Selection'},
-    {stage: 'Photo Editing', role: 'Photo Editor', dep: 'Photos Selection'},
-    {stage: 'Video Editing', role: 'Video Editor', dep: 'Photos Selection'},
+    {stage: 'Photo Editing', role: 'Photo Editor', dep: ''},
+    {stage: 'Video Editing', role: 'Video Editor', dep: ''},
     {stage: 'Media Cross Check', role: 'Media CrossChecker', dep: 'Photo Editing, Video Editing'},
-    {stage: 'Ready to Post', role: 'Uploader', dep: 'Cross check'}
+    {stage: 'Media Final Cross check', role: 'Media CrossChecker', dep: 'Media Cross Check, Proofreading'},
+    {stage: 'Ready to Post', role: 'Uploader', dep: 'Text Crosscheck, Media Final Cross check'},
+    {stage: 'Photos Clean', role: 'Photo Selector', dep: 'Ready to Post'}
   ];
   
+  // Remove obsolete stages from PIPELINE_SHEET
   var existingPipeData = pipeSheet.getDataRange().getValues();
-  var existingStages = [];
-  for (var i = 1; i < existingPipeData.length; i++) {
-    existingStages.push((existingPipeData[i][0] || '').toString().toLowerCase());
+  for (var i = existingPipeData.length - 1; i >= 1; i--) {
+    var sNorm = normalizeStageName(existingPipeData[i][0]);
+    if (sNorm === 'photosselection' || sNorm === 'photoselection') {
+      pipeSheet.deleteRow(i + 1);
+    }
   }
+  existingPipeData = pipeSheet.getDataRange().getValues();
   
   for (var r = 0; r < requiredStages.length; r++) {
-    if (existingStages.indexOf(requiredStages[r].stage.toLowerCase()) === -1) {
+    var matchIdx = -1;
+    for (var i = 1; i < existingPipeData.length; i++) {
+      if (normalizeStageName(existingPipeData[i][0]) === normalizeStageName(requiredStages[r].stage)) {
+        matchIdx = i + 1;
+        pipeSheet.getRange(i + 1, 1).setValue(requiredStages[r].stage);
+        pipeSheet.getRange(i + 1, 2).setValue(requiredStages[r].role);
+        pipeSheet.getRange(i + 1, 3).setValue(requiredStages[r].dep);
+        break;
+      }
+    }
+    if (matchIdx === -1) {
       pipeSheet.appendRow([requiredStages[r].stage, requiredStages[r].role, requiredStages[r].dep]);
     }
   }
@@ -142,6 +156,8 @@ function doPost(e) {
       return respond(handleGetMediaFolders(payload));
     } else if (action === 'getPhotos') {
       return respond(handleGetPhotos(payload));
+    } else if (action === 'checkFolderNotEmpty') {
+      return respond(handleCheckFolderNotEmpty(payload));
     } else if (action === 'updateTask') {
       var lock = LockService.getScriptLock();
       lock.waitLock(10000);
@@ -183,6 +199,15 @@ function doPost(e) {
       return respond(handleGroupPosts(payload));
     } else if (action === 'ungroupPost') {
       return respond(handleUngroupPost(payload));
+    } else if (action === 'reverseTask') {
+      var lock = LockService.getScriptLock();
+      lock.waitLock(10000);
+      try {
+        var res = handleReverseTask(payload);
+        return respond(res);
+      } finally {
+        lock.releaseLock();
+      }
     } else if (action === 'createTasksForPostV2') {
       var lock = LockService.getScriptLock();
       lock.waitLock(15000);
@@ -271,10 +296,14 @@ function buildPostObj(pRow) {
 
 function normalizeStageName(st) {
   if (!st) return '';
-  return st.toString().toLowerCase()
+  var norm = st.toString().toLowerCase()
            .replace(/[^a-z0-9]/g, '')
            .replace(/photos/g, 'photo')
            .replace(/videos/g, 'video');
+  if (norm === 'crosscheck' || norm === 'textcrosscheck' || norm === 'crosschecking' || norm === 'textcrosschecking') {
+    return 'textcrosscheck';
+  }
+  return norm;
 }
 
 function backfillMissingTasks(ss) {
@@ -336,7 +365,7 @@ function backfillMissingTasks(ss) {
       var existingSt = postTasks[pNo];
       var meta = postMetadata[pNo] || { pub: '', mod: '' };
       
-      var skipStages = [];
+      var skipStages = ['photosselection', 'photoselection'];
       if (meta.pub.indexOf('insta') === -1) {
         skipStages.push('thumbnailselection', 'thumbnailprocessing', 'thumbnailcrosschecking');
       }
@@ -379,16 +408,120 @@ function backfillMissingTasks(ss) {
   return false;
 }
 
+function cleanupAndSyncTasks(ss) {
+  var taskSheet = ss.getSheetByName(TASKS_SHEET);
+  if (!taskSheet) return;
+  var data = taskSheet.getDataRange().getValues();
+  if (data.length < 2) return;
+  var headers = data[0];
+  var taskIdCol = headers.indexOf('TaskID');
+  var postNoCol = headers.indexOf('PostNo');
+  var stageCol = headers.indexOf('Stage');
+  var statusCol = headers.indexOf('Status');
+  var assigneeCol = headers.indexOf('Assignee');
+  var allottedCol = headers.indexOf('AllottedDate');
+  var dueDateCol = headers.indexOf('DueDate');
+
+  // 1. Delete obsolete Photos Selection tasks from TASKS_SHEET
+  var deletedAny = false;
+  for (var i = data.length - 1; i >= 1; i--) {
+    var rawStage = (data[i][stageCol] || '').toString().trim();
+    var sNorm = normalizeStageName(rawStage);
+    if (sNorm === 'photosselection' || sNorm === 'photoselection') {
+      taskSheet.deleteRow(i + 1);
+      deletedAny = true;
+    }
+  }
+  if (deletedAny) {
+    data = taskSheet.getDataRange().getValues();
+  }
+
+  // 2. Auto-sync: If old stage is 'Cross check' or 'Crosscheck', rename cell to 'Text Crosscheck'
+  var postTasksMap = {};
+  for (var i = 1; i < data.length; i++) {
+    var pNo = data[i][postNoCol];
+    if (!pNo) continue;
+    pNo = pNo.toString().trim();
+    
+    var rawStage = (data[i][stageCol] || '').toString().trim();
+    if (rawStage === 'Cross check' || rawStage === 'Crosscheck') {
+      taskSheet.getRange(i + 1, stageCol + 1).setValue('Text Crosscheck');
+      rawStage = 'Text Crosscheck';
+      if (taskIdCol !== -1) {
+        var curTaskId = (data[i][taskIdCol] || '').toString();
+        if (curTaskId.indexOf('-Cross check') !== -1 || curTaskId.indexOf('-Crosscheck') !== -1) {
+          taskSheet.getRange(i + 1, taskIdCol + 1).setValue(pNo + '-Text Crosscheck');
+        }
+      }
+    }
+    
+    if (!postTasksMap[pNo]) postTasksMap[pNo] = [];
+    postTasksMap[pNo].push({
+      stage: normalizeStageName(rawStage),
+      status: data[i][statusCol],
+      assignee: data[i][assigneeCol]
+    });
+  }
+
+  // 3. Ensure Media Final Cross check exists for all active posts
+  var now = new Date().toLocaleString();
+  var newRows = [];
+  for (var pNo in postTasksMap) {
+    var tList = postTasksMap[pNo];
+    var hasFinalCheck = tList.some(function(t) {
+      return t.stage === 'mediafinalcrosscheck' || t.stage === 'mediafinalcrosschecking';
+    });
+
+    if (!hasFinalCheck && tList.length > 0) {
+      var mediaCheckTask = null;
+      var proofTask = null;
+      for (var k = 0; k < tList.length; k++) {
+        if (tList[k].stage === 'mediacrosscheck') { mediaCheckTask = tList[k]; }
+        if (tList[k].stage === 'proofreading') { proofTask = tList[k]; }
+      }
+      var assignee = mediaCheckTask ? mediaCheckTask.assignee : '';
+      var isMediaDone = mediaCheckTask && mediaCheckTask.status === 'Done';
+      var isProofDone = !proofTask || proofTask.status === 'Done';
+      var initialStatus = (isMediaDone && isProofDone) ? 'Ready' : 'Waiting';
+      var allottedDate = assignee ? now : '';
+
+      var rowData = [
+        pNo + '-Media Final Cross check',
+        pNo,
+        'Media Final Cross check',
+        assignee,
+        initialStatus,
+        now,
+        '',
+        ''
+      ];
+      if (allottedCol !== -1) {
+        while (rowData.length <= allottedCol) rowData.push('');
+        rowData[allottedCol] = allottedDate;
+      }
+      if (dueDateCol !== -1) {
+        while (rowData.length <= dueDateCol) rowData.push('');
+        rowData[dueDateCol] = '';
+      }
+      newRows.push(rowData);
+    }
+  }
+
+  if (newRows.length > 0) {
+    taskSheet.getRange(data.length + 1, 1, newRows.length, headers.length).setValues(newRows);
+  }
+
+  // 4. Run fixStuckTasks to fix any dependencies and unblock Ready to Post
+  try {
+    fixStuckTasks(ss);
+  } catch(e) {}
+}
+
 function handleGetTasks(payload) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
-  
-  var props = PropertiesService.getScriptProperties();
-  if (!props.getProperty('fixedStuckTasks_v3')) {
-    try {
-      fixStuckTasks(ss);
-    } catch(e) {}
-    props.setProperty('fixedStuckTasks_v3', 'true');
-  }
+  try {
+    cleanupAndSyncTasks(ss);
+  } catch(e) {}
   
   var tasksData = ss.getSheetByName(TASKS_SHEET).getDataRange().getValues();
   var postsData = ss.getSheetByName(POSTS_SHEET).getDataRange().getValues();
@@ -481,6 +614,19 @@ function handleGetTasks(payload) {
 }
 
 function handleGetPosts(payload) {
+  var cache = CacheService.getScriptCache();
+  var cacheKey = 'all_posts';
+
+  // If forceRefresh requested, clear GAS cache
+  if (payload && payload.forceRefresh) {
+    cache.remove(cacheKey);
+  } else {
+    var cached = cache.get(cacheKey);
+    if (cached) {
+      return { success: true, posts: JSON.parse(cached), fromCache: true };
+    }
+  }
+
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var postsData = ss.getSheetByName(POSTS_SHEET).getDataRange().getValues();
   if (postsData.length < 2) return { success: true, posts: [] };
@@ -491,7 +637,18 @@ function handleGetPosts(payload) {
     if (!pRow[0]) continue;
     posts.push(buildPostObj(pRow));
   }
-  return { success: true, posts: posts.reverse() };
+  var result = posts.reverse();
+
+  // Cache for 5 minutes (300 sec). GAS cache max value size is 100KB.
+  // If posts list is large, chunk it or skip caching gracefully.
+  try {
+    var serialized = JSON.stringify(result);
+    if (serialized.length < 90000) { // stay under 100KB GAS limit
+      cache.put(cacheKey, serialized, 300);
+    }
+  } catch(cErr) {}
+
+  return { success: true, posts: result };
 }
 
 function handleGetDashboardStats() {
@@ -565,22 +722,24 @@ function handleReassignTasks(payload) {
   var stageCol = headers.indexOf('Stage');
   var assigneeCol = headers.indexOf('Assignee');
   
-  var postNosToUpdate = [payload.postNo];
+  // Convert all postNos to strings for safe comparison (Sheets may return numbers)
+  var postNosToUpdate = [String(payload.postNo)];
   if (payload.isCombined) {
     var postsSheet = ss.getSheetByName(POSTS_SHEET);
     var posts = postsSheet.getDataRange().getValues();
     var groupId = null;
     for(var p=1; p<posts.length; p++) {
-      if (posts[p][0] == payload.postNo || posts[p][37] == payload.postNo) {
-        groupId = posts[p][37] || payload.postNo;
+      if (String(posts[p][0]) == String(payload.postNo) || String(posts[p][37]) == String(payload.postNo)) {
+        groupId = posts[p][37] ? String(posts[p][37]) : String(payload.postNo);
         break;
       }
     }
     if (groupId) {
       for(var p=1; p<posts.length; p++) {
-        if (posts[p][37] == groupId || posts[p][0] == groupId) {
-          if (postNosToUpdate.indexOf(posts[p][0]) === -1) {
-            postNosToUpdate.push(posts[p][0]);
+        if (String(posts[p][37]) == groupId || String(posts[p][0]) == groupId) {
+          var pNo = String(posts[p][0]);
+          if (postNosToUpdate.indexOf(pNo) === -1) {
+            postNosToUpdate.push(pNo);
           }
         }
       }
@@ -590,12 +749,15 @@ function handleReassignTasks(payload) {
   var updated = 0;
   var targetStage = normalizeStageName(payload.stage);
   for(var i=1; i<tasks.length; i++) {
-    var tPostNo = tasks[i][postNoCol];
+    var tPostNo = String(tasks[i][postNoCol]);  // convert to string
     var tStage = normalizeStageName(tasks[i][stageCol]);
     if (postNosToUpdate.indexOf(tPostNo) !== -1 && tStage === targetStage) {
       taskSheet.getRange(i+1, assigneeCol+1).setValue(payload.newAssigneeEmail);
       updated++;
     }
+  }
+  if (updated === 0) {
+    return {success: false, message: 'No matching task found for stage: ' + payload.stage + ' postNo: ' + payload.postNo};
   }
   return {success: true, message: 'Reassigned ' + updated + ' tasks'};
 }
@@ -614,6 +776,16 @@ function handleUpdateTask(payload) {
     } catch(e) {
       // Drive logic failed, still save status
     }
+    
+    try {
+      var data = sheet.getDataRange().getValues();
+      var stage = data[rowIndex - 1][headers.indexOf('Stage')] || '';
+      var postNo = data[rowIndex - 1][headers.indexOf('PostNo')];
+      var currentStageLower = stage.toString().replace(/\s+/g, '').toLowerCase();
+      if (currentStageLower === 'thumbnailcrosschecking' || currentStageLower === 'thumbnailcrosscheck' || currentStageLower === 'mediacrosscheck') {
+        copyThumbnailFile(postNo);
+      }
+    } catch (e) {}
   }
 
   for (var key in updates) {
@@ -622,6 +794,9 @@ function handleUpdateTask(payload) {
       sheet.getRange(rowIndex, colIndex + 1).setValue(updates[key]);
     }
   }
+  try {
+    CacheService.getScriptCache().remove('all_posts');
+  } catch(cErr) {}
 
   if (updates['Status'] === 'Done') {
     // Unlock any task that depends on this one
@@ -631,27 +806,7 @@ function handleUpdateTask(payload) {
       // Fail silently if unlocking fails
     }
     
-    // Failsafe: Explicitly unlock Ready to Post when Cross check is done, ignoring media dependencies
-    try {
-      var data = sheet.getDataRange().getValues();
-      var currentStage = data[rowIndex - 1][headers.indexOf('Stage')];
-      var currentStageLower = (currentStage || '').replace(/\s+/g, '').toLowerCase();
-      var postNo = data[rowIndex - 1][headers.indexOf('PostNo')];
-      var statusCol = headers.indexOf('Status');
-      
-      if (currentStageLower === 'crosscheck') {
-        for (var i = 1; i < data.length; i++) {
-          var iterStageLower = (data[i][headers.indexOf('Stage')] || '').replace(/\s+/g, '').toLowerCase();
-          if (data[i][headers.indexOf('PostNo')] == postNo && iterStageLower === 'readytopost') {
-            var currStatus = data[i][statusCol];
-            if (currStatus === 'Waiting' || !currStatus) {
-              sheet.getRange(i + 1, statusCol + 1).setValue('Ready');
-            }
-            break;
-          }
-        }
-      }
-    } catch(e) {}
+// Dynamic dependency unlocking handles Ready to Post and Photos Clean
     
     // Sync back to POSTS_SHEET to keep old columns updated
     try {
@@ -691,21 +846,25 @@ function handleUpdateTask(payload) {
 
 function fixStuckTasks(ss) {
   var taskSheet = ss.getSheetByName(TASKS_SHEET);
-  var pipe = ss.getSheetByName(PIPELINE_SHEET).getDataRange().getValues();
+  var pipeSheet = ss.getSheetByName(PIPELINE_SHEET);
+  if (!taskSheet || !pipeSheet) return;
+  var pipe = pipeSheet.getDataRange().getValues();
   var data = taskSheet.getDataRange().getValues();
   if (data.length < 2) return;
   var headers = data[0];
   var statusCol = headers.indexOf('Status');
   var stageCol = headers.indexOf('Stage');
   var postNoCol = headers.indexOf('PostNo');
+  var docLinkCol = headers.indexOf('DocLink');
 
   var reqMap = {};
   for (var i = 1; i < pipe.length; i++) {
-    var stage = (pipe[i][0] || '').replace(/\s+/g, '').toLowerCase();
+    var stage = normalizeStageName(pipe[i][0]);
+    if (stage === 'photosselection' || stage === 'photoselection') continue;
     var deps = (pipe[i][2] || '').toString().toLowerCase().split(',');
     var cleanDeps = [];
     for (var d = 0; d < deps.length; d++) {
-      var c = deps[d].replace(/\s+/g, '');
+      var c = normalizeStageName(deps[d]);
       if (c) cleanDeps.push(c);
     }
     reqMap[stage] = cleanDeps;
@@ -717,13 +876,11 @@ function fixStuckTasks(ss) {
     if (!posts[pNo]) posts[pNo] = [];
     posts[pNo].push({
       rowIdx: i + 1,
-      stage: (data[i][stageCol] || '').replace(/\s+/g, '').toLowerCase(),
+      stage: normalizeStageName(data[i][stageCol]),
       status: data[i][statusCol],
-      docLink: data[i][docLinkCol]
+      docLink: docLinkCol !== -1 ? data[i][docLinkCol] : ''
     });
   }
-
-  var docLinkCol = headers.indexOf('DocLink');
 
   for (var pNo in posts) {
     var pTasks = posts[pNo];
@@ -733,14 +890,31 @@ function fixStuckTasks(ss) {
     var crosscheckDocLink = '';
     for (var t = 0; t < pTasks.length; t++) {
       if (pTasks[t].stage === 'readytopost') readyToPostTask = pTasks[t];
-      if (pTasks[t].stage === 'crosscheck') crosscheckDocLink = pTasks[t].docLink || '';
+      if (pTasks[t].stage === 'textcrosscheck') crosscheckDocLink = pTasks[t].docLink || '';
     }
-    if (readyToPostTask && crosscheckDocLink && !readyToPostTask.docLink) {
+    if (readyToPostTask && crosscheckDocLink && !readyToPostTask.docLink && docLinkCol !== -1) {
       taskSheet.getRange(readyToPostTask.rowIdx, docLinkCol + 1).setValue(crosscheckDocLink);
     }
     
     for (var t = 0; t < pTasks.length; t++) {
       var task = pTasks[t];
+      if (task.stage === 'photosselection' || task.stage === 'photoselection') continue;
+      
+      // Fix: Photos Clean should NEVER be Ready if Ready to Post is not Done
+      if (task.stage === 'photosclean' && task.status === 'Ready') {
+        var rtpDone = false;
+        for (var pt = 0; pt < pTasks.length; pt++) {
+          if (pTasks[pt].stage === 'readytopost' && pTasks[pt].status === 'Done') {
+            rtpDone = true;
+            break;
+          }
+        }
+        if (!rtpDone) {
+          taskSheet.getRange(task.rowIdx, statusCol + 1).setValue('Waiting');
+          task.status = 'Waiting';
+        }
+      }
+
       if (task.status === 'Waiting' || !task.status) {
         var reqs = reqMap[task.stage] || [];
         var allDone = true;
@@ -776,14 +950,16 @@ function unlockDependentTasks(rowIndex, headers, taskSheet) {
   var postNo = data[rowIndex - 1][headers.indexOf('PostNo')];
 
   var dependentStages = [];
-  var currentStageLower = (currentStage || '').replace(/\s+/g, '').toLowerCase();
+  var currentStageNorm = normalizeStageName(currentStage);
 
   // Find all stages that depend on currentStage
   for (var i = 1; i < pipe.length; i++) {
+    var pStageNorm = normalizeStageName(pipe[i][0]);
+    if (pStageNorm === 'photosselection' || pStageNorm === 'photoselection') continue;
     var deps = (pipe[i][2] || '').toString().toLowerCase().split(',');
     for (var d = 0; d < deps.length; d++) {
-      if (deps[d].replace(/\s+/g, '') === currentStageLower) {
-        dependentStages.push((pipe[i][0] || '').replace(/\s+/g, '').toLowerCase());
+      if (normalizeStageName(deps[d]) === currentStageNorm) {
+        dependentStages.push(pStageNorm);
       }
     }
   }
@@ -800,7 +976,7 @@ function unlockDependentTasks(rowIndex, headers, taskSheet) {
     if (data[i][postNoCol] == postNo) {
       postTasks.push({
         rowIdx: i + 1, 
-        stage: (data[i][stageCol] || '').replace(/\s+/g, '').toLowerCase(), 
+        stage: normalizeStageName(data[i][stageCol]), 
         status: data[i][statusCol]
       });
     }
@@ -808,12 +984,12 @@ function unlockDependentTasks(rowIndex, headers, taskSheet) {
 
   // For each dependent stage, check if ALL its dependencies are Done (only for tasks that exist)
   for (var d = 0; d < dependentStages.length; d++) {
-    var depStageLower = dependentStages[d];
+    var depStageNorm = dependentStages[d];
     
     // Find the task for this dependent stage
     var targetTask = null;
     for (var p = 0; p < postTasks.length; p++) {
-      if (postTasks[p].stage === depStageLower) {
+      if (postTasks[p].stage === depStageNorm) {
         targetTask = postTasks[p];
         break;
       }
@@ -823,10 +999,11 @@ function unlockDependentTasks(rowIndex, headers, taskSheet) {
       // Find its required dependencies from pipe
       var requiredDeps = [];
       for (var i = 1; i < pipe.length; i++) {
-        if ((pipe[i][0] || '').replace(/\s+/g, '').toLowerCase() === depStageLower) {
-          requiredDeps = (pipe[i][2] || '').toString().toLowerCase().split(',');
-          for (var r = 0; r < requiredDeps.length; r++) {
-            requiredDeps[r] = requiredDeps[r].replace(/\s+/g, '');
+        if (normalizeStageName(pipe[i][0]) === depStageNorm) {
+          var rawDeps = (pipe[i][2] || '').toString().toLowerCase().split(',');
+          for (var r = 0; r < rawDeps.length; r++) {
+            var n = normalizeStageName(rawDeps[r]);
+            if (n) requiredDeps.push(n);
           }
           break;
         }
@@ -1194,7 +1371,19 @@ function handleGetPhotos(payload) {
 function handleGetMediaFolders(payload) {
   var monthLink = payload.monthLink;
   var dateStr = payload.dateStr;
-  var result = { raw: '', edited: '' };
+  var venue = payload.venue || '';
+  var postNo = payload.postNo || '';
+
+  // ── Layer 1: GAS server cache (6 hours) ──
+  // Folder links are fixed — Raw/Selected/Edited paths never change for a post.
+  var cache = CacheService.getScriptCache();
+  var cacheKey = 'mf_' + (postNo || monthLink.slice(-20)) + '_' + dateStr.replace(/[^a-zA-Z0-9]/g, '') + (venue ? '_' + venue.replace(/[^a-zA-Z0-9]/g, '').slice(0, 10) : '');
+  var cached = cache.get(cacheKey);
+  if (cached) {
+    return { success: true, folders: JSON.parse(cached), fromCache: true };
+  }
+
+  var result = { raw: '', selected: '', edited: '' };
 
   if (!monthLink || monthLink.indexOf('drive.google.com') === -1) {
     return { success: true, folders: result };
@@ -1205,38 +1394,7 @@ function handleGetMediaFolders(payload) {
 
   var monthFolderId = match[0];
   try {
-    var monthFolder = DriveApp.getFolderById(monthFolderId);
-
-    var targetFolderName = dateStr;
-    if (payload.venue) {
-       targetFolderName = dateStr + ' - ' + payload.venue;
-    }
-
-    var dateFolder = null;
-    var folders = monthFolder.getFolders();
-    
-    // First try exact match with venue, if not found try just date
-    while (folders.hasNext()) {
-      var f = folders.next();
-      var fn = f.getName().toLowerCase();
-      if (fn === targetFolderName.toLowerCase()) {
-        dateFolder = f;
-        break;
-      }
-    }
-    
-    // Fallback to just date match if specific venue folder not found
-    if (!dateFolder) {
-      var folders2 = monthFolder.getFolders();
-      while (folders2.hasNext()) {
-        var f2 = folders2.next();
-        var fn2 = f2.getName().toLowerCase();
-        if (fn2 === dateStr.toLowerCase()) {
-          dateFolder = f2;
-          break;
-        }
-      }
-    }
+    var dateFolder = DriveApp.getFolderById(monthFolderId);
 
     if (dateFolder) {
       var sfs = dateFolder.getFolders();
@@ -1251,6 +1409,11 @@ function handleGetMediaFolders(payload) {
           result.edited = sub.getUrl();
         }
       }
+    }
+
+    // Cache the result for 6 hours (21600 sec) — folder links are static
+    if (result.raw || result.selected || result.edited) {
+      try { cache.put(cacheKey, JSON.stringify(result), 21600); } catch(cErr) {}
     }
   } catch (e) {}
 
@@ -1407,6 +1570,38 @@ function createTasksForPostV2(payload) {
     }
   }
 
+  // Delete obsolete Photos Selection tasks from sheet for this post
+  if (isUpdate) {
+    for (var t = existingTasks.length - 1; t >= 1; t--) {
+      if (existingTasks[t][1] == postNo) {
+        var stNorm = normalizeStageName(existingTasks[t][2]);
+        if (stNorm === 'photosselection' || stNorm === 'photoselection') {
+          tasks.deleteRow(t + 1);
+          delete existingTaskRows[stNorm];
+        }
+      }
+    }
+    existingTasks = tasks.getDataRange().getValues();
+  }
+
+  // If updating from Instagram to WhatsApp (non-Insta), delete thumbnail tasks from sheet
+  var pubLower = (publishPlatform || '').toLowerCase();
+  var isInsta = pubLower.indexOf('insta') !== -1;
+  if (!isInsta && isUpdate) {
+    var thumbStages = ['thumbnailselection', 'thumbnailprocessing', 'thumbnailcrosschecking', 'thumbnailcrosscheck'];
+    for (var t = existingTasks.length - 1; t >= 1; t--) {
+      if (existingTasks[t][1] == postNo) {
+        var stNorm = normalizeStageName(existingTasks[t][2]);
+        if (thumbStages.indexOf(stNorm) !== -1) {
+          tasks.deleteRow(t + 1);
+          delete existingTaskRows[stNorm];
+        }
+      }
+    }
+    // Re-fetch existing tasks after row deletions
+    existingTasks = tasks.getDataRange().getValues();
+  }
+
   // Find all posts in the group (or just the single post)
   var groupPosts = [];
   var groupId = null;
@@ -1462,42 +1657,22 @@ function createTasksForPostV2(payload) {
   var docLinks = {};
 
   if (groupPosts.length > 0) {
-    var leaderPost = groupPosts[0];
-    var monthFolderLink = leaderPost[21] || leaderPost[20] || '';
+    // First, count occurrences of each date in the group
+    var dateCounts = {};
+    for (var i = 0; i < groupPosts.length; i++) {
+      var dStr = formatDate(groupPosts[i][6]);
+      dateCounts[dStr] = (dateCounts[dStr] || 0) + 1;
+    }
 
-    if (monthFolderLink && monthFolderLink.indexOf('drive.google.com') !== -1) {
-      var match = monthFolderLink.match(/[-\w]{25,}/);
-      if (match) {
-        try {
-          var monthFolder = DriveApp.getFolderById(match[0]);
+    for (var gp = 0; gp < groupPosts.length; gp++) {
+      var currPost = groupPosts[gp];
+      var currMonthLink = currPost[21] || currPost[20] || '';
 
-          // First, count occurrences of each date in the group
-          var dateCounts = {};
-          for (var i = 0; i < groupPosts.length; i++) {
-            var dStr = formatDate(groupPosts[i][6]);
-            dateCounts[dStr] = (dateCounts[dStr] || 0) + 1;
-          }
-
-          for (var gp = 0; gp < groupPosts.length; gp++) {
-            var currPost = groupPosts[gp];
-            var cDateStr = formatDate(currPost[6]);
-            var cVenue = currPost[4] || '';
-            // Only append venue if this date appears more than once in the group
-            var cDateFolderTitle = (dateCounts[cDateStr] > 1 && cVenue) ? (cDateStr + ' - ' + cVenue) : cDateStr;
-
-            // Find or create date folder for this specific venue/post
-            var dateFolder = null;
-            var dateFolders = monthFolder.getFolders();
-            var searchStr = cDateFolderTitle.toLowerCase();
-            while (dateFolders.hasNext()) {
-              var df = dateFolders.next();
-              var fn = df.getName().toLowerCase();
-              if (fn === searchStr) {
-                dateFolder = df;
-                break;
-              }
-            }
-            if (!dateFolder) dateFolder = monthFolder.createFolder(cDateFolderTitle);
+      if (currMonthLink && currMonthLink.indexOf('drive.google.com') !== -1) {
+        var match = currMonthLink.match(/[-\w]{25,}/);
+        if (match) {
+          try {
+            var dateFolder = DriveApp.getFolderById(match[0]);
 
             // Create subfolders inside this post's folder
             var subfolderNames = (gp === 0) ? ['Raw', 'Selected', 'Selected (Edited)'] : ['Raw', 'Selected'];
@@ -1552,9 +1727,9 @@ function createTasksForPostV2(payload) {
                 docLinks[docStageName.toLowerCase()] = foundDocUrl;
               }
             }
+          } catch (driveErr) {
+            // Drive failed for this specific post, continue to next
           }
-        } catch (driveErr) {
-          // Drive failed, continue without docs
         }
       }
     }
@@ -1566,7 +1741,7 @@ function createTasksForPostV2(payload) {
   var notesCol = taskHeaders.indexOf('Notes');
   
   // ── Create task rows with admin-specified assignees ──
-  var skipStages = [];
+  var skipStages = ['photosselection', 'photoselection'];
   var pubLower = (publishPlatform || '').toLowerCase();
   var modLower = (mediaMode || '').toLowerCase();
   
@@ -1666,6 +1841,221 @@ function createTasksForPostV2(payload) {
   return {success: true, message: msg};
 }
 
+function copyThumbnailFile(postNo) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var postsSheet = ss.getSheetByName(POSTS_SHEET);
+  var postsData = postsSheet.getDataRange().getValues();
+  var postRow = null;
+  
+  for (var p = 1; p < postsData.length; p++) {
+    if (postsData[p][0] == postNo) {
+      postRow = postsData[p];
+      break;
+    }
+  }
+  if (!postRow) return;
+
+  var dateStr = formatDate(postRow[6]);
+  var photosLink = postRow[20] || '';
+  var videosLink = postRow[21] || '';
+  
+  var linksToTry = [photosLink, videosLink];
+  
+  for (var i = 0; i < linksToTry.length; i++) {
+    var link = linksToTry[i];
+    if (!link || link.indexOf('drive.google.com') === -1) continue;
+    
+    var match = link.match(/[-\w]{25,}/);
+    if (!match) continue;
+    
+    try {
+      var dateFolder = DriveApp.getFolderById(match[0]);
+      
+      var rawFolder = null;
+      var editedFolder = null;
+      
+      var sfs = dateFolder.getFolders();
+      while (sfs.hasNext()) {
+        var sub = sfs.next();
+        var subName = sub.getName().toLowerCase();
+        if (subName === 'raw') {
+          rawFolder = sub;
+        } else if (subName.indexOf('edited') !== -1 || subName === 'selected (edited)') {
+          editedFolder = sub;
+        }
+      }
+      
+      if (rawFolder && editedFolder) {
+        var targetThumbFolder = null;
+        
+        // 1. Look for 'Photos' inside 'Raw'
+        var photosFolders = rawFolder.searchFolders("title = 'Photos' or title = 'photos'");
+        if (photosFolders.hasNext()) {
+          var photosFolder = photosFolders.next();
+          // Look for 'Thumbnail' inside 'Photos'
+          var thumbFolders = photosFolder.searchFolders("title contains 'Thumbnail' or title contains 'thumbnail'");
+          if (thumbFolders.hasNext()) {
+            targetThumbFolder = thumbFolders.next();
+          }
+        }
+        
+        // 2. Fallback: Look directly in 'Raw' just in case
+        if (!targetThumbFolder) {
+          var directThumb = rawFolder.searchFolders("title contains 'Thumbnail' or title contains 'thumbnail'");
+          if (directThumb.hasNext()) targetThumbFolder = directThumb.next();
+        }
+        
+        if (targetThumbFolder) {
+          var files = targetThumbFolder.getFiles();
+          while (files.hasNext()) {
+            var file = files.next();
+            var existingIter = editedFolder.getFilesByName(file.getName());
+            if (!existingIter.hasNext()) {
+              file.makeCopy(file.getName(), editedFolder);
+            }
+          }
+        }
+      }
+    } catch(e) {
+      // Ignore Drive errors
+    }
+  }
+}
+
+function handleReverseTask(payload) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var taskSheet = ss.getSheetByName(TASKS_SHEET);
+  var pipeSheet = ss.getSheetByName(PIPELINE_SHEET);
+  var pipe = pipeSheet.getDataRange().getValues();
+  var data = taskSheet.getDataRange().getValues();
+  var headers = data[0];
+  
+  var postNo = payload.postNo;
+  var currentStage = payload.currentStage;
+  var reason = payload.reason || '';
+  var targetStage = payload.targetStage;
+  
+  var stageCol = headers.indexOf('Stage');
+  var postNoCol = headers.indexOf('PostNo');
+  var statusCol = headers.indexOf('Status');
+  var notesCol = headers.indexOf('Notes');
+  var completedAtCol = headers.indexOf('CompletedAt');
+  
+  var currentNorm = normalizeStageName(currentStage);
+  
+  if (!targetStage) {
+    if (currentNorm === 'thumbnailcrosschecking' || currentNorm === 'thumbnailcrosscheck') {
+      targetStage = 'Thumbnail Processing';
+    } else if (currentNorm === 'thumbnailprocessing') {
+      targetStage = 'Thumbnail Selection';
+    } else if (currentNorm === 'mediacrosscheck') {
+      targetStage = 'Photo Editing';
+    } else if (currentNorm === 'mediafinalcrosscheck' || currentNorm === 'mediafinalcrosschecking') {
+      targetStage = 'Media Cross Check';
+    } else if (currentNorm === 'photosclean') {
+      targetStage = 'Ready to Post';
+    } else if (currentNorm === 'editing') {
+      targetStage = 'Writing';
+    } else if (currentNorm === 'proofreading') {
+      targetStage = 'Editing';
+    } else if (currentNorm === 'crosscheck' || currentNorm === 'textcrosscheck') {
+      targetStage = 'Proofreading';
+    } else if (currentNorm === 'readytopost') {
+      targetStage = 'Text Crosscheck';
+    }
+  }
+  
+  if (!targetStage) {
+    return { success: false, message: 'Could not determine previous stage to reverse to.' };
+  }
+  
+  var targetNorm = normalizeStageName(targetStage);
+  var reversed = false;
+  
+  for (var r = 1; r < data.length; r++) {
+    if (data[r][postNoCol] == postNo) {
+      var rStage = normalizeStageName(data[r][stageCol]);
+      
+      // Revert previous stage task to In Progress
+      if (rStage === targetNorm) {
+        taskSheet.getRange(r + 1, statusCol + 1).setValue('Ready');
+        if (completedAtCol !== -1) {
+          taskSheet.getRange(r + 1, completedAtCol + 1).setValue('');
+        }
+        if (notesCol !== -1 && reason) {
+          var existingNote = data[r][notesCol] || '';
+          var newNote = (existingNote ? existingNote + '\n' : '') + '[Revision: ' + new Date().toLocaleDateString() + ']: ' + reason;
+          taskSheet.getRange(r + 1, notesCol + 1).setValue(newNote);
+        }
+        reversed = true;
+      }
+      
+      // Reset current stage task back to Waiting
+      if (rStage === currentNorm) {
+        taskSheet.getRange(r + 1, statusCol + 1).setValue('Waiting');
+      }
+    }
+  }
+  
+  try {
+    CacheService.getScriptCache().remove('all_posts');
+  } catch(cErr) {}
+  
+  if (reversed) {
+    return { success: true, message: 'Task reversed back to ' + targetStage, targetStage: targetStage };
+  } else {
+    return { success: false, message: 'Previous stage task (' + targetStage + ') not found for Post ' + postNo };
+  }
+}
+
 function doGet(e) {
   return ContentService.createTextOutput('GET requests not supported, use POST.').setMimeType(ContentService.MimeType.TEXT);
 }
+
+// Keep-Alive: set a time-based trigger on this function every 5 minutes
+// GAS Editor > Triggers > Add Trigger > keepAlive > Time-driven > Every 5 minutes
+function keepAlive() {
+  Logger.log('keep-alive ping: ' + new Date());
+}
+
+function handleCheckFolderNotEmpty(payload) {
+  var postNo = payload.postNo;
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var postsSheet = ss.getSheetByName(POSTS_SHEET);
+  var postsData = postsSheet.getDataRange().getValues();
+  var postRow = null;
+  for (var p = 1; p < postsData.length; p++) {
+    if (postsData[p][0] == postNo) { postRow = postsData[p]; break; }
+  }
+  if (!postRow) return {success: true, notEmpty: true}; // failsafe
+  
+  var dateStr = formatDate(postRow[6]);
+  var photosLink = postRow[20] || '';
+  var videosLink = postRow[21] || '';
+  var linksToTry = [photosLink, videosLink];
+  
+  for (var i = 0; i < linksToTry.length; i++) {
+    var link = linksToTry[i];
+    if (!link || link.indexOf('drive.google.com') === -1) continue;
+    var match = link.match(/[-\w]{25,}/);
+    if (!match) continue;
+    
+    try {
+      var dateFolder = DriveApp.getFolderById(match[0]);
+      
+      var sfs = dateFolder.getFolders();
+      while(sfs.hasNext()) {
+        var sub = sfs.next();
+        var subName = sub.getName().toLowerCase();
+        if (subName.indexOf('edited') !== -1 || subName === 'selected') {
+          if (sub.getFiles().hasNext() || sub.getFolders().hasNext()) {
+             return {success: true, notEmpty: true};
+          }
+        }
+      }
+    } catch(e) {}
+  }
+  
+  return {success: true, notEmpty: false};
+}
+
