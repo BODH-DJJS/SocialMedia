@@ -1599,6 +1599,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                   'isCombined': true,
                   'isInitialized': isInitialized,
                   'existingTasks': postTasks,
+                  'combinedPosts': posts,
                   if (posts.isNotEmpty) ...posts.first,
                 });
               },
@@ -1622,13 +1623,19 @@ class _DashboardScreenState extends State<DashboardScreen>
           case 4: valA = a['Date']; valB = b['Date']; break;
           case 5: valA = a['TotalBeneficiary']; valB = b['TotalBeneficiary']; break;
         }
+        if (_sortColumnIndex == 0) {
+          final intA = int.tryParse(valA?.toString() ?? '') ?? 0;
+          final intB = int.tryParse(valB?.toString() ?? '') ?? 0;
+          return _sortAscending ? intA.compareTo(intB) : intB.compareTo(intA);
+        }
+
         valA = valA?.toString() ?? '';
         valB = valB?.toString() ?? '';
         
         if (_sortColumnIndex == 5) {
-          valA = int.tryParse(valA) ?? 0;
-          valB = int.tryParse(valB) ?? 0;
-          return _sortAscending ? valA.compareTo(valB) : valB.compareTo(valA);
+          final intA = int.tryParse(valA) ?? 0;
+          final intB = int.tryParse(valB) ?? 0;
+          return _sortAscending ? intA.compareTo(intB) : intB.compareTo(intA);
         }
         return _sortAscending ? valA.compareTo(valB) : valB.compareTo(valA);
       });
@@ -1650,7 +1657,8 @@ class _DashboardScreenState extends State<DashboardScreen>
                 columns: [
                   DataColumn(
                     label: const Text('Post No'),
-                    onSort: (col, asc) => _sort((p) => p['PostNo'] ?? '', col, asc),
+                    numeric: true,
+                    onSort: (col, asc) => _sort((p) => int.tryParse(p['PostNo']?.toString() ?? '') ?? 0, col, asc),
                   ),
                   
                   DataColumn(

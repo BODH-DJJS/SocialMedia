@@ -1,9 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../providers/event_provider.dart';
 import '../models/event.dart';
 import 'package:intl/intl.dart';
+
+class GroupMediaLink {
+  final String postNo;
+  final String theme;
+  final String rawFolder;
+  final String selectedFolder;
+  final String monthLink;
+  GroupMediaLink(this.postNo, this.theme, this.rawFolder, this.selectedFolder, this.monthLink);
+}
 
 class AdminAssignScreen extends StatefulWidget {
   final Map<String, dynamic> postData;
@@ -16,6 +26,12 @@ class AdminAssignScreen extends StatefulWidget {
 
 class _AdminAssignScreenState extends State<AdminAssignScreen> {
   bool _isLoading = false;
+  bool _isLoadingMedia = true;
+  String _rawFolderLink = '';
+  String _selectedFolderLink = '';
+  String _editedFolderLink = '';
+  List<GroupMediaLink> _groupMediaLinks = [];
+
   String? _selectedWriter;
   String? _selectedEditor;
   String? _selectedProofreader;
@@ -130,7 +146,87 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
             }
           }
         });
+
+      _fetchMediaLinks();
     });
+  }
+
+  Future<void> _fetchMediaLinks() async {
+    final provider = context.read<EventProvider>();
+    final isCombined = widget.postData['isCombined'] == true;
+    final combinedPosts = widget.postData['combinedPosts'] as List<dynamic>? ?? [];
+
+    if (isCombined && combinedPosts.isNotEmpty) {
+      List<GroupMediaLink> groupLinks = [];
+      String firstEdited = '';
+
+      for (int i = 0; i < combinedPosts.length; i++) {
+        final p = combinedPosts[i] as Map<String, dynamic>;
+        final pDate = p['Date']?.toString() ?? '';
+        final pVenue = p['Venue']?.toString() ?? '';
+        final pMonth = p['FolderLink']?.toString() ?? '';
+        final pTheme = p['Theme']?.toString() ?? '';
+        final pNo = p['PostNo']?.toString() ?? '';
+
+        if (pMonth.isNotEmpty) {
+          final links = await provider.fetchMediaFolders(pMonth, pDate, 'AdminAssign', venue: pVenue, postNo: pNo);
+          groupLinks.add(GroupMediaLink(pNo, pTheme, links['raw'] ?? '', links['selected'] ?? '', pMonth));
+
+          if (i == 0) {
+            firstEdited = links['edited'] ?? '';
+          }
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          _groupMediaLinks = groupLinks;
+          _editedFolderLink = firstEdited;
+          _isLoadingMedia = false;
+        });
+      }
+    } else {
+      final folderLink = widget.postData['FolderLink']?.toString() ?? '';
+      final eventDate = widget.postData['Date']?.toString() ?? '';
+      final venue = widget.postData['Venue']?.toString() ?? '';
+      final postNo = widget.postData['PostNo']?.toString() ?? '';
+
+      if (folderLink.isNotEmpty) {
+        final links = await provider.fetchMediaFolders(folderLink, eventDate, 'AdminAssign', venue: venue, postNo: postNo);
+        if (mounted) {
+          setState(() {
+            _rawFolderLink = links['raw'] ?? '';
+            _selectedFolderLink = links['selected'] ?? '';
+            _editedFolderLink = links['edited'] ?? '';
+            _isLoadingMedia = false;
+          });
+        }
+      } else {
+        if (mounted) {
+          setState(() {
+            _isLoadingMedia = false;
+          });
+        }
+      }
+    }
+  }
+
+  void _openLink(String url) async {
+    final trimmedUrl = url.trim();
+    if (trimmedUrl.isEmpty || !trimmedUrl.startsWith('http')) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No valid link available')));
+      return;
+    }
+    try {
+      final uri = Uri.parse(trimmedUrl);
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } else {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Cannot open link')));
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error opening link: $e')));
+    }
   }
 
   Future<void> _pickDate(BuildContext context, Function(DateTime) onSelect) async {
@@ -401,17 +497,284 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: theme.colorScheme.primary.withOpacity(0.05),
+                      color: theme.colorScheme.primary.withValues(alpha: 0.05),
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: theme.colorScheme.primary.withOpacity(0.2)),
+                      border: Border.all(color: theme.colorScheme.primary.withValues(alpha: 0.2)),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text('Post #$postNo', style: TextStyle(color: theme.colorScheme.primary, fontWeight: FontWeight.bold)),
                         const SizedBox(height: 4),
-                        Text(themeName, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                        Text(themeName, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                        if (widget.postData['Program']?.toString().isNotEmpty == true) ...[
+                          const SizedBox(height: 2),
+                          Text(widget.postData['Program'].toString(), style: TextStyle(color: Colors.grey.shade700, fontSize: 13)),
+                        ],
                       ],
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+
+                  // Combined Events Breakdown (if combined)
+                  if (isCombined && (widget.postData['combinedPosts'] as List<dynamic>? ?? []).isNotEmpty) ...[
+                    Card(
+                      color: Colors.purple.shade50,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        side: BorderSide(color: Colors.purple.shade200),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Icon(Icons.merge_type, size: 18, color: Colors.purple.shade700),
+                                const SizedBox(width: 6),
+                                Text(
+                                  'Combined Events (${(widget.postData['combinedPosts'] as List).length})',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 15,
+                                    color: Colors.purple.shade700,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            ...(widget.postData['combinedPosts'] as List).asMap().entries.map((entry) {
+                              final idx = entry.key;
+                              final p = entry.value as Map<String, dynamic>;
+                              final pNo = p['PostNo']?.toString() ?? '';
+                              final pTheme = p['Theme']?.toString() ?? '';
+                              final pProgram = p['Program']?.toString() ?? '';
+                              final pDate = p['Date']?.toString() ?? '';
+                              final pVenue = p['Venue']?.toString() ?? '';
+                              final pBranch = p['Branch']?.toString() ?? '';
+                              final pState = p['State']?.toString() ?? '';
+                              final pMale = p['Male'] ?? 0;
+                              final pFemale = p['Female'] ?? 0;
+                              final pChildren = p['Children'] ?? 0;
+                              final pTotal = p['TotalBeneficiary'] ??
+                                  ((pMale is num ? pMale : 0) +
+                                      (pFemale is num ? pFemale : 0) +
+                                      (pChildren is num ? pChildren : 0));
+                              final accentColor = idx == 0 ? Colors.purple : Colors.blue;
+
+                              return Container(
+                                margin: const EdgeInsets.only(bottom: 10),
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(color: accentColor.shade200),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                          decoration: BoxDecoration(
+                                            color: accentColor.shade500,
+                                            borderRadius: BorderRadius.circular(6),
+                                          ),
+                                          child: Text(
+                                            '#$pNo',
+                                            style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: Text(
+                                            pTheme.isNotEmpty ? pTheme : pProgram,
+                                            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                                            maxLines: 2,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 8),
+                                    if (pDate.isNotEmpty) _infoRow(Icons.calendar_today, 'Date', pDate),
+                                    if (pBranch.isNotEmpty) _infoRow(Icons.location_city, 'Branch', pState.isNotEmpty ? '$pBranch, $pState' : pBranch),
+                                    if (pVenue.isNotEmpty) _infoRow(Icons.place, 'Venue', pVenue),
+                                    if ((pTotal as num) > 0)
+                                      Padding(
+                                        padding: const EdgeInsets.only(top: 4),
+                                        child: Row(
+                                          children: [
+                                            const Icon(Icons.people, size: 14, color: Colors.grey),
+                                            const SizedBox(width: 4),
+                                            Text(
+                                              '👨 $pMale  👩 $pFemale  🧒 $pChildren  👥 Total: $pTotal',
+                                              style: TextStyle(fontSize: 11, color: Colors.grey.shade700),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              );
+                            }),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                  ],
+
+                  // Event Details Card (Individual post)
+                  if (!isCombined) ...[
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('Event Details', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                            const SizedBox(height: 12),
+                            if (widget.postData['Date']?.toString().isNotEmpty == true)
+                              _infoRow(Icons.calendar_today, 'Date', widget.postData['Date'].toString()),
+                            if (widget.postData['Branch']?.toString().isNotEmpty == true)
+                              _infoRow(Icons.location_city, 'Branch', '${widget.postData['Branch'] ?? ''}${widget.postData['State']?.toString().isNotEmpty == true ? ', ${widget.postData['State']}' : ''}'),
+                            if (widget.postData['Venue']?.toString().isNotEmpty == true)
+                              _infoRow(Icons.place, 'Venue', widget.postData['Venue'].toString()),
+                            if (widget.postData['Organizers']?.toString().isNotEmpty == true)
+                              _infoRow(Icons.people, 'Organizers', widget.postData['Organizers'].toString()),
+                            if (widget.postData['Partners']?.toString().isNotEmpty == true)
+                              _infoRow(Icons.handshake, 'Partners', widget.postData['Partners'].toString()),
+                            if (widget.postData['Timings']?.toString().isNotEmpty == true)
+                              _infoRow(Icons.access_time, 'Timings', widget.postData['Timings'].toString()),
+                            if (widget.postData['ActivityType']?.toString().isNotEmpty == true)
+                              _infoRow(Icons.category, 'Activity Type', widget.postData['ActivityType'].toString()),
+                            if (widget.postData['MOP']?.toString().isNotEmpty == true)
+                              _infoRow(Icons.campaign, 'Promotion (MOP)', widget.postData['MOP'].toString()),
+                            if (widget.postData['ImportantInfo']?.toString().isNotEmpty == true)
+                              _infoRow(Icons.info_outline, 'Important', widget.postData['ImportantInfo'].toString()),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+
+                    // Guest Card (if any)
+                    if (widget.postData['GuestName']?.toString().isNotEmpty == true || widget.postData['GuestOrg']?.toString().isNotEmpty == true) ...[
+                      Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('Guest / Speaker Information', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                              const SizedBox(height: 12),
+                              if (widget.postData['GuestType']?.toString().isNotEmpty == true)
+                                _infoRow(Icons.person_pin, 'Type', widget.postData['GuestType'].toString()),
+                              if (widget.postData['GuestName']?.toString().isNotEmpty == true)
+                                _infoRow(Icons.person, 'Name', widget.postData['GuestName'].toString()),
+                              if (widget.postData['GuestDesignation']?.toString().isNotEmpty == true)
+                                _infoRow(Icons.work, 'Designation', widget.postData['GuestDesignation'].toString()),
+                              if (widget.postData['GuestOrg']?.toString().isNotEmpty == true)
+                                _infoRow(Icons.business, 'Organization', widget.postData['GuestOrg'].toString()),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                    ],
+
+                    // Beneficiaries Card
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('Beneficiaries', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                            const SizedBox(height: 12),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                              children: [
+                                _benCircle('👨', 'Male', int.tryParse(widget.postData['Male']?.toString() ?? '') ?? 0, const Color(0xFF42A5F5)),
+                                _benCircle('👩', 'Female', int.tryParse(widget.postData['Female']?.toString() ?? '') ?? 0, const Color(0xFFE91E63)),
+                                _benCircle('🧒', 'Children', int.tryParse(widget.postData['Children']?.toString() ?? '') ?? 0, const Color(0xFFFF9800)),
+                                _benCircle('👥', 'Total', int.tryParse(widget.postData['TotalBeneficiary']?.toString() ?? '') ?? 0, theme.colorScheme.primary),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                  ],
+
+                  // Media Folders Card
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(Icons.folder_shared, color: Color(0xFF1565C0)),
+                              const SizedBox(width: 8),
+                              const Text('Media & Raw Folders', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          if (_isLoadingMedia)
+                            const Center(
+                              child: Padding(
+                                padding: EdgeInsets.all(16),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
+                                    SizedBox(width: 12),
+                                    Text('Checking Drive folders...', style: TextStyle(color: Colors.grey, fontSize: 13)),
+                                  ],
+                                ),
+                              ),
+                            )
+                          else if (isCombined && _groupMediaLinks.isNotEmpty) ...[
+                            ..._groupMediaLinks.map((g) {
+                              return Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('Post #${g.postNo} - ${g.theme}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.indigo)),
+                                  const SizedBox(height: 6),
+                                  if (g.rawFolder.isNotEmpty)
+                                    Padding(padding: const EdgeInsets.only(bottom: 6), child: _mediaButton(Icons.photo_library, 'View Photos / Videos (Raw)', 'Original files from event', Colors.blueGrey, () => _openLink(g.rawFolder))),
+                                  if (g.selectedFolder.isNotEmpty)
+                                    Padding(padding: const EdgeInsets.only(bottom: 6), child: _mediaButton(Icons.checklist, 'Selected Folder', 'Selected picks', Colors.teal, () => _openLink(g.selectedFolder))),
+                                  if (g.monthLink.isNotEmpty)
+                                    Padding(padding: const EdgeInsets.only(bottom: 12), child: _mediaButton(Icons.folder_shared, 'Date / Month Archive', '', const Color(0xFFF39C12), () => _openLink(g.monthLink))),
+                                  const Divider(),
+                                ],
+                              );
+                            }),
+                            if (_editedFolderLink.isNotEmpty)
+                              _mediaButton(Icons.auto_fix_high, 'Selected (Edited) [Group Master]', 'Edited files for the whole group', Colors.purple, () => _openLink(_editedFolderLink)),
+                          ] else ...[
+                            if (_rawFolderLink.isNotEmpty)
+                              _mediaButton(Icons.photo_library, 'View Photos / Videos (Raw)', 'Original unedited files', Colors.blueGrey, () => _openLink(_rawFolderLink))
+                            else if (widget.postData['FolderLink']?.toString().isNotEmpty == true)
+                              _mediaButton(Icons.photo_library, 'View Photos / Videos (Raw / Event Folder)', 'Date drive link', Colors.blueGrey, () => _openLink(widget.postData['FolderLink'].toString())),
+                            if (_selectedFolderLink.isNotEmpty)
+                              _mediaButton(Icons.checklist, 'Selected Photos', 'Best picks from Raw', Colors.teal, () => _openLink(_selectedFolderLink)),
+                            if (_editedFolderLink.isNotEmpty)
+                              _mediaButton(Icons.auto_fix_high, 'Selected (Edited)', 'Edited and approved files', Colors.purple, () => _openLink(_editedFolderLink)),
+                            if (widget.postData['FolderLink']?.toString().isNotEmpty == true && widget.postData['FolderLink'].toString() != _rawFolderLink)
+                              _mediaButton(Icons.folder_shared, 'Month / Date Folder', 'Media drive archive', const Color(0xFFF39C12), () => _openLink(widget.postData['FolderLink'].toString())),
+                            if (_rawFolderLink.isEmpty && (widget.postData['FolderLink']?.toString().isEmpty ?? true))
+                              Text('No media folder links registered for this post yet.', style: TextStyle(color: Colors.grey.shade600, fontSize: 13, fontStyle: FontStyle.italic)),
+                          ],
+                        ],
+                      ),
                     ),
                   ),
                   const SizedBox(height: 24),
@@ -615,4 +978,85 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
             ),
     );
   }
+
+  Widget _infoRow(IconData icon, String label, String value, {Color? color}) {
+    if (value.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 16, color: color ?? Colors.grey.shade500),
+          const SizedBox(width: 10),
+          Expanded(
+            child: RichText(
+              text: TextSpan(
+                style: TextStyle(color: color ?? Colors.black87, fontSize: 13),
+                children: [
+                  TextSpan(text: '$label: ', style: const TextStyle(fontWeight: FontWeight.bold)),
+                  TextSpan(text: value),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _benCircle(String emoji, String label, int value, Color color) {
+    return Column(
+      children: [
+        Container(
+          width: 52,
+          height: 52,
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.1),
+            shape: BoxShape.circle,
+            border: Border.all(color: color.withValues(alpha: 0.3), width: 2),
+          ),
+          child: Center(child: Text('$value', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: color))),
+        ),
+        const SizedBox(height: 4),
+        Text(emoji, style: const TextStyle(fontSize: 14)),
+        Text(label, style: TextStyle(fontSize: 10, color: Colors.grey.shade600)),
+      ],
+    );
+  }
+
+  Widget _mediaButton(IconData icon, String title, String subtitle, Color color, VoidCallback onTap) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            color: color.withValues(alpha: 0.08),
+            border: Border.all(color: color.withValues(alpha: 0.2)),
+          ),
+          child: Row(
+            children: [
+              Icon(icon, color: color, size: 28),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, style: TextStyle(fontWeight: FontWeight.bold, color: color, fontSize: 13)),
+                    if (subtitle.isNotEmpty)
+                      Text(subtitle, style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
+                  ],
+                ),
+              ),
+              Icon(Icons.open_in_new, size: 18, color: color.withValues(alpha: 0.6)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
+
