@@ -98,6 +98,22 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   String get _bestDocLink {
     if (_writingDocLink.isNotEmpty && _writingDocLink.startsWith('http')) return _writingDocLink;
     if (widget.event.docLink.isNotEmpty && widget.event.docLink.startsWith('http')) return widget.event.docLink;
+
+    // Fallback: If Ready to Post (or if current docLink is empty), look for Crosscheck / Text Crosscheck doc from the same post
+    try {
+      final provider = context.read<EventProvider>();
+      final postTasks = provider.events.where((t) => t.postNo == widget.event.postNo).toList();
+      for (final targetStage in ['text crosscheck', 'cross check', 'crosscheck', 'proofreading', 'editing', 'writing']) {
+        final match = postTasks.firstWhere(
+          (t) => t.stage.trim().toLowerCase() == targetStage && t.docLink.isNotEmpty && t.docLink.startsWith('http'),
+          orElse: () => Event.fromJson({}),
+        );
+        if (match.docLink.isNotEmpty && match.docLink.startsWith('http')) {
+          return match.docLink;
+        }
+      }
+    } catch (_) {}
+
     return '';
   }
 
@@ -702,17 +718,31 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                               children: [
                                 Icon(Icons.description, color: stageColor),
                                 const SizedBox(width: 8),
-                                Text('${e.stage} Document', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: stageColor)),
+                                Text(
+                                  e.stage.toLowerCase().replaceAll(' ', '') == 'readytopost'
+                                      ? 'Final Content Document (Crosscheck)'
+                                      : '${e.stage} Document',
+                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: stageColor),
+                                ),
                               ],
                             ),
                             const SizedBox(height: 8),
-                            const Text('Open this document to work on the content. Google Docs saves automatically.', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                            Text(
+                              e.stage.toLowerCase().replaceAll(' ', '') == 'readytopost'
+                                  ? 'Open the approved crosscheck document for the final post content.'
+                                  : 'Open this document to work on the content. Google Docs saves automatically.',
+                              style: const TextStyle(color: Colors.grey, fontSize: 12),
+                            ),
                             const SizedBox(height: 12),
                             SizedBox(
                               width: double.infinity,
                               child: ElevatedButton.icon(
                                 icon: const Icon(Icons.open_in_new),
-                                label: Text('Open ${e.stage} Doc'),
+                                label: Text(
+                                  e.stage.toLowerCase().replaceAll(' ', '') == 'readytopost'
+                                      ? 'Open Crosscheck Doc'
+                                      : 'Open ${e.stage} Doc',
+                                ),
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: stageColor,
                                   foregroundColor: Colors.white,

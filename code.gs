@@ -885,15 +885,24 @@ function fixStuckTasks(ss) {
   for (var pNo in posts) {
     var pTasks = posts[pNo];
     
-    // Fix missing doc links for Ready to Post
+    // Fix missing doc links for Text Crosscheck and Ready to Post
     var readyToPostTask = null;
-    var crosscheckDocLink = '';
+    var crosscheckTask = null;
+    var proofreadingDocLink = '';
+    var writingDocLink = '';
     for (var t = 0; t < pTasks.length; t++) {
       if (pTasks[t].stage === 'readytopost') readyToPostTask = pTasks[t];
-      if (pTasks[t].stage === 'textcrosscheck') crosscheckDocLink = pTasks[t].docLink || '';
+      if (pTasks[t].stage === 'textcrosscheck') crosscheckTask = pTasks[t];
+      if (pTasks[t].stage === 'proofreading' && pTasks[t].docLink) proofreadingDocLink = pTasks[t].docLink;
+      if (pTasks[t].stage === 'writing' && pTasks[t].docLink) writingDocLink = pTasks[t].docLink;
     }
-    if (readyToPostTask && crosscheckDocLink && !readyToPostTask.docLink && docLinkCol !== -1) {
-      taskSheet.getRange(readyToPostTask.rowIdx, docLinkCol + 1).setValue(crosscheckDocLink);
+    var bestDocLink = (crosscheckTask && crosscheckTask.docLink) || proofreadingDocLink || writingDocLink;
+    if (crosscheckTask && !crosscheckTask.docLink && bestDocLink && docLinkCol !== -1) {
+      taskSheet.getRange(crosscheckTask.rowIdx, docLinkCol + 1).setValue(bestDocLink);
+      crosscheckTask.docLink = bestDocLink;
+    }
+    if (readyToPostTask && !readyToPostTask.docLink && bestDocLink && docLinkCol !== -1) {
+      taskSheet.getRange(readyToPostTask.rowIdx, docLinkCol + 1).setValue(bestDocLink);
     }
     
     for (var t = 0; t < pTasks.length; t++) {
@@ -1053,34 +1062,33 @@ function copyForwardDocument(rowIndex, headers, taskSheet) {
   var currentDocId = currentDocUrl.match(/[-\w]{25,}/);
   if (!currentDocId) return;
 
-  var currentStageLower = (currentStage || '').replace(/\s+/g, '').toLowerCase();
+  var currentNorm = normalizeStageName(currentStage);
 
-  // If we just finished Cross check, share its doc link with Ready to Post
-  if (currentStageLower === 'crosscheck') {
-    var readyToPostLower = 'readytopost';
+  // If we just finished Crosscheck (Text Crosscheck), share its doc link with Ready to Post
+  if (currentNorm === 'textcrosscheck') {
     for (var i = 1; i < data.length; i++) {
-      var iterStageLower = (data[i][stageCol] || '').replace(/\s+/g, '').toLowerCase();
-      if (data[i][postNoCol] == postNo && iterStageLower === readyToPostLower) {
+      var iterNorm = normalizeStageName(data[i][stageCol]);
+      if (data[i][postNoCol] == postNo && iterNorm === 'readytopost') {
         taskSheet.getRange(i + 1, docLinkCol + 1).setValue(currentDocUrl);
         break;
       }
     }
-    return; // Do not copy the document
+    return; // Do not create a separate copy, Ready to Post reads the Crosscheck doc
   }
 
-  var stageOrder = ['Writing', 'Editing', 'Proofreading', 'Crosscheck'];
-  var stageOrderLower = ['writing', 'editing', 'proofreading', 'crosscheck'];
-  var currentIdx = stageOrderLower.indexOf(currentStageLower);
-  if (currentIdx === -1 || currentIdx >= stageOrderLower.length - 1) return;
+  var stageOrder = ['Writing', 'Editing', 'Proofreading', 'Text Crosscheck'];
+  var stageOrderNorm = ['writing', 'editing', 'proofreading', 'textcrosscheck'];
+  var currentIdx = stageOrderNorm.indexOf(currentNorm);
+  if (currentIdx === -1 || currentIdx >= stageOrderNorm.length - 1) return;
   var nextStage = stageOrder[currentIdx + 1];
 
   // Find the next stage row and get its document link
   var nextDocUrl = '';
   var nextRowIdx = -1;
-  var nextStageLower = nextStage.replace(/\s+/g, '').toLowerCase(); // Normalize
+  var nextStageNorm = normalizeStageName(nextStage);
   for (var i = 1; i < data.length; i++) {
-    var iterStageLower = (data[i][stageCol] || '').replace(/\s+/g, '').toLowerCase();
-    if (data[i][postNoCol] == postNo && iterStageLower === nextStageLower) {
+    var iterNorm = normalizeStageName(data[i][stageCol]);
+    if (data[i][postNoCol] == postNo && iterNorm === nextStageNorm) {
       nextDocUrl = data[i][docLinkCol] || '';
       nextRowIdx = i + 1;
       break;
@@ -1155,12 +1163,12 @@ function copyForwardDocument(rowIndex, headers, taskSheet) {
         // 2. Iterate backwards through all previous stages and copy their original docs
         for (var p = currentIdx - 1; p >= 0; p--) {
           var prevStageName = stageOrder[p];
-          var prevStageLower = prevStageName.toLowerCase();
+          var prevStageNorm = normalizeStageName(prevStageName);
           var prevDocUrl = '';
           
           for (var r = 1; r < data.length; r++) {
-            var iterStageLower = (data[r][stageCol] || '').replace(/\s+/g, '').toLowerCase();
-            if (data[r][postNoCol] == postNo && iterStageLower === prevStageLower) {
+            var iterNorm = normalizeStageName(data[r][stageCol]);
+            if (data[r][postNoCol] == postNo && iterNorm === prevStageNorm) {
               prevDocUrl = data[r][docLinkCol] || '';
               break;
             }
