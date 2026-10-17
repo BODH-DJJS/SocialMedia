@@ -1426,6 +1426,15 @@ class _DashboardScreenState extends State<DashboardScreen>
                         ),
                         title: Text(t.stage),
                         subtitle: Text(displayStatus + assigneeInfo),
+                        trailing: t.docLink.isNotEmpty
+                            ? IconButton(
+                                icon: const Icon(Icons.description, color: Colors.blue),
+                                tooltip: 'Open ${t.stage} Doc',
+                                onPressed: () {
+                                  html.window.open(t.docLink, '_blank');
+                                },
+                              )
+                            : null,
                       );
                     }).toList(),
                   ],
