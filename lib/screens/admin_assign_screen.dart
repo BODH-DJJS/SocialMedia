@@ -752,7 +752,7 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
                                   if (g.selectedFolder.isNotEmpty)
                                     Padding(padding: const EdgeInsets.only(bottom: 6), child: _mediaButton(Icons.checklist, 'Selected Folder', 'Selected picks', Colors.teal, () => _openLink(g.selectedFolder))),
                                   if (g.monthLink.isNotEmpty)
-                                    Padding(padding: const EdgeInsets.only(bottom: 12), child: _mediaButton(Icons.folder_shared, 'Date / Month Archive', '', const Color(0xFFF39C12), () => _openLink(g.monthLink))),
+                                    Padding(padding: const EdgeInsets.only(bottom: 12), child: _mediaButton(Icons.folder_shared, 'Date Folder Archive', '', const Color(0xFFF39C12), () => _openLink(g.monthLink))),
                                   const Divider(),
                                 ],
                               );
@@ -769,7 +769,7 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
                             if (_editedFolderLink.isNotEmpty)
                               _mediaButton(Icons.auto_fix_high, 'Selected (Edited)', 'Edited and approved files', Colors.purple, () => _openLink(_editedFolderLink)),
                             if (widget.postData['FolderLink']?.toString().isNotEmpty == true && widget.postData['FolderLink'].toString() != _rawFolderLink)
-                              _mediaButton(Icons.folder_shared, 'Month / Date Folder', 'Media drive archive', const Color(0xFFF39C12), () => _openLink(widget.postData['FolderLink'].toString())),
+                              _mediaButton(Icons.folder_shared, 'Date Folder', 'Media drive archive', const Color(0xFFF39C12), () => _openLink(widget.postData['FolderLink'].toString())),
                             if (_rawFolderLink.isEmpty && (widget.postData['FolderLink']?.toString().isEmpty ?? true))
                               Text('No media folder links registered for this post yet.', style: TextStyle(color: Colors.grey.shade600, fontSize: 13, fontStyle: FontStyle.italic)),
                           ],

@@ -679,7 +679,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                                   if (g.selectedFolder.isNotEmpty)
                                     Padding(padding: const EdgeInsets.only(bottom: 6), child: _mediaButton(Icons.checklist, 'Selected Folder', '', Colors.teal, () => _openLink(g.selectedFolder))),
                                   if (g.monthLink.isNotEmpty)
-                                    Padding(padding: const EdgeInsets.only(bottom: 12), child: _mediaButton(Icons.folder_shared, 'Month Archive', '', const Color(0xFFF39C12), () => _openLink(g.monthLink))),
+                                    Padding(padding: const EdgeInsets.only(bottom: 12), child: _mediaButton(Icons.folder_shared, 'Date Folder / Event Archive', '', const Color(0xFFF39C12), () => _openLink(g.monthLink))),
                                   const Divider(),
                                 ],
                               );
@@ -694,7 +694,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                               _mediaButton(Icons.checklist, 'Selected Photos', 'Best picks from Raw', Colors.teal, () => _openLink(_selectedFolderLink)),
                             if (_editedFolderLink.isNotEmpty)
                               _mediaButton(Icons.auto_fix_high, 'Selected (Edited)', 'Edited and approved files', Colors.purple, () => _openLink(_editedFolderLink)),
-                            _mediaButton(Icons.folder_shared, 'Month Folder', 'Master media archive', const Color(0xFFF39C12), () => _openLink(e.folderLink)),
+                            _mediaButton(Icons.folder_shared, 'Date Folder', 'Master event archive', const Color(0xFFF39C12), () => _openLink(e.folderLink)),
                           ],
                         ],
                       ),
