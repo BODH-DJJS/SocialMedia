@@ -44117,7 +44117,7 @@ else{m=J.U(h.a.c,a8)
 if((m==null?g:J.N(m).length!==0)===!0)n.push(h.lD(B.fG,"View Photos / Videos (Raw / Event Folder)","Date drive link",B.er,new A.anM(h)))}if(h.r.length!==0)n.push(h.lD(B.iv,"Selected Photos","Best picks from Raw",B.fY,new A.anT(h)))
 if(h.w.length!==0)n.push(h.lD(B.fC,"Selected (Edited)","Edited and approved files",B.eq,new A.anU(h)))
 m=J.U(h.a.c,a8)
-if((m==null?g:J.N(m).length!==0)===!0&&J.N(J.U(h.a.c,a8))!==h.f)n.push(h.lD(B.fE,"Month / Date Folder","Media drive archive",B.hN,new A.anV(h)))
+if((m==null?g:J.N(m).length!==0)===!0&&J.N(J.U(h.a.c,a8))!==h.f)n.push(h.lD(B.fE,"Date Folder","Media drive archive",B.hN,new A.anV(h)))
 if(h.f.length===0){m=J.U(h.a.c,a8)
 m=m==null?g:J.N(m).length===0
 m=m!==!1}else m=!1
@@ -44323,7 +44323,7 @@ $1(a){var s,r=null,q=A.a([A.a4("Post #"+a.a+" - "+a.b,r,r,r,B.C3,r,r,r),B.bD],t.
 if(a.c.length!==0){s=this.a
 q.push(new A.aE(B.fv,s.lD(B.fG,"View Photos / Videos (Raw)","Original files from event",B.er,new A.ane(s,a)),r))}if(a.d.length!==0){s=this.a
 q.push(new A.aE(B.fv,s.lD(B.iv,"Selected Folder","Selected picks",B.fY,new A.anf(s,a)),r))}if(a.e.length!==0){s=this.a
-q.push(new A.aE(B.i7,s.lD(B.fE,"Date / Month Archive","",B.hN,new A.anh(s,a)),r))}q.push(B.dt)
+q.push(new A.aE(B.i7,s.lD(B.fE,"Date Folder Archive","",B.hN,new A.anh(s,a)),r))}q.push(B.dt)
 return A.bo(q,B.E,B.k,B.l)},
 $S:271}
 A.ane.prototype={
@@ -45907,7 +45907,7 @@ B.b.I(m,o)}else{o=A.a([],n)
 if(h.f.length!==0)o.push(h.mT(B.fG,"View Photos / Videos (Raw)","Original unedited files",B.er,new A.auh(h)))
 if(h.r.length!==0)o.push(h.mT(B.iv,"Selected Photos","Best picks from Raw",B.fY,new A.aui(h)))
 if(h.w.length!==0)o.push(h.mT(B.fC,"Selected (Edited)","Edited and approved files",B.eq,new A.auj(h)))
-o.push(h.mT(B.fE,"Month Folder","Master media archive",B.hN,new A.auk(h,a)))
+o.push(h.mT(B.fE,"Date Folder","Master event archive",B.hN,new A.auk(h,a)))
 B.b.I(m,o)}p.push(A.ei(new A.aE(B.af,A.bo(m,B.E,B.k,B.l),g),g,g,g,g,g))
 p.push(B.ac)
 if(B.b.m(A.a(["writing","editing","proofreading","crosscheck","textcrosscheck","cross check","text crosscheck","ready to post","readytopost"],t.s),B.c.dL(a0).toLowerCase())){o=A.bn(16)
@@ -46101,7 +46101,7 @@ $1(a){var s,r=null,q=A.a([A.a4("Post #"+a.a+" - "+a.b,r,r,r,B.C3,r,r,r),B.bD],t.
 if(a.c.length!==0){s=this.a
 q.push(new A.aE(B.fv,s.mT(B.fG,"Raw Folder","",B.er,new A.aua(s,a)),r))}if(a.d.length!==0){s=this.a
 q.push(new A.aE(B.fv,s.mT(B.iv,"Selected Folder","",B.fY,new A.aub(s,a)),r))}if(a.e.length!==0){s=this.a
-q.push(new A.aE(B.i7,s.mT(B.fE,"Month Archive","",B.hN,new A.auc(s,a)),r))}q.push(B.dt)
+q.push(new A.aE(B.i7,s.mT(B.fE,"Date Folder / Event Archive","",B.hN,new A.auc(s,a)),r))}q.push(B.dt)
 return A.bo(q,B.E,B.k,B.l)},
 $S:370}
 A.aua.prototype={
