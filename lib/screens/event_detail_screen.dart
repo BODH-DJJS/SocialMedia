@@ -551,6 +551,39 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                                               '👨 $pMale  👩 $pFemale  🧒 $pChildren  👥 Total: $pTotal',
                                               style: TextStyle(fontSize: 11, color: Colors.grey.shade700),
                                             ),
+                                    // Guest / Speaker / Participant Info
+                                    if ((p['GuestName']?.toString().isNotEmpty ?? false) ||
+                                        (p['GuestOrg']?.toString().isNotEmpty ?? false) ||
+                                        (p['GuestType']?.toString().isNotEmpty ?? false) ||
+                                        (p['GuestDesignation']?.toString().isNotEmpty ?? false)) ...[
+                                      const SizedBox(height: 6),
+                                      Container(
+                                        padding: const EdgeInsets.all(8),
+                                        decoration: BoxDecoration(
+                                          color: Colors.amber.shade50,
+                                          borderRadius: BorderRadius.circular(6),
+                                          border: Border.all(color: Colors.amber.shade200),
+                                        ),
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            const Text(
+                                              'अतिथि / वक्ता / प्रतिभागी | Guest / Speaker / Participant:',
+                                              style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.brown),
+                                            ),
+                                            const SizedBox(height: 4),
+                                            if (p['GuestType']?.toString().isNotEmpty ?? false)
+                                              _infoRow(Icons.person_pin, 'Type', p['GuestType'].toString()),
+                                            if (p['GuestName']?.toString().isNotEmpty ?? false)
+                                              _infoRow(Icons.person, 'Name', p['GuestName'].toString()),
+                                            if (p['GuestDesignation']?.toString().isNotEmpty ?? false)
+                                              _infoRow(Icons.work, 'Designation', p['GuestDesignation'].toString()),
+                                            if (p['GuestOrg']?.toString().isNotEmpty ?? false)
+                                              _infoRow(Icons.business, 'Organization', p['GuestOrg'].toString()),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
                                           ],
                                         ),
                                       ),
@@ -588,15 +621,18 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                   ),
                   const SizedBox(height: 12),
 
-                  // Guest Card
-                  if (e.guestName.isNotEmpty || e.guestOrg.isNotEmpty) ...[
+                  // Guest / Speaker / Participant Card
+                  if (e.guestName.isNotEmpty || e.guestOrg.isNotEmpty || e.guestType.isNotEmpty || e.guestDesignation.isNotEmpty) ...[
                     Card(
                       child: Padding(
                         padding: const EdgeInsets.all(16),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text('Guest / Speaker Information', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                            const Text(
+                              'अतिथि / वक्ता / प्रतिभागी सूची | List of Guest(s) / Speaker(s) / Participant(s)',
+                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF1A1A2E)),
+                            ),
                             const SizedBox(height: 12),
                             if (e.guestType.isNotEmpty) _infoRow(Icons.person_pin, 'Type', e.guestType),
                             if (e.guestName.isNotEmpty) _infoRow(Icons.person, 'Name', e.guestName),

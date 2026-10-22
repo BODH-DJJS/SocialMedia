@@ -1331,6 +1331,11 @@ class _DashboardScreenState extends State<DashboardScreen>
     final eventDate = post['Date']?.toString() ?? '';
     final theme = post['Theme']?.toString() ?? '';
     final branch = post['Branch']?.toString() ?? '';
+    final guestType = post['GuestType']?.toString() ?? '';
+    final guestName = post['GuestName']?.toString() ?? '';
+    final guestDesignation = post['GuestDesignation']?.toString() ?? '';
+    final guestOrg = post['GuestOrg']?.toString() ?? '';
+    final hasGuest = guestName.isNotEmpty || guestOrg.isNotEmpty || guestType.isNotEmpty || guestDesignation.isNotEmpty;
 
     showDialog(
       context: context,
@@ -1376,6 +1381,36 @@ class _DashboardScreenState extends State<DashboardScreen>
                   if (eventDate.isNotEmpty) ...[
                     Text('Event Date: $eventDate', style: TextStyle(color: Colors.grey.shade700)),
                     const SizedBox(height: 4),
+                  ],
+                  if (hasGuest) ...[
+                    const SizedBox(height: 6),
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Colors.amber.shade50,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.amber.shade200),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'अतिथि / वक्ता / प्रतिभागी सूची | List of Guest(s) / Speaker(s) / Participant(s)',
+                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.brown),
+                          ),
+                          const SizedBox(height: 6),
+                          if (guestType.isNotEmpty)
+                            Text('• Type: $guestType', style: const TextStyle(fontSize: 12)),
+                          if (guestName.isNotEmpty)
+                            Text('• Name: $guestName', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                          if (guestDesignation.isNotEmpty)
+                            Text('• Designation: $guestDesignation', style: const TextStyle(fontSize: 12)),
+                          if (guestOrg.isNotEmpty)
+                            Text('• Organization: $guestOrg', style: const TextStyle(fontSize: 12)),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 6),
                   ],
                   const SizedBox(height: 8),
                   if (folderLink.isNotEmpty) ...[
@@ -2133,6 +2168,44 @@ class _DashboardScreenState extends State<DashboardScreen>
                       ),
                     ),
                   ],
+                ),
+              ],
+              if ((post['GuestName']?.toString().isNotEmpty ?? false) ||
+                  (post['GuestOrg']?.toString().isNotEmpty ?? false) ||
+                  (post['GuestType']?.toString().isNotEmpty ?? false) ||
+                  (post['GuestDesignation']?.toString().isNotEmpty ?? false)) ...[
+                const SizedBox(height: 6),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.amber.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.amber.shade200),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.people_alt, size: 14, color: Colors.brown.shade700),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          'अतिथि / वक्ता / प्रतिभागी: ' +
+                              [
+                                if (post['GuestType']?.toString().isNotEmpty ?? false) '${post['GuestType']}:',
+                                if (post['GuestName']?.toString().isNotEmpty ?? false) post['GuestName'].toString(),
+                                if (post['GuestDesignation']?.toString().isNotEmpty ?? false) '(${post['GuestDesignation']})',
+                                if (post['GuestOrg']?.toString().isNotEmpty ?? false) '- ${post['GuestOrg']}',
+                              ].join(' '),
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.brown.shade800,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ],
               const SizedBox(height: 10),
