@@ -464,7 +464,7 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
     if (_selectedMediaFinalCheck != null) assignees['Media Final Cross check'] = _selectedMediaFinalCheck!;
     if (_selectedUploader != null) assignees['Ready to Post'] = _selectedUploader!;
     
-    if (_publishPlatform.toLowerCase().contains('insta')) {
+    if (_publishPlatform.toLowerCase().contains('insta') && _mediaMode.toLowerCase().contains('video')) {
       if (_selectedThumbnailSelect != null) assignees['Thumbnail Selection'] = _selectedThumbnailSelect!;
       if (_selectedThumbnailProcess != null) assignees['Thumbnail Processing'] = _selectedThumbnailProcess!;
       if (_selectedThumbnailCrosscheck != null) assignees['Thumbnail Cross checking'] = _selectedThumbnailCrosscheck!;
@@ -491,7 +491,7 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
     if (_mediaFinalCheckDue != null) dueDates['Media Final Cross check'] = _mediaFinalCheckDue!.toIso8601String();
     if (_uploaderDue != null) dueDates['Ready to Post'] = _uploaderDue!.toIso8601String();
     
-    if (_publishPlatform.toLowerCase().contains('insta')) {
+    if (_publishPlatform.toLowerCase().contains('insta') && _mediaMode.toLowerCase().contains('video')) {
       if (_thumbnailSelectDue != null) dueDates['Thumbnail Selection'] = _thumbnailSelectDue!.toIso8601String();
       if (_thumbnailProcessDue != null) dueDates['Thumbnail Processing'] = _thumbnailProcessDue!.toIso8601String();
       if (_thumbnailCrosscheckDue != null) dueDates['Thumbnail Cross checking'] = _thumbnailCrosscheckDue!.toIso8601String();
@@ -978,7 +978,7 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
                           const SizedBox(height: 16),
                           const Text('Media Assignments', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                           
-                          if (_publishPlatform.toLowerCase().contains('insta')) ...[
+                          if (_publishPlatform.toLowerCase().contains('insta') && _mediaMode.toLowerCase().contains('video')) ...[
                             const SizedBox(height: 20),
                             Row(
                               crossAxisAlignment: CrossAxisAlignment.start,

@@ -375,8 +375,8 @@ function backfillMissingTasks(ss) {
       var meta = postMetadata[pNo] || { pub: '', mod: '' };
       
       var skipStages = ['photosselection', 'photoselection'];
-      if (meta.pub.indexOf('insta') === -1) {
-        skipStages.push('thumbnailselection', 'thumbnailprocessing', 'thumbnailcrosschecking');
+      if (meta.pub.indexOf('insta') === -1 || meta.mod.indexOf('video') === -1) {
+        skipStages.push('thumbnailselection', 'thumbnailprocessing', 'thumbnailcrosschecking', 'thumbnailcrosscheck');
       }
       if (meta.mod.indexOf('video') === -1) {
         skipStages.push('videoediting');
@@ -1629,10 +1629,11 @@ function createTasksForPostV2(payload) {
     existingTasks = tasks.getDataRange().getValues();
   }
 
-  // If updating from Instagram to WhatsApp (non-Insta), delete thumbnail tasks from sheet
+  // If not Instagram Video, delete thumbnail tasks from sheet when updating
   var pubLower = (publishPlatform || '').toLowerCase();
-  var isInsta = pubLower.indexOf('insta') !== -1;
-  if (!isInsta && isUpdate) {
+  var modLower = (mediaMode || '').toLowerCase();
+  var isInstaVideo = pubLower.indexOf('insta') !== -1 && modLower.indexOf('video') !== -1;
+  if (!isInstaVideo && isUpdate) {
     var thumbStages = ['thumbnailselection', 'thumbnailprocessing', 'thumbnailcrosschecking', 'thumbnailcrosscheck'];
     for (var t = existingTasks.length - 1; t >= 1; t--) {
       if (existingTasks[t][1] == postNo) {
@@ -1810,8 +1811,8 @@ function createTasksForPostV2(payload) {
   var pubLower = (publishPlatform || '').toLowerCase();
   var modLower = (mediaMode || '').toLowerCase();
   
-  if (pubLower.indexOf('insta') === -1) {
-    skipStages.push('thumbnailselection', 'thumbnailprocessing', 'thumbnailcrosschecking');
+  if (pubLower.indexOf('insta') === -1 || modLower.indexOf('video') === -1) {
+    skipStages.push('thumbnailselection', 'thumbnailprocessing', 'thumbnailcrosschecking', 'thumbnailcrosscheck');
   }
   if (modLower.indexOf('video') === -1) {
     skipStages.push('videoediting');
