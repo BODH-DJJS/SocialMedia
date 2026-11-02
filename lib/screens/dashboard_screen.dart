@@ -37,6 +37,7 @@ class _DashboardScreenState extends State<DashboardScreen>
     'theme': 220.0,
     'date': 115.0,
     'totalBen': 90.0,
+    'actions': 90.0,
   };
   final Map<String, double> _colWidths = Map.from(_defaultColWidths);
 
@@ -1558,6 +1559,15 @@ class _DashboardScreenState extends State<DashboardScreen>
             ),
           ),
           actions: [
+            if (isInitialized)
+              TextButton.icon(
+                icon: const Icon(Icons.delete_outline, color: Colors.red, size: 18),
+                label: const Text('Delete Workflow', style: TextStyle(color: Colors.red)),
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  _confirmDeletePostWorkflow(post, provider, context.read<AuthProvider>());
+                },
+              ),
             TextButton(
               onPressed: () => Navigator.pop(ctx), 
               child: const Text('Close'),
@@ -1584,6 +1594,101 @@ class _DashboardScreenState extends State<DashboardScreen>
     );
   }
 
+  void _confirmDeletePostWorkflow(Map<String, dynamic> post, EventProvider provider, AuthProvider auth) {
+    final postNo = post['PostNo']?.toString() ?? '';
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: Colors.red.shade700),
+            const SizedBox(width: 8),
+            const Text('Delete Workflow?'),
+          ],
+        ),
+        content: Text(
+          'Are you sure you want to delete all workflow tasks for Post #$postNo?\n\nThis will remove all assigned tasks and convert the post back to Inactive.',
+          style: const TextStyle(fontSize: 14),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+            onPressed: () async {
+              Navigator.pop(ctx);
+              final ok = await provider.deleteWorkflow(
+                postNo: postNo,
+                isCombined: false,
+                username: auth.username,
+                role: auth.role,
+              );
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(ok ? 'Post #$postNo workflow deleted and marked Inactive.' : 'Failed to delete workflow.'),
+                    backgroundColor: ok ? Colors.orange.shade800 : Colors.red,
+                  ),
+                );
+              }
+            },
+            child: const Text('Delete & Make Inactive'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _confirmDeleteCombinedWorkflow(Map<String, dynamic> group, EventProvider provider, AuthProvider auth) {
+    final groupId = group['GroupID']?.toString() ?? '';
+    final List<Map<String, dynamic>> posts = (group['Posts'] as List<dynamic>?)?.cast<Map<String, dynamic>>() ?? [];
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: Colors.red.shade700),
+            const SizedBox(width: 8),
+            const Text('Delete Combined Post?'),
+          ],
+        ),
+        content: Text(
+          'Are you sure you want to delete combined post "$groupId"?\n\nThis will delete all workflow tasks, ungroup the ${posts.length} events, and convert all of them back to Inactive.',
+          style: const TextStyle(fontSize: 14),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+            onPressed: () async {
+              Navigator.pop(ctx);
+              final ok = await provider.deleteWorkflow(
+                postNo: groupId,
+                isCombined: true,
+                username: auth.username,
+                role: auth.role,
+              );
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(ok ? 'Combined post $groupId deleted. Events are now Inactive.' : 'Failed to delete combined post.'),
+                    backgroundColor: ok ? Colors.orange.shade800 : Colors.red,
+                  ),
+                );
+              }
+            },
+            child: const Text('Delete & Make Inactive'),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _openInNewTab(String path) {
     try {
       final currentUri = Uri.parse(html.window.location.href);
@@ -1597,12 +1702,23 @@ class _DashboardScreenState extends State<DashboardScreen>
     }
   }
 
-  void _showPostContextMenu(BuildContext context, TapDownDetails details, String postNo) {
+  void _showPostContextMenu(
+    BuildContext context, 
+    TapDownDetails details, 
+    String postNo, {
+    bool isCombined = false,
+    Map<String, dynamic>? post,
+    Map<String, dynamic>? group,
+  }) {
     final RenderBox overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
     final position = RelativeRect.fromRect(
       details.globalPosition & const Size(40, 40),
       Offset.zero & overlay.size,
     );
+
+    final provider = context.read<EventProvider>();
+    final auth = context.read<AuthProvider>();
+    final isInitialized = provider.events.any((t) => t.postNo == postNo);
 
     showMenu<String>(
       context: context,
@@ -1618,10 +1734,63 @@ class _DashboardScreenState extends State<DashboardScreen>
             ],
           ),
         ),
+        const PopupMenuItem<String>(
+          value: 'edit_workflow',
+          child: Row(
+            children: [
+              Icon(Icons.edit_outlined, size: 18, color: Colors.blue),
+              SizedBox(width: 10),
+              Text('Edit Workflow', style: TextStyle(fontSize: 13)),
+            ],
+          ),
+        ),
+        if (isInitialized)
+          const PopupMenuItem<String>(
+            value: 'delete_workflow',
+            child: Row(
+              children: [
+                Icon(Icons.delete_outline, size: 18, color: Colors.red),
+                SizedBox(width: 10),
+                Text('Delete Workflow (Make Inactive)', style: TextStyle(fontSize: 13, color: Colors.red)),
+              ],
+            ),
+          ),
       ],
     ).then((value) {
       if (value == 'open_new_tab') {
         _openInNewTab('/admin-assign?postNo=$postNo');
+      } else if (value == 'edit_workflow') {
+        if (isCombined && group != null) {
+          final List<Map<String, dynamic>> posts = (group['Posts'] as List<dynamic>?)?.cast<Map<String, dynamic>>() ?? [];
+          context.push('/admin-assign', extra: {
+            'postNo': postNo,
+            'isCombined': true,
+            'isInitialized': isInitialized,
+            'existingTasks': provider.events.where((t) => t.postNo == postNo).toList(),
+            'combinedPosts': posts,
+            if (posts.isNotEmpty) ...posts.first,
+          });
+        } else if (post != null) {
+          context.push('/admin-assign', extra: {
+            ...post,
+            'isInitialized': isInitialized,
+            'existingTasks': provider.events.where((t) => t.postNo == postNo).toList(),
+          });
+        } else {
+          _openInNewTab('/admin-assign?postNo=$postNo');
+        }
+      } else if (value == 'delete_workflow') {
+        if (isCombined && group != null) {
+          _confirmDeleteCombinedWorkflow(group, provider, auth);
+        } else if (post != null) {
+          _confirmDeletePostWorkflow(post, provider, auth);
+        } else {
+          final foundPost = provider.rawPosts.firstWhere(
+            (p) => p['PostNo']?.toString() == postNo,
+            orElse: () => {'PostNo': postNo},
+          );
+          _confirmDeletePostWorkflow(foundPost, provider, auth);
+        }
       }
     });
   }
@@ -1746,6 +1915,15 @@ class _DashboardScreenState extends State<DashboardScreen>
             ),
           ),
           actions: [
+            if (isInitialized)
+              TextButton.icon(
+                icon: const Icon(Icons.delete_outline, color: Colors.red, size: 18),
+                label: const Text('Delete Combined Post', style: TextStyle(color: Colors.red)),
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  _confirmDeleteCombinedWorkflow(group, provider, context.read<AuthProvider>());
+                },
+              ),
             TextButton(
               onPressed: () => Navigator.pop(ctx),
               child: const Text('Close'),
@@ -1972,6 +2150,12 @@ class _DashboardScreenState extends State<DashboardScreen>
                           (p) => int.tryParse(p['TotalBeneficiary']?.toString() ?? '0') ?? 0,
                         ),
                       ),
+                      DataColumn(
+                        label: SizedBox(
+                          width: _colWidths['actions'] ?? _defaultColWidths['actions']!,
+                          child: const Text('Actions', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                        ),
+                      ),
                     ],
                     rows: posts.map((post) {
                       final postNo = post['PostNo']?.toString() ?? '';
@@ -1983,7 +2167,8 @@ class _DashboardScreenState extends State<DashboardScreen>
                       final totalBen = post['TotalBeneficiary']?.toString() ?? '0';
 
                       final isSelected = _isSelectionMode && _selectedPosts.contains(postNo);
-                      final isInitialized = provider.events.any((t) => t.postNo == postNo);
+                      final postTasks = provider.events.where((t) => t.postNo == postNo).toList();
+                      final isInitialized = postTasks.isNotEmpty;
 
                       return DataRow(
                         selected: isSelected,
@@ -2001,7 +2186,12 @@ class _DashboardScreenState extends State<DashboardScreen>
                               width: _colWidths['postNo'] ?? _defaultColWidths['postNo']!,
                               child: InkWell(
                                 onTap: () => _showPostLifecycle(post, provider),
-                                onSecondaryTapDown: (details) => _showPostContextMenu(context, details, postNo),
+                                onSecondaryTapDown: (details) => _showPostContextMenu(
+                                  context, 
+                                  details, 
+                                  postNo, 
+                                  post: post,
+                                ),
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
@@ -2065,6 +2255,39 @@ class _DashboardScreenState extends State<DashboardScreen>
                             SizedBox(
                               width: _colWidths['totalBen'] ?? _defaultColWidths['totalBen']!,
                               child: Text(totalBen, overflow: TextOverflow.ellipsis),
+                            ),
+                          ),
+                          DataCell(
+                            SizedBox(
+                              width: _colWidths['actions'] ?? _defaultColWidths['actions']!,
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  IconButton(
+                                    icon: Icon(Icons.edit_outlined, size: 18, color: Colors.blue.shade700),
+                                    tooltip: 'Edit Workflow',
+                                    padding: EdgeInsets.zero,
+                                    constraints: const BoxConstraints(minWidth: 26, minHeight: 26),
+                                    onPressed: () {
+                                      context.push('/admin-assign', extra: {
+                                        ...post,
+                                        'isInitialized': isInitialized,
+                                        'existingTasks': postTasks,
+                                      });
+                                    },
+                                  ),
+                                  if (isInitialized) ...[
+                                    const SizedBox(width: 4),
+                                    IconButton(
+                                      icon: Icon(Icons.delete_outline, size: 18, color: Colors.red.shade600),
+                                      tooltip: 'Delete Workflow (Make Inactive)',
+                                      padding: EdgeInsets.zero,
+                                      constraints: const BoxConstraints(minWidth: 26, minHeight: 26),
+                                      onPressed: () => _confirmDeletePostWorkflow(post, provider, context.read<AuthProvider>()),
+                                    ),
+                                  ],
+                                ],
+                              ),
                             ),
                           ),
                         ],
@@ -2313,7 +2536,7 @@ class _DashboardScreenState extends State<DashboardScreen>
             _showPostLifecycle(post, provider);
           }
         },
-        onSecondaryTapDown: (details) => _showPostContextMenu(context, details, postNo),
+        onSecondaryTapDown: (details) => _showPostContextMenu(context, details, postNo, post: post),
         borderRadius: BorderRadius.circular(16),
         child: Padding(
           padding: const EdgeInsets.all(16),
@@ -2384,25 +2607,29 @@ class _DashboardScreenState extends State<DashboardScreen>
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  // Assign Setup button
+                  // Edit Workflow button
                   IconButton(
                     icon: Icon(
-                      isInitialized ? Icons.settings : Icons.add_task_rounded,
-                      color:
-                          isInitialized
-                              ? Colors.grey
-                              : Theme.of(context).colorScheme.secondary,
+                      isInitialized ? Icons.edit_outlined : Icons.add_task_rounded,
+                      color: isInitialized
+                          ? Colors.blue.shade700
+                          : Theme.of(context).colorScheme.secondary,
                     ),
-                    tooltip:
-                        isInitialized
-                            ? 'Update Setup & Assignees'
-                            : 'Assign & Setup Workflow',
+                    tooltip: isInitialized
+                        ? 'Edit Workflow & Assignees'
+                        : 'Assign & Setup Workflow',
                     onPressed: () => context.push('/admin-assign', extra: {
                       ...post,
                       'isInitialized': isInitialized,
                       'existingTasks': postTasks,
                     }),
                   ),
+                  if (isInitialized)
+                    IconButton(
+                      icon: Icon(Icons.delete_outline, color: Colors.red.shade600),
+                      tooltip: 'Delete Workflow (Make Inactive)',
+                      onPressed: () => _confirmDeletePostWorkflow(post, provider, auth),
+                    ),
                 ],
               ),
               const SizedBox(height: 10),
@@ -2578,7 +2805,7 @@ class _DashboardScreenState extends State<DashboardScreen>
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
         onTap: () => _showCombinedLifecycle(group, provider),
-        onSecondaryTapDown: (details) => _showPostContextMenu(context, details, groupId),
+        onSecondaryTapDown: (details) => _showPostContextMenu(context, details, groupId, isCombined: true, group: group),
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(
@@ -2614,18 +2841,17 @@ class _DashboardScreenState extends State<DashboardScreen>
                       ),
                     ),
                   ),
+                  // Edit Combined Workflow button
                   IconButton(
                     icon: Icon(
-                      isInitialized ? Icons.settings : Icons.add_task_rounded,
-                      color:
-                          isInitialized
-                              ? Colors.grey
-                              : Theme.of(context).colorScheme.secondary,
+                      isInitialized ? Icons.edit_outlined : Icons.add_task_rounded,
+                      color: isInitialized
+                          ? Colors.purple.shade700
+                          : Theme.of(context).colorScheme.secondary,
                     ),
-                    tooltip:
-                        isInitialized
-                            ? 'Workflow Initialized'
-                            : 'Assign & Setup Workflow',
+                    tooltip: isInitialized
+                        ? 'Edit Combined Workflow'
+                        : 'Assign & Setup Workflow',
                     onPressed: () {
                       context.push(
                         '/admin-assign',
@@ -2634,11 +2860,18 @@ class _DashboardScreenState extends State<DashboardScreen>
                           'isCombined': true,
                           'isInitialized': isInitialized,
                           'existingTasks': postTasks,
-                          ...posts.first,
+                          'combinedPosts': posts,
+                          if (posts.isNotEmpty) ...posts.first,
                         },
                       );
                     },
                   ),
+                  if (isInitialized)
+                    IconButton(
+                      icon: Icon(Icons.delete_outline, color: Colors.red.shade600),
+                      tooltip: 'Delete Combined Post (Make Inactive)',
+                      onPressed: () => _confirmDeleteCombinedWorkflow(group, provider, auth),
+                    ),
                 ],
               ),
               const SizedBox(height: 10),

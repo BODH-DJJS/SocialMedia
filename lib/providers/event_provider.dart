@@ -409,6 +409,44 @@ class EventProvider with ChangeNotifier {
     }
   }
 
+  Future<bool> deleteWorkflow({
+    required String postNo,
+    bool isCombined = false,
+    String? username,
+    String? role,
+  }) async {
+    try {
+      final res = await _apiService.postData({
+        'action': 'deleteWorkflow',
+        'postNo': postNo,
+        'isCombined': isCombined,
+      });
+
+      if (res['success'] == true) {
+        // Optimistically remove tasks locally
+        _events.removeWhere((t) => t.postNo == postNo);
+        if (isCombined) {
+          for (final p in _rawPosts) {
+            if (p['GroupID']?.toString() == postNo) {
+              p['GroupID'] = '';
+            }
+          }
+        }
+        notifyListeners();
+
+        // Refresh events in background
+        if (role != null && username != null) {
+          fetchEvents(role, username);
+        }
+        return true;
+      }
+      return false;
+    } catch (e) {
+      debugPrint('Error deleting workflow: $e');
+      return false;
+    }
+  }
+
   Future<Map<String, String>> fetchMediaFolders(String monthLink, String dateStr, String stage, {String venue = '', String postNo = ''}) async {
     // ── Layer 2: Flutter in-memory cache ──
     // Key combines postNo + dateStr to be unique per event

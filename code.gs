@@ -217,6 +217,15 @@ function doPost(e) {
       } finally {
         lock.releaseLock();
       }
+    } else if (action === 'deleteWorkflow') {
+      var lock = LockService.getScriptLock();
+      lock.waitLock(15000);
+      try {
+        var res = handleDeleteWorkflow(payload);
+        return respond(res);
+      } finally {
+        lock.releaseLock();
+      }
     } else {
       return respond({success: false, message: 'Unknown action'});
     }
@@ -1537,6 +1546,46 @@ function handleUngroupPost(payload) {
     }
   }
   return { success: false, message: 'Post not found' };
+}
+
+function handleDeleteWorkflow(payload) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var tasksSheet = ss.getSheetByName(TASKS_SHEET);
+  var postsSheet = ss.getSheetByName(POSTS_SHEET);
+  
+  var postNo = (payload.postNo || '').toString().trim();
+  var isCombined = payload.isCombined === true;
+  
+  if (!postNo) return { success: false, message: 'postNo required' };
+  
+  // 1. Delete all tasks for this postNo or groupId from TASKS_SHEET
+  var deletedCount = 0;
+  if (tasksSheet) {
+    var tasksData = tasksSheet.getDataRange().getValues();
+    for (var t = tasksData.length - 1; t >= 1; t--) {
+      var taskPostNo = tasksData[t][1] ? tasksData[t][1].toString().trim() : '';
+      if (taskPostNo === postNo) {
+        tasksSheet.deleteRow(t + 1);
+        deletedCount++;
+      }
+    }
+  }
+  
+  // 2. If combined, clear GroupID (col 38 / AL) for all posts that had this groupId
+  if (isCombined && postsSheet) {
+    var postsData = postsSheet.getDataRange().getValues();
+    for (var p = 1; p < postsData.length; p++) {
+      var currentGroupId = postsData[p][37] ? postsData[p][37].toString().trim() : '';
+      if (currentGroupId === postNo) {
+        postsSheet.getRange(p + 1, 38).setValue('');
+      }
+    }
+  }
+  
+  return { 
+    success: true, 
+    message: 'Workflow deleted (' + deletedCount + ' tasks removed). Post is now inactive.' 
+  };
 }
 
 function createTasksForPostV2(payload) {
