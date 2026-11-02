@@ -54,7 +54,23 @@ class BodhSocialMediaApp extends StatelessWidget {
         GoRoute(
           path: '/admin-assign',
           builder: (context, state) {
-            final postData = state.extra as Map<String, dynamic>;
+            Map<String, dynamic> postData = {};
+            if (state.extra is Map<String, dynamic>) {
+              postData = state.extra as Map<String, dynamic>;
+            } else {
+              final postNo = state.uri.queryParameters['postNo'] ?? '';
+              final provider = context.read<EventProvider>();
+              final foundPost = provider.rawPosts.firstWhere(
+                (p) => p['PostNo']?.toString() == postNo,
+                orElse: () => {'PostNo': postNo},
+              );
+              final postTasks = provider.events.where((t) => t.postNo == postNo).toList();
+              postData = {
+                ...foundPost,
+                'isInitialized': postTasks.isNotEmpty,
+                'existingTasks': postTasks,
+              };
+            }
             return AdminAssignScreen(postData: postData);
           },
         ),

@@ -93,7 +93,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                 controller: _workflowSearchController,
                 style: const TextStyle(color: Colors.white, fontSize: 13),
                 decoration: InputDecoration(
-                  hintText: 'Search Post No...',
+                  hintText: 'Search Post No or Branch...',
                   hintStyle: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 13),
                   prefixIcon: const Icon(Icons.search, size: 18, color: Colors.white70),
                   filled: true,
@@ -508,7 +508,7 @@ class _DashboardScreenState extends State<DashboardScreen>
     final wQuery = _workflowSearchController.text.trim().toLowerCase();
     final filteredEvents = wQuery.isEmpty
           ? provider.events.where((e) => e.status != 'Done').toList()
-          : provider.events.where((e) => e.postNo.toLowerCase().contains(wQuery) && e.status != 'Done').toList();
+          : provider.events.where((e) => (e.postNo.toLowerCase().contains(wQuery) || e.branch.toLowerCase().contains(wQuery)) && e.status != 'Done').toList();
 
     final contentStages = [
       (
@@ -1027,15 +1027,16 @@ class _DashboardScreenState extends State<DashboardScreen>
 
   // ── ALL POSTS ──
   Widget _buildAllPosts(EventProvider provider, AuthProvider auth) {
-    final filters = ['All', 'Not Started', 'In Pipeline', 'Done'];
+    final filters = ['All', 'Active', 'Inactive', 'Done'];
 
     List<Map<String, dynamic>> rawFiltered =
         provider.rawPosts.where((post) {
-          final postNo = post['PostNo']?.toString() ?? '';
+          final postNo = post['PostNo']?.toString().toLowerCase() ?? '';
+          final branch = post['Branch']?.toString().toLowerCase() ?? '';
 
-          // Search text filter
-          final searchQuery = _searchController.text.trim();
-          if (searchQuery.isNotEmpty && !postNo.contains(searchQuery)) {
+          // Search text filter by Post No OR Branch
+          final searchQuery = _searchController.text.trim().toLowerCase();
+          if (searchQuery.isNotEmpty && !postNo.contains(searchQuery) && !branch.contains(searchQuery)) {
             return false;
           }
 
@@ -1046,15 +1047,19 @@ class _DashboardScreenState extends State<DashboardScreen>
               provider.events
                   .where(
                     (t) =>
-                        t.postNo == postNo ||
+                        t.postNo == post['PostNo']?.toString() ||
                         (groupId.isNotEmpty && t.postNo == groupId),
                   )
                   .toList();
 
-          if (_postFilter == 'Not Started') return postTasks.isEmpty;
-          if (_postFilter == 'In Pipeline')
-            return postTasks.isNotEmpty &&
-                postTasks.any((t) => t.status != 'Done');
+          final isInitialized = postTasks.isNotEmpty;
+
+          if (_postFilter == 'Inactive' || _postFilter == 'Not Started') {
+            return !isInitialized;
+          }
+          if (_postFilter == 'Active' || _postFilter == 'In Pipeline') {
+            return isInitialized && postTasks.any((t) => t.status != 'Done');
+          }
           if (_postFilter == 'Done') {
             if (postTasks.isEmpty) return false;
             final hasReadyDone = postTasks.any(
@@ -1128,7 +1133,7 @@ class _DashboardScreenState extends State<DashboardScreen>
             child: TextField(
               controller: _searchController,
               decoration: InputDecoration(
-                hintText: 'Search by Post No...',
+                hintText: 'Search by Post No or Branch...',
                 prefixIcon: const Icon(Icons.search),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
@@ -1504,6 +1509,47 @@ class _DashboardScreenState extends State<DashboardScreen>
     );
   }
 
+  void _openInNewTab(String path) {
+    try {
+      final currentUri = Uri.parse(html.window.location.href);
+      final newUrl = currentUri.replace(
+        fragment: path,
+        queryParameters: {},
+      ).toString();
+      html.window.open(newUrl, '_blank');
+    } catch (_) {
+      html.window.open('#$path', '_blank');
+    }
+  }
+
+  void _showPostContextMenu(BuildContext context, TapDownDetails details, String postNo) {
+    final RenderBox overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
+    final position = RelativeRect.fromRect(
+      details.globalPosition & const Size(40, 40),
+      Offset.zero & overlay.size,
+    );
+
+    showMenu<String>(
+      context: context,
+      position: position,
+      items: [
+        const PopupMenuItem<String>(
+          value: 'open_new_tab',
+          child: Row(
+            children: [
+              Icon(Icons.open_in_new, size: 18, color: Colors.blue),
+              SizedBox(width: 10),
+              Text('Open in new tab', style: TextStyle(fontSize: 13)),
+            ],
+          ),
+        ),
+      ],
+    ).then((value) {
+      if (value == 'open_new_tab') {
+        _openInNewTab('/admin-assign?postNo=$postNo');
+      }
+    });
+  }
 
   void _showCombinedLifecycle(Map<String, dynamic> group, EventProvider provider) {
     final groupId = group['GroupID']?.toString() ?? '';
@@ -1751,6 +1797,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                       DataCell(
                         InkWell(
                           onTap: () => _showPostLifecycle(post, provider),
+                          onSecondaryTapDown: (details) => _showPostContextMenu(context, details, postNo),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
@@ -1898,6 +1945,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                       DataCell(
                         InkWell(
                           onTap: () => _showCombinedLifecycle(group, provider),
+                          onSecondaryTapDown: (details) => _showPostContextMenu(context, details, groupId),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
@@ -2030,8 +2078,11 @@ class _DashboardScreenState extends State<DashboardScreen>
               else
                 _selectedPosts.add(postNo);
             });
+          } else {
+            _showPostLifecycle(post, provider);
           }
         },
+        onSecondaryTapDown: (details) => _showPostContextMenu(context, details, postNo),
         borderRadius: BorderRadius.circular(16),
         child: Padding(
           padding: const EdgeInsets.all(16),
@@ -2296,6 +2347,7 @@ class _DashboardScreenState extends State<DashboardScreen>
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
         onTap: () => _showCombinedLifecycle(group, provider),
+        onSecondaryTapDown: (details) => _showPostContextMenu(context, details, groupId),
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(

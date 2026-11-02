@@ -1053,14 +1053,12 @@ function copyForwardDocument(rowIndex, headers, taskSheet) {
   var currentDocId = currentDocUrl.match(/[-\w]{25,}/);
   if (!currentDocId) return;
 
-  var currentStageLower = (currentStage || '').replace(/\s+/g, '').toLowerCase();
+  var currentNorm = normalizeStageName(currentStage);
 
   // If we just finished Cross check, share its doc link with Ready to Post
-  if (currentStageLower === 'crosscheck') {
-    var readyToPostLower = 'readytopost';
+  if (currentNorm === 'textcrosscheck') {
     for (var i = 1; i < data.length; i++) {
-      var iterStageLower = (data[i][stageCol] || '').replace(/\s+/g, '').toLowerCase();
-      if (data[i][postNoCol] == postNo && iterStageLower === readyToPostLower) {
+      if (data[i][postNoCol] == postNo && normalizeStageName(data[i][stageCol]) === 'readytopost') {
         taskSheet.getRange(i + 1, docLinkCol + 1).setValue(currentDocUrl);
         break;
       }
@@ -1068,19 +1066,18 @@ function copyForwardDocument(rowIndex, headers, taskSheet) {
     return; // Do not copy the document
   }
 
-  var stageOrder = ['Writing', 'Editing', 'Proofreading', 'Crosscheck'];
-  var stageOrderLower = ['writing', 'editing', 'proofreading', 'crosscheck'];
-  var currentIdx = stageOrderLower.indexOf(currentStageLower);
-  if (currentIdx === -1 || currentIdx >= stageOrderLower.length - 1) return;
+  var stageOrder = ['Writing', 'Editing', 'Proofreading', 'Text Crosscheck'];
+  var stageOrderNorm = ['writing', 'editing', 'proofreading', 'textcrosscheck'];
+  var currentIdx = stageOrderNorm.indexOf(currentNorm);
+  if (currentIdx === -1 || currentIdx >= stageOrderNorm.length - 1) return;
   var nextStage = stageOrder[currentIdx + 1];
+  var nextStageNorm = stageOrderNorm[currentIdx + 1];
 
   // Find the next stage row and get its document link
   var nextDocUrl = '';
   var nextRowIdx = -1;
-  var nextStageLower = nextStage.replace(/\s+/g, '').toLowerCase(); // Normalize
   for (var i = 1; i < data.length; i++) {
-    var iterStageLower = (data[i][stageCol] || '').replace(/\s+/g, '').toLowerCase();
-    if (data[i][postNoCol] == postNo && iterStageLower === nextStageLower) {
+    if (data[i][postNoCol] == postNo && normalizeStageName(data[i][stageCol]) === nextStageNorm) {
       nextDocUrl = data[i][docLinkCol] || '';
       nextRowIdx = i + 1;
       break;
@@ -1155,12 +1152,11 @@ function copyForwardDocument(rowIndex, headers, taskSheet) {
         // 2. Iterate backwards through all previous stages and copy their original docs
         for (var p = currentIdx - 1; p >= 0; p--) {
           var prevStageName = stageOrder[p];
-          var prevStageLower = prevStageName.toLowerCase();
+          var prevStageNorm = stageOrderNorm[p];
           var prevDocUrl = '';
           
           for (var r = 1; r < data.length; r++) {
-            var iterStageLower = (data[r][stageCol] || '').replace(/\s+/g, '').toLowerCase();
-            if (data[r][postNoCol] == postNo && iterStageLower === prevStageLower) {
+            if (data[r][postNoCol] == postNo && normalizeStageName(data[r][stageCol]) === prevStageNorm) {
               prevDocUrl = data[r][docLinkCol] || '';
               break;
             }
@@ -1691,23 +1687,43 @@ function createTasksForPostV2(payload) {
 
             // Create Google Docs for specific stages ONLY in the first post's folder
             if (gp === 0) {
-              var docStages = ['Writing', 'Editing', 'Proofreading', 'Crosscheck'];
+              var docStages = ['Writing', 'Editing', 'Proofreading', 'Text Crosscheck'];
               for (var d = 0; d < docStages.length; d++) {
                 var docStageName = docStages[d];
                 var docName = currPost[0] + ' - ' + docStageName;
                 var docFound = false;
                 var existingFiles = dateFolder.getFiles();
                 var foundDocUrl = '';
+                var targetHeadingText = 'Post: ' + currPost[0] + ' | ' + docStageName + ' Document';
+
                 while (existingFiles.hasNext()) {
                   var ef = existingFiles.next();
                   if (ef.getName().toLowerCase() === docName.toLowerCase() ||
                       ef.getName().toLowerCase() === (docName + '.docx').toLowerCase() ||
-                      ef.getName().toLowerCase() === docStageName.toLowerCase()) {
+                      ef.getName().toLowerCase() === docStageName.toLowerCase() ||
+                      (docStageName === 'Text Crosscheck' && (ef.getName().toLowerCase() === (currPost[0] + ' - crosscheck').toLowerCase() || ef.getName().toLowerCase() === 'crosscheck'))) {
                     foundDocUrl = ef.getUrl();
                     docFound = true;
+
+                    // Inspect existing doc and ensure heading exists
+                    try {
+                      var efDoc = DocumentApp.openById(ef.getId());
+                      var efBody = efDoc.getBody();
+                      var firstPara = efBody.getNumChildren() > 0 ? efBody.getChild(0) : null;
+                      var firstText = firstPara ? firstPara.asText().getText().trim() : '';
+
+                      // If empty or doesn't have the post/stage heading, insert it at top
+                      if (!firstText || firstText.indexOf('Post: ' + currPost[0]) === -1) {
+                        var insertedHeader = efBody.insertParagraph(0, targetHeadingText);
+                        insertedHeader.setHeading(DocumentApp.ParagraphHeading.HEADING1);
+                        efDoc.saveAndClose();
+                      }
+                    } catch (inspectErr) {}
+
                     break;
                   }
                 }
+
                 if (!docFound) {
                   try {
                     var newDoc = DocumentApp.create(docName);
@@ -1716,7 +1732,7 @@ function createTasksForPostV2(payload) {
                     newDocFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.EDIT);
                     var body = newDoc.getBody();
 
-                    body.appendParagraph('Post: ' + currPost[0] + ' | ' + docStageName + ' Document').setHeading(DocumentApp.ParagraphHeading.HEADING1);
+                    body.appendParagraph(targetHeadingText).setHeading(DocumentApp.ParagraphHeading.HEADING1);
                     newDoc.saveAndClose();
                     foundDocUrl = newDocFile.getUrl();
                   } catch (docErr) {
@@ -1724,7 +1740,7 @@ function createTasksForPostV2(payload) {
                   }
                 }
                 
-                docLinks[docStageName.toLowerCase()] = foundDocUrl;
+                docLinks[normalizeStageName(docStageName)] = foundDocUrl;
               }
             }
           } catch (driveErr) {
