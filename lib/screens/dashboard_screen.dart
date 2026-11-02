@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../providers/auth_provider.dart';
 import '../providers/event_provider.dart';
 import '../models/event.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -27,9 +28,25 @@ class _DashboardScreenState extends State<DashboardScreen>
   final TextEditingController _workflowSearchController = TextEditingController();
   String _myQueueFilter = 'All Tasks';
 
+  static const String _colWidthsPrefPrefix = 'dashboard_col_width_';
+  static const Map<String, double> _defaultColWidths = {
+    'postNo': 130.0,
+    'activityType': 130.0,
+    'branch': 150.0,
+    'venue': 200.0,
+    'theme': 220.0,
+    'date': 115.0,
+    'totalBen': 90.0,
+  };
+  final Map<String, double> _colWidths = Map.from(_defaultColWidths);
+
+  final ScrollController _horizontalScrollController = ScrollController();
+  final ScrollController _verticalScrollController = ScrollController();
+
   @override
   void initState() {
     super.initState();
+    _loadColumnWidths();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final auth = context.read<AuthProvider>();
       final provider = context.read<EventProvider>();
@@ -41,11 +58,48 @@ class _DashboardScreenState extends State<DashboardScreen>
     });
   }
 
+  Future<void> _loadColumnWidths() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      for (final key in _defaultColWidths.keys) {
+        final val = prefs.getDouble('$_colWidthsPrefPrefix$key');
+        if (val != null && val >= 50.0) {
+          _colWidths[key] = val;
+        }
+      }
+      if (mounted) setState(() {});
+    } catch (_) {}
+  }
+
+  Future<void> _saveColumnWidths() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      for (final entry in _colWidths.entries) {
+        await prefs.setDouble('$_colWidthsPrefPrefix${entry.key}', entry.value);
+      }
+    } catch (_) {}
+  }
+
+  void _resetColumnWidths() {
+    setState(() {
+      _colWidths.clear();
+      _colWidths.addAll(_defaultColWidths);
+    });
+    _saveColumnWidths();
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Column widths reset to default!'), duration: Duration(seconds: 2)),
+      );
+    }
+  }
+
   @override
   void dispose() {
     _refreshTimer?.cancel();
     _searchController.dispose();
     _workflowSearchController.dispose();
+    _horizontalScrollController.dispose();
+    _verticalScrollController.dispose();
     super.dispose();
   }
 
@@ -1218,9 +1272,30 @@ class _DashboardScreenState extends State<DashboardScreen>
                   ),
                 ),
                 const Spacer(),
+                if (_postTab == 'Individual') ...[
+                  Tooltip(
+                    message: 'Reset column widths to default',
+                    child: InkWell(
+                      onTap: _resetColumnWidths,
+                      borderRadius: BorderRadius.circular(4),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.tune, size: 13, color: Colors.blue.shade700),
+                            const SizedBox(width: 4),
+                            Text('Reset Columns', style: TextStyle(fontSize: 11, color: Colors.blue.shade700, fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                ],
                 Text(
-                  'Tap card for details',
-                  style: TextStyle(fontSize: 11, color: Colors.grey.shade400),
+                  'Drag column border to resize',
+                  style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
                 ),
               ],
             ),
@@ -1700,18 +1775,101 @@ class _DashboardScreenState extends State<DashboardScreen>
     );
   }
 
+  Widget _buildResizableHeader(
+    String title,
+    String key,
+    int colIndex,
+    Comparable Function(Map<String, dynamic> p) getSortField,
+  ) {
+    final width = _colWidths[key] ?? _defaultColWidths[key] ?? 120.0;
+    final isSorted = _sortColumnIndex == colIndex;
+
+    return SizedBox(
+      width: width,
+      child: Row(
+        children: [
+          Expanded(
+            child: InkWell(
+              onTap: () {
+                final newAsc = _sortColumnIndex == colIndex ? !_sortAscending : true;
+                _sort(getSortField, colIndex, newAsc);
+              },
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Flexible(
+                    child: Text(
+                      title,
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  if (isSorted) ...[
+                    const SizedBox(width: 4),
+                    Icon(
+                      _sortAscending ? Icons.arrow_upward : Icons.arrow_downward,
+                      size: 14,
+                      color: Colors.blue.shade700,
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          // Draggable column resize handle
+          MouseRegion(
+            cursor: SystemMouseCursors.resizeColumn,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onHorizontalDragUpdate: (details) {
+                setState(() {
+                  final cur = _colWidths[key] ?? _defaultColWidths[key] ?? 120.0;
+                  _colWidths[key] = (cur + details.delta.dx).clamp(60.0, 700.0);
+                });
+              },
+              onHorizontalDragEnd: (_) => _saveColumnWidths(),
+              onDoubleTap: () {
+                setState(() {
+                  _colWidths[key] = _defaultColWidths[key] ?? 120.0;
+                });
+                _saveColumnWidths();
+              },
+              child: Tooltip(
+                message: 'Drag to resize, double-click to reset',
+                child: Container(
+                  width: 14,
+                  height: 32,
+                  alignment: Alignment.center,
+                  child: Container(
+                    width: 2,
+                    height: 16,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade400,
+                      borderRadius: BorderRadius.circular(1),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildPostsTable(List<Map<String, dynamic>> posts, EventProvider provider) {
     if (_sortColumnIndex != null) {
       posts.sort((a, b) {
         dynamic valA;
         dynamic valB;
-                switch (_sortColumnIndex) {
+        switch (_sortColumnIndex) {
           case 0: valA = a['PostNo']; valB = b['PostNo']; break;
-          case 1: valA = a['Branch']; valB = b['Branch']; break;
-          case 2: valA = a['Venue']; valB = b['Venue']; break;
-          case 3: valA = a['Theme']; valB = b['Theme']; break;
-          case 4: valA = a['Date']; valB = b['Date']; break;
-          case 5: valA = a['TotalBeneficiary']; valB = b['TotalBeneficiary']; break;
+          case 1: valA = a['ActivityType']; valB = b['ActivityType']; break;
+          case 2: valA = a['Branch']; valB = b['Branch']; break;
+          case 3: valA = a['Venue']; valB = b['Venue']; break;
+          case 4: valA = a['Theme']; valB = b['Theme']; break;
+          case 5: valA = a['Date']; valB = b['Date']; break;
+          case 6: valA = a['TotalBeneficiary']; valB = b['TotalBeneficiary']; break;
         }
         if (_sortColumnIndex == 0) {
           final intA = int.tryParse(valA?.toString() ?? '') ?? 0;
@@ -1722,7 +1880,7 @@ class _DashboardScreenState extends State<DashboardScreen>
         valA = valA?.toString() ?? '';
         valB = valB?.toString() ?? '';
         
-        if (_sortColumnIndex == 5) {
+        if (_sortColumnIndex == 6) {
           final intA = int.tryParse(valA) ?? 0;
           final intB = int.tryParse(valB) ?? 0;
           return _sortAscending ? intA.compareTo(intB) : intB.compareTo(intA);
@@ -1733,119 +1891,192 @@ class _DashboardScreenState extends State<DashboardScreen>
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        return SingleChildScrollView(
-          scrollDirection: Axis.vertical,
+        return Scrollbar(
+          controller: _verticalScrollController,
+          thumbVisibility: true,
           child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: ConstrainedBox(
-              constraints: BoxConstraints(minWidth: constraints.maxWidth),
-              child: DataTable(
-                columnSpacing: 16,
-                sortColumnIndex: _sortColumnIndex,
-                sortAscending: _sortAscending,
-                headingRowColor: MaterialStateProperty.all(Colors.grey.shade100),
-                columns: [
-                  DataColumn(
-                    label: const Text('Post No'),
-                    numeric: true,
-                    onSort: (col, asc) => _sort((p) => int.tryParse(p['PostNo']?.toString() ?? '') ?? 0, col, asc),
-                  ),
-                  
-                  DataColumn(
-                    label: const Text('Branch'),
-                    onSort: (col, asc) => _sort((p) => p['Branch'] ?? '', col, asc),
-                  ),
-                  DataColumn(
-                    label: const Text('Venue'),
-                    onSort: (col, asc) => _sort((p) => p['Venue'] ?? '', col, asc),
-                  ),
-                  DataColumn(
-                    label: const Text('Theme'),
-                    onSort: (col, asc) => _sort((p) => p['Theme'] ?? '', col, asc),
-                  ),
-                  DataColumn(
-                    label: const Text('Date'),
-                    onSort: (col, asc) => _sort((p) => p['Date'] ?? '', col, asc),
-                  ),
-                  DataColumn(
-                    label: const Text('Total Ben.', style: TextStyle(fontWeight: FontWeight.bold)),
-                    numeric: true,
-                    onSort: (col, asc) => _sort((p) => int.tryParse(p['TotalBeneficiary']?.toString() ?? '0') ?? 0, col, asc),
-                  ),
-                ],
-                rows: posts.map((post) {
-                  final postNo = post['PostNo']?.toString() ?? '';
-                  final branch = post['Branch']?.toString() ?? '';
-                  final venue = post['Venue']?.toString() ?? '';
-                  final theme = post['Theme']?.toString() ?? '';
-                  final date = post['Date']?.toString() ?? '';
-                  final totalBen = post['TotalBeneficiary']?.toString() ?? '0';
-
-                  final isSelected = _isSelectionMode && _selectedPosts.contains(postNo);
-
-                  return DataRow(
-                    selected: isSelected,
-                    onSelectChanged: _isSelectionMode
-                        ? (selected) {
-                            setState(() {
-                              if (selected == true) _selectedPosts.add(postNo);
-                              else _selectedPosts.remove(postNo);
-                            });
-                          }
-                        : null,
-                    cells: [
-                      DataCell(
-                        InkWell(
-                          onTap: () => _showPostLifecycle(post, provider),
-                          onSecondaryTapDown: (details) => _showPostContextMenu(context, details, postNo),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text('#${postNo}', style: const TextStyle(color: Colors.blue, decoration: TextDecoration.underline, fontWeight: FontWeight.bold)),
-                              const SizedBox(width: 6),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: (provider.events.any((t) => t.postNo == postNo)) ? Colors.blue.shade50 : Colors.orange.shade50,
-                                  borderRadius: BorderRadius.circular(4),
-                                  border: Border.all(
-                                    color: (provider.events.any((t) => t.postNo == postNo)) ? Colors.blue.shade300 : Colors.orange.shade300,
-                                    width: 0.8,
-                                  ),
-                                ),
-                                child: Text(
-                                  (provider.events.any((t) => t.postNo == postNo)) ? 'Active' : 'Inactive',
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.bold,
-                                    color: (provider.events.any((t) => t.postNo == postNo)) ? Colors.blue.shade700 : Colors.orange.shade800,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
+            controller: _verticalScrollController,
+            scrollDirection: Axis.vertical,
+            child: Scrollbar(
+              controller: _horizontalScrollController,
+              thumbVisibility: true,
+              trackVisibility: true,
+              thickness: 10,
+              radius: const Radius.circular(5),
+              child: SingleChildScrollView(
+                controller: _horizontalScrollController,
+                scrollDirection: Axis.horizontal,
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 16),
+                  child: DataTable(
+                    columnSpacing: 10,
+                    horizontalMargin: 12,
+                    headingRowHeight: 40,
+                    dataRowMinHeight: 44,
+                    dataRowMaxHeight: 56,
+                    headingRowColor: WidgetStateProperty.all(Colors.grey.shade100),
+                    columns: [
+                      DataColumn(
+                        label: _buildResizableHeader(
+                          'Post No',
+                          'postNo',
+                          0,
+                          (p) => int.tryParse(p['PostNo']?.toString() ?? '') ?? 0,
                         ),
                       ),
-                      
-                      DataCell(Text(branch)),
-                      DataCell(Container(
-                        constraints: const BoxConstraints(maxWidth: 200),
-                        child: Text(venue, maxLines: 2, overflow: TextOverflow.ellipsis)
-                      )),
-                      DataCell(Container(
-                        constraints: const BoxConstraints(maxWidth: 200),
-                        child: Text(theme, maxLines: 2, overflow: TextOverflow.ellipsis)
-                      )),
-                      DataCell(Text(date)),
-                      DataCell(Text(totalBen)),
+                      DataColumn(
+                        label: _buildResizableHeader(
+                          'Activity Type',
+                          'activityType',
+                          1,
+                          (p) => p['ActivityType'] ?? '',
+                        ),
+                      ),
+                      DataColumn(
+                        label: _buildResizableHeader(
+                          'Branch',
+                          'branch',
+                          2,
+                          (p) => p['Branch'] ?? '',
+                        ),
+                      ),
+                      DataColumn(
+                        label: _buildResizableHeader(
+                          'Venue',
+                          'venue',
+                          3,
+                          (p) => p['Venue'] ?? '',
+                        ),
+                      ),
+                      DataColumn(
+                        label: _buildResizableHeader(
+                          'Theme',
+                          'theme',
+                          4,
+                          (p) => p['Theme'] ?? '',
+                        ),
+                      ),
+                      DataColumn(
+                        label: _buildResizableHeader(
+                          'Date',
+                          'date',
+                          5,
+                          (p) => p['Date'] ?? '',
+                        ),
+                      ),
+                      DataColumn(
+                        label: _buildResizableHeader(
+                          'Total Ben.',
+                          'totalBen',
+                          6,
+                          (p) => int.tryParse(p['TotalBeneficiary']?.toString() ?? '0') ?? 0,
+                        ),
+                      ),
                     ],
-                  );
-                }).toList(),
+                    rows: posts.map((post) {
+                      final postNo = post['PostNo']?.toString() ?? '';
+                      final activityType = post['ActivityType']?.toString() ?? '';
+                      final branch = post['Branch']?.toString() ?? '';
+                      final venue = post['Venue']?.toString() ?? '';
+                      final theme = post['Theme']?.toString() ?? '';
+                      final date = post['Date']?.toString() ?? '';
+                      final totalBen = post['TotalBeneficiary']?.toString() ?? '0';
+
+                      final isSelected = _isSelectionMode && _selectedPosts.contains(postNo);
+                      final isInitialized = provider.events.any((t) => t.postNo == postNo);
+
+                      return DataRow(
+                        selected: isSelected,
+                        onSelectChanged: _isSelectionMode
+                            ? (selected) {
+                                setState(() {
+                                  if (selected == true) _selectedPosts.add(postNo);
+                                  else _selectedPosts.remove(postNo);
+                                });
+                              }
+                            : null,
+                        cells: [
+                          DataCell(
+                            SizedBox(
+                              width: _colWidths['postNo'] ?? _defaultColWidths['postNo']!,
+                              child: InkWell(
+                                onTap: () => _showPostLifecycle(post, provider),
+                                onSecondaryTapDown: (details) => _showPostContextMenu(context, details, postNo),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text('#$postNo', style: const TextStyle(color: Colors.blue, decoration: TextDecoration.underline, fontWeight: FontWeight.bold)),
+                                    const SizedBox(width: 6),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: isInitialized ? Colors.blue.shade50 : Colors.orange.shade50,
+                                        borderRadius: BorderRadius.circular(4),
+                                        border: Border.all(
+                                          color: isInitialized ? Colors.blue.shade300 : Colors.orange.shade300,
+                                          width: 0.8,
+                                        ),
+                                      ),
+                                      child: Text(
+                                        isInitialized ? 'Active' : 'Inactive',
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.bold,
+                                          color: isInitialized ? Colors.blue.shade700 : Colors.orange.shade800,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                          DataCell(
+                            SizedBox(
+                              width: _colWidths['activityType'] ?? _defaultColWidths['activityType']!,
+                              child: Text(activityType.isEmpty ? '—' : activityType, overflow: TextOverflow.ellipsis),
+                            ),
+                          ),
+                          DataCell(
+                            SizedBox(
+                              width: _colWidths['branch'] ?? _defaultColWidths['branch']!,
+                              child: Text(branch, overflow: TextOverflow.ellipsis),
+                            ),
+                          ),
+                          DataCell(
+                            SizedBox(
+                              width: _colWidths['venue'] ?? _defaultColWidths['venue']!,
+                              child: Text(venue, maxLines: 2, overflow: TextOverflow.ellipsis),
+                            ),
+                          ),
+                          DataCell(
+                            SizedBox(
+                              width: _colWidths['theme'] ?? _defaultColWidths['theme']!,
+                              child: Text(theme, maxLines: 2, overflow: TextOverflow.ellipsis),
+                            ),
+                          ),
+                          DataCell(
+                            SizedBox(
+                              width: _colWidths['date'] ?? _defaultColWidths['date']!,
+                              child: Text(date, overflow: TextOverflow.ellipsis),
+                            ),
+                          ),
+                          DataCell(
+                            SizedBox(
+                              width: _colWidths['totalBen'] ?? _defaultColWidths['totalBen']!,
+                              child: Text(totalBen, overflow: TextOverflow.ellipsis),
+                            ),
+                          ),
+                        ],
+                      );
+                    }).toList(),
+                  ),
+                ),
               ),
             ),
           ),
         );
-      }
+      },
     );
   }
 
