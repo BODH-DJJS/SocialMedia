@@ -113,7 +113,7 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
             } else if (stage == 'proofreading') {
               _selectedProofreader = assignee;
               _proofreadingDue = dueDate;
-            } else if (stage == 'crosscheck') {
+            } else if (stage == 'crosscheck' || stage == 'textcrosscheck') {
               _selectedCrosscheck = assignee;
               _crosscheckDue = dueDate;
             } else if (stage == 'readytopost') {
@@ -145,9 +145,65 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
               _mediaFinalCheckDue = dueDate;
             }
           }
+
+          // Auto-populate default due dates for any unassigned due dates
+          _applyDefaultDueDates(force: false);
         });
 
       _fetchMediaLinks();
+    });
+  }
+
+  void _applyDefaultDueDates({DateTime? baseDate, bool force = false}) {
+    final now = baseDate ?? DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+
+    setState(() {
+      // Content Timeline: Writing (+3d) -> Editing (+3d) -> Proofreading (+2d) -> Text Crosscheck (+1d) -> Ready to Post (+1d) -> Photos Clean (+5d)
+      if (force || _writingDue == null) {
+        _writingDue = today.add(const Duration(days: 3));
+      }
+      if (force || _editingDue == null) {
+        _editingDue = (_writingDue ?? today).add(const Duration(days: 3));
+      }
+      if (force || _proofreadingDue == null) {
+        _proofreadingDue = (_editingDue ?? today).add(const Duration(days: 2));
+      }
+      if (force || _crosscheckDue == null) {
+        _crosscheckDue = (_proofreadingDue ?? today).add(const Duration(days: 1));
+      }
+      if (force || _uploaderDue == null) {
+        _uploaderDue = (_crosscheckDue ?? today).add(const Duration(days: 1));
+      }
+      if (force || _photosCleanDue == null) {
+        _photosCleanDue = (_uploaderDue ?? today).add(const Duration(days: 5));
+      }
+
+      // Thumbnail Timeline: Selection (+2d) -> Processing (+2d) -> Cross checking (+2d)
+      if (force || _thumbnailSelectDue == null) {
+        _thumbnailSelectDue = today.add(const Duration(days: 2));
+      }
+      if (force || _thumbnailProcessDue == null) {
+        _thumbnailProcessDue = (_thumbnailSelectDue ?? today).add(const Duration(days: 2));
+      }
+      if (force || _thumbnailCrosscheckDue == null) {
+        _thumbnailCrosscheckDue = (_thumbnailProcessDue ?? today).add(const Duration(days: 2));
+      }
+
+      // Media Timeline: Video / Photo Editing (+5d) -> Media Cross Check (+1d) -> Media Final Cross check (+1d aligned with Text Crosscheck)
+      if (force || _photoEditDue == null) {
+        _photoEditDue = today.add(const Duration(days: 5));
+      }
+      if (force || _videoEditDue == null) {
+        _videoEditDue = today.add(const Duration(days: 5));
+      }
+      final mediaBase = (_mediaMode.toLowerCase().contains('video') ? _videoEditDue : _photoEditDue) ?? today;
+      if (force || _mediaCheckDue == null) {
+        _mediaCheckDue = mediaBase.add(const Duration(days: 1));
+      }
+      if (force || _mediaFinalCheckDue == null) {
+        _mediaFinalCheckDue = (_proofreadingDue ?? today).add(const Duration(days: 1));
+      }
     });
   }
 
@@ -853,7 +909,25 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text('Content Assignments', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text('Content Assignments', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                              TextButton.icon(
+                                icon: const Icon(Icons.auto_awesome, size: 16),
+                                label: const Text('Auto-calculate Due Dates', style: TextStyle(fontSize: 12)),
+                                onPressed: () {
+                                  _applyDefaultDueDates(force: true);
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('Default due dates calculated from today!'),
+                                      duration: Duration(seconds: 2),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ],
+                          ),
                           const SizedBox(height: 20),
                           Row(
                             crossAxisAlignment: CrossAxisAlignment.start,

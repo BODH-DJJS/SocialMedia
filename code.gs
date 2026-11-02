@@ -1799,6 +1799,33 @@ function createTasksForPostV2(payload) {
     for (var k in dueDates) {
       if (normalizeStageName(k) === normalizedStage) { dueDate = dueDates[k]; break; }
     }
+    if (dueDate) {
+      dueDate = formatDate(dueDate);
+    } else {
+      var defaultOffsetDays = {
+        'writing': 3,
+        'editing': 6,
+        'proofreading': 8,
+        'textcrosscheck': 9,
+        'crosscheck': 9,
+        'readytopost': 10,
+        'photosclean': 15,
+        'thumbnailselection': 2,
+        'thumbnailprocessing': 4,
+        'thumbnailcrosschecking': 6,
+        'photoediting': 5,
+        'videoediting': 5,
+        'mediacrosscheck': 6,
+        'mediafinalcrosscheck': 9,
+        'mediafinalcrosschecking': 9
+      };
+      var offset = defaultOffsetDays[normalizedStage];
+      if (offset !== undefined) {
+        var d = new Date();
+        d.setDate(d.getDate() + offset);
+        dueDate = formatDate(d);
+      }
+    }
     
     var existingRowIdx = existingTaskRows[normalizedStage];
 
