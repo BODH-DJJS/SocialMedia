@@ -44145,7 +44145,7 @@ k.m(0,"Cross check",j)}j=p.dx
 if(j!=null)k.m(0,"Media Final Cross check",j)
 j=p.at
 if(j!=null)k.m(0,"Ready to Post",j)
-if(B.c.n(p.p3.toLowerCase(),"insta")){j=p.ax
+if(B.c.n(p.p3.toLowerCase(),"insta")&&B.c.n(p.R8.toLowerCase(),"video")){j=p.ax
 if(j!=null)k.m(0,"Thumbnail Selection",j)
 j=p.ay
 if(j!=null)k.m(0,"Thumbnail Processing",j)
@@ -44169,7 +44169,7 @@ i.m(0,"Cross check",p.fy.ia())}f=p.p2
 if(f!=null)i.m(0,"Media Final Cross check",f.ia())
 f=p.go
 if(f!=null)i.m(0,"Ready to Post",f.ia())
-if(B.c.n(p.p3.toLowerCase(),"insta")){f=p.id
+if(B.c.n(p.p3.toLowerCase(),"insta")&&B.c.n(p.R8.toLowerCase(),"video")){f=p.id
 if(f!=null)i.m(0,"Thumbnail Selection",f.ia())
 f=p.k1
 if(f!=null)i.m(0,"Thumbnail Processing",f.ia())
@@ -44298,7 +44298,7 @@ p=t.s
 o.push(A.ei(new A.aE(B.ag,A.bj(A.a([B.a0J,B.bD,h.F4("Publishing Platform",A.a(["WhatsApp","Instagram"],p),h.p3,new A.ao0(h)),B.ik,h.F4("Post Type",A.a(["Individual","Combined"],p),h.p4,new A.ao1(h)),B.ik,h.F4("Media Mode",A.a(["Photos","Video"],p),h.R8,new A.ao2(h)),B.ik,B.a0W,B.bQ,A.mG(!0,B.bi,!1,g,!0,B.C,g,A.pK(),h.RG,g,g,g,g,g,2,B.Ls,B.V,!0,g,!0,g,!1,g,B.bq,g,g,g,g,g,g,g,3,g,g,!1,"\u2022",g,g,g,g,g,!1,g,g,!1,g,!0,g,B.bK,g,g,B.be,B.b1,g,g,g,g,g,g,g,!0,B.ah,g,B.ca,g,g,g,g)],l),B.E,B.j,B.l),g),g,g,g,g,g))
 o.push(B.jE)
 p=A.a([A.aG(A.a([B.a10,A.al7(B.KR,B.a17,new A.anv(h,b7),g,g)],l),B.o,B.ev,B.l,g),B.b5,A.aG(A.a([A.bc(h.is("1. Writer","Writer",h.y,new A.anw(h)),2),B.aA,A.bc(h.ir(a9,h.dy,new A.anx(h)),1)],l),B.E,B.j,B.l,g),B.b5,A.aG(A.a([A.bc(h.is("2. Editor","Editor",h.z,new A.any(h)),2),B.aA,A.bc(h.ir(a9,h.fr,new A.anz(h)),1)],l),B.E,B.j,B.l,g),B.b5,A.aG(A.a([A.bc(h.is("3. Proofreader","Proofreader",h.Q,new A.anA(h)),2),B.aA,A.bc(h.ir(a9,h.fx,new A.anB(h)),1)],l),B.E,B.j,B.l,g),B.b5,A.aG(A.a([A.bc(h.is("4. Text Crosscheck","CrossChecker",h.as,new A.anC(h)),2),B.aA,A.bc(h.ir(a9,h.fy,new A.anD(h)),1)],l),B.E,B.j,B.l,g),B.b5,A.aG(A.a([A.bc(h.is("5. Ready to Post","Uploader",h.at,new A.anE(h)),2),B.aA,A.bc(h.ir(a9,h.go,new A.anG(h)),1)],l),B.E,B.j,B.l,g),B.BE,B.dw,B.bD,B.a0H],l)
-if(B.c.n(h.p3.toLowerCase(),"insta"))B.b.H(p,A.a([B.b5,A.aG(A.a([A.bc(h.is("1. Thumbnail Selection",b0,h.ax,new A.anH(h)),2),B.aA,A.bc(h.ir(a9,h.id,new A.anI(h)),1)],l),B.E,B.j,B.l,g),B.b5,A.aG(A.a([A.bc(h.is("2. Thumbnail Processing",b0,h.ay,new A.anJ(h)),2),B.aA,A.bc(h.ir(a9,h.k1,new A.anK(h)),1)],l),B.E,B.j,B.l,g),B.b5,A.aG(A.a([A.bc(h.is("3. Thumbnail Cross checking",b0,h.ch,new A.anL(h)),2),B.aA,A.bc(h.ir(a9,h.k2,new A.anM(h)),1)],l),B.E,B.j,B.l,g),B.RN],l))
+if(B.c.n(h.p3.toLowerCase(),"insta")&&B.c.n(h.R8.toLowerCase(),"video"))B.b.H(p,A.a([B.b5,A.aG(A.a([A.bc(h.is("1. Thumbnail Selection",b0,h.ax,new A.anH(h)),2),B.aA,A.bc(h.ir(a9,h.id,new A.anI(h)),1)],l),B.E,B.j,B.l,g),B.b5,A.aG(A.a([A.bc(h.is("2. Thumbnail Processing",b0,h.ay,new A.anJ(h)),2),B.aA,A.bc(h.ir(a9,h.k1,new A.anK(h)),1)],l),B.E,B.j,B.l,g),B.b5,A.aG(A.a([A.bc(h.is("3. Thumbnail Cross checking",b0,h.ch,new A.anL(h)),2),B.aA,A.bc(h.ir(a9,h.k2,new A.anM(h)),1)],l),B.E,B.j,B.l,g),B.RN],l))
 p.push(B.dT)
 p.push(A.aG(A.a([A.bc(h.is("Photos Clean (Post-Publishing)","Photo Selector",h.CW,new A.anN(h)),2),B.aA,A.bc(h.ir(a9,h.k3,new A.anO(h)),1)],l),B.E,B.j,B.l,g))
 if(B.c.n(h.R8.toLowerCase(),"photo"))B.b.H(p,A.a([B.b5,A.aG(A.a([A.bc(h.is("Photo Editing","Photo Editor",h.cx,new A.anP(h)),2),B.aA,A.bc(h.ir(a9,h.k4,new A.anR(h)),1)],l),B.E,B.j,B.l,g)],l))
