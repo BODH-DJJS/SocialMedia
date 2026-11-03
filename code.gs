@@ -121,6 +121,7 @@ function ensureSheets() {
   if (taskHeaders.indexOf('AllottedDate') === -1) tasksSheet.getRange(1, taskHeaders.length + 1).setValue('AllottedDate');
   if (taskHeaders.indexOf('DueDate') === -1) tasksSheet.getRange(1, taskHeaders.length + 2).setValue('DueDate');
   if (taskHeaders.indexOf('Notes') === -1) tasksSheet.getRange(1, taskHeaders.length + 3).setValue('Notes');
+  if (taskHeaders.indexOf('CanvaLink') === -1) tasksSheet.getRange(1, taskHeaders.length + 4).setValue('CanvaLink');
 }
 
 function formatDate(dateVal) {
@@ -797,12 +798,18 @@ function handleUpdateTask(payload) {
     } catch (e) {}
   }
 
-  for (var key in updates) {
+    for (var key in updates) {
     var colIndex = headers.indexOf(key);
     if (colIndex !== -1) {
       sheet.getRange(rowIndex, colIndex + 1).setValue(updates[key]);
     }
   }
+
+  // If CanvaLink was updated or if task is marked Done with CanvaLink present, forward it to downstream media stages
+  try {
+    copyForwardCanvaLink(rowIndex, headers, sheet, updates);
+  } catch (canvaErr) {}
+
   try {
     CacheService.getScriptCache().remove('all_posts');
   } catch(cErr) {}
@@ -1195,6 +1202,36 @@ function copyForwardDocument(rowIndex, headers, taskSheet) {
     var currentStatus = data[nextRowIdx - 1][statusCol];
     if (currentStatus === 'Waiting' || !currentStatus) {
       taskSheet.getRange(nextRowIdx, statusCol + 1).setValue('Ready');
+    }
+  }
+}
+
+function copyForwardCanvaLink(rowIndex, headers, taskSheet, updates) {
+  var data = taskSheet.getDataRange().getValues();
+  var row = data[rowIndex - 1];
+  var canvaLinkCol = headers.indexOf('CanvaLink');
+  var postNoCol = headers.indexOf('PostNo');
+  var stageCol = headers.indexOf('Stage');
+  
+  if (canvaLinkCol === -1) return;
+
+  var currentLink = (updates && updates['CanvaLink'] !== undefined) ? updates['CanvaLink'] : row[canvaLinkCol];
+  if (!currentLink) return;
+
+  var postNo = row[postNoCol];
+  var stageNorm = normalizeStageName(row[stageCol]);
+
+  // Forward Canva link from Photo/Video Editing or Media stages to downstream Media stages
+  var isSourceStage = (stageNorm === 'photoediting' || stageNorm === 'videoediting' || stageNorm === 'mediacrosscheck');
+  if (!isSourceStage) return;
+
+  var targetStages = ['mediacrosscheck', 'mediafinalcrosscheck', 'readytopost'];
+  for (var i = 1; i < data.length; i++) {
+    if (data[i][postNoCol] == postNo) {
+      var tStageNorm = normalizeStageName(data[i][stageCol]);
+      if (targetStages.indexOf(tStageNorm) !== -1) {
+        taskSheet.getRange(i + 1, canvaLinkCol + 1).setValue(currentLink);
+      }
     }
   }
 }
@@ -1805,6 +1842,7 @@ function createTasksForPostV2(payload) {
   var allottedDateCol = taskHeaders.indexOf('AllottedDate');
   var dueDateCol = taskHeaders.indexOf('DueDate');
   var notesCol = taskHeaders.indexOf('Notes');
+  var canvaLinkCol = taskHeaders.indexOf('CanvaLink');
   
   // ── Create task rows with admin-specified assignees ──
   var skipStages = ['photosselection', 'photoselection'];
@@ -1924,6 +1962,10 @@ function createTasksForPostV2(payload) {
       if (notesCol !== -1) {
         while (rowData.length <= notesCol) rowData.push('');
         rowData[notesCol] = '';
+      }
+      if (canvaLinkCol !== -1) {
+        while (rowData.length <= canvaLinkCol) rowData.push('');
+        rowData[canvaLinkCol] = '';
       }
       
       tasks.appendRow(rowData);

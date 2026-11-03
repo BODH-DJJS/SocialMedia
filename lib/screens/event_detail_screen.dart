@@ -29,12 +29,15 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   String _selectedFolderLink = '';
   String _editedFolderLink = '';
   String _writingDocLink = '';
+  String _canvaLink = '';
+  bool _isSavingCanva = false;
   List<Map<String, dynamic>> _photos = [];
   List<GroupMediaLink> _groupMediaLinks = [];
 
   @override
   void initState() {
     super.initState();
+    _canvaLink = widget.event.canvaLink;
     _fetchMediaLinks();
   }
 
@@ -115,6 +118,100 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     } catch (_) {}
 
     return '';
+  }
+
+  /// Get the best available Canva link (from current task or upstream media tasks)
+  String get _bestCanvaLink {
+    if (_canvaLink.trim().isNotEmpty && _canvaLink.trim().startsWith('http')) return _canvaLink.trim();
+    if (widget.event.canvaLink.trim().isNotEmpty && widget.event.canvaLink.trim().startsWith('http')) {
+      return widget.event.canvaLink.trim();
+    }
+    try {
+      final provider = context.read<EventProvider>();
+      final postTasks = provider.events.where((t) => t.postNo == widget.event.postNo).toList();
+      for (final targetStage in ['media cross check', 'mediacrosscheck', 'photo editing', 'video editing']) {
+        final match = postTasks.firstWhere(
+          (t) => t.stage.trim().toLowerCase() == targetStage && t.canvaLink.isNotEmpty && t.canvaLink.startsWith('http'),
+          orElse: () => Event.fromJson({}),
+        );
+        if (match.canvaLink.isNotEmpty && match.canvaLink.startsWith('http')) {
+          return match.canvaLink.trim();
+        }
+      }
+    } catch (_) {}
+    return '';
+  }
+
+  void _showEditCanvaDialog() {
+    final controller = TextEditingController(text: _bestCanvaLink);
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Row(
+          children: const [
+            Icon(Icons.palette_outlined, color: Color(0xFF00C4CC)),
+            SizedBox(width: 8),
+            Text('Canva Project Link'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Paste the Canva project or design link here. This link will be shared with the Media Cross-Checkers.',
+              style: TextStyle(fontSize: 13, color: Colors.black87),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: controller,
+              decoration: const InputDecoration(
+                hintText: 'https://www.canva.com/design/...',
+                labelText: 'Canva URL',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.link),
+              ),
+              keyboardType: TextInputType.url,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF00C4CC),
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () async {
+              final newLink = controller.text.trim();
+              Navigator.pop(ctx);
+              setState(() {
+                _canvaLink = newLink;
+                _isSavingCanva = true;
+              });
+              final provider = context.read<EventProvider>();
+              final err = await provider.updateEvent(widget.event, {'CanvaLink': newLink});
+              if (mounted) {
+                setState(() => _isSavingCanva = false);
+                if (err == null || err == 'timeout') {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Canva link saved successfully!'), backgroundColor: Colors.teal),
+                  );
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Failed to save Canva link: $err'), backgroundColor: Colors.red),
+                  );
+                }
+              }
+            },
+            child: const Text('Save Link'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _openLink(String url, {bool inApp = true}) async {
@@ -737,6 +834,117 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                     ),
                   ),
                   const SizedBox(height: 12),
+
+                  // Canva Link Section (Photo Editing, Video Editing, Media Cross Check, Media Final Cross check, Ready to Post)
+                  if (['photo editing', 'photoediting', 'video editing', 'videoediting', 'media cross check', 'mediacrosscheck', 'media final cross check', 'mediafinalcrosscheck', 'ready to post', 'readytopost'].contains(e.stage.trim().toLowerCase())) ...[
+                    Builder(
+                      builder: (context) {
+                        final canvaUrl = _bestCanvaLink;
+                        final isEditorRole = ['photo editing', 'photoediting', 'video editing', 'videoediting'].contains(e.stage.trim().toLowerCase());
+                        const canvaColor = Color(0xFF00C4CC);
+
+                        return Card(
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                            side: BorderSide(color: canvaColor.withOpacity(0.4), width: 1.5),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(6),
+                                      decoration: BoxDecoration(
+                                        color: canvaColor.withOpacity(0.12),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: const Icon(Icons.palette_outlined, color: canvaColor, size: 22),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    const Expanded(
+                                      child: Text(
+                                        'Canva Design / Project',
+                                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: canvaColor),
+                                      ),
+                                    ),
+                                    if (_isSavingCanva)
+                                      const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: canvaColor))
+                                    else
+                                      Builder(
+                                        builder: (ctx) {
+                                          final authRole = ctx.watch<AuthProvider>().role;
+                                          if (isEditorRole || authRole == 'Admin') {
+                                            return TextButton.icon(
+                                              icon: Icon(canvaUrl.isEmpty ? Icons.add_link : Icons.edit, size: 16),
+                                              label: Text(canvaUrl.isEmpty ? 'Add Link' : 'Edit Link'),
+                                              style: TextButton.styleFrom(foregroundColor: canvaColor),
+                                              onPressed: _showEditCanvaDialog,
+                                            );
+                                          }
+                                          return const SizedBox.shrink();
+                                        },
+                                      ),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  isEditorRole
+                                      ? 'Add your Canva project link below so reviewers and cross-checkers can view the design.'
+                                      : 'Open the Canva project created by the photo/video editors.',
+                                  style: const TextStyle(color: Colors.grey, fontSize: 12),
+                                ),
+                                const SizedBox(height: 12),
+                                if (canvaUrl.isNotEmpty) ...[
+                                  SizedBox(
+                                    width: double.infinity,
+                                    child: ElevatedButton.icon(
+                                      icon: const Icon(Icons.open_in_new),
+                                      label: const Text('Open Canva Project'),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: canvaColor,
+                                        foregroundColor: Colors.white,
+                                        padding: const EdgeInsets.symmetric(vertical: 12),
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                      ),
+                                      onPressed: () => _openLink(canvaUrl),
+                                    ),
+                                  ),
+                                ] else ...[
+                                  Container(
+                                    width: double.infinity,
+                                    padding: const EdgeInsets.all(12),
+                                    decoration: BoxDecoration(
+                                      color: Colors.grey.shade50,
+                                      borderRadius: BorderRadius.circular(10),
+                                      border: Border.all(color: Colors.grey.shade300),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        const Icon(Icons.info_outline, color: Colors.grey, size: 18),
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: Text(
+                                            isEditorRole
+                                                ? 'No Canva link added yet. Tap "Add Link" to attach your design.'
+                                                : 'No Canva link provided by the editor yet.',
+                                            style: const TextStyle(fontSize: 12, color: Colors.grey),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                  ],
 
                   // Content Document Card
                   if (['writing', 'editing', 'proofreading', 'crosscheck', 'textcrosscheck', 'cross check', 'text crosscheck', 'ready to post', 'readytopost'].contains(e.stage.trim().toLowerCase())) ...[

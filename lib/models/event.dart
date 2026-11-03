@@ -6,6 +6,7 @@ class Event {
   String assigneeName;
   String status;
   final String docLink;
+  final String canvaLink;
   final String allottedDate;
   final String dueDate;
   final String notes;
@@ -66,6 +67,7 @@ class Event {
     required this.assigneeName,
     required this.status,
     required this.docLink,
+    this.canvaLink = '',
     required this.allottedDate,
     required this.dueDate,
     required this.notes,
@@ -120,6 +122,7 @@ class Event {
       assigneeName: (json['AssigneeName'] ?? json['Assignee'])?.toString().trim() ?? '',
       status: json['Status']?.toString() ?? '',
       docLink: json['DocLink']?.toString() ?? '',
+      canvaLink: json['CanvaLink']?.toString() ?? '',
       allottedDate: json['AllottedDate']?.toString() ?? '',
       dueDate: json['DueDate']?.toString() ?? '',
       notes: json['Notes']?.toString() ?? '',
