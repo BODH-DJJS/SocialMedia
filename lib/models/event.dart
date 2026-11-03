@@ -6,7 +6,7 @@ class Event {
   String assigneeName;
   String status;
   final String docLink;
-  final String canvaLink;
+  String canvaLink;
   final String allottedDate;
   final String dueDate;
   final String notes;

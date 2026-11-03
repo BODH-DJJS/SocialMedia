@@ -182,10 +182,25 @@ class EventProvider with ChangeNotifier {
   Future<String?> updateEvent(Event event, Map<String, dynamic> updates) async {
     // Optimistic UI update
     final originalStatus = event.status;
+    final originalCanvaLink = event.canvaLink;
     if (updates.containsKey('Status')) {
       event.status = updates['Status'];
       notifyListeners();
     }
+    if (updates.containsKey('CanvaLink')) {
+      event.canvaLink = updates['CanvaLink']?.toString() ?? '';
+      // Also update sibling downstream media tasks of the same post in local cache
+      final postTasks = _events.where((t) => t.postNo == event.postNo);
+      for (final t in postTasks) {
+        final s = t.stage.toLowerCase().replaceAll(' ', '');
+        if (s == 'mediacrosscheck' || s == 'mediafinalcrosscheck' || s == 'readytopost') {
+          t.canvaLink = event.canvaLink;
+        }
+      }
+      notifyListeners();
+    }
+
+    invalidateCache();
 
     try {
       final response = await _apiService.postData({
@@ -205,8 +220,11 @@ class EventProvider with ChangeNotifier {
       // Revert optimistic update on error
       if (updates.containsKey('Status')) {
         event.status = originalStatus;
-        notifyListeners();
       }
+      if (updates.containsKey('CanvaLink')) {
+        event.canvaLink = originalCanvaLink;
+      }
+      notifyListeners();
       return response['message']?.toString() ?? 'Unknown backend error';
     } catch (e) {
       debugPrint('Error updating event: $e');

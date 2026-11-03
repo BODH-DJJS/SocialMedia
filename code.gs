@@ -6,13 +6,6 @@ var BRANCH_SPOC_SHEET = 'Branch SPOC';
 
 function ensureSheets() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var sheetNames = ss.getSheets().map(function(s) { return s.getName(); });
-  if (sheetNames.indexOf(USERS_SHEET) !== -1 && 
-      sheetNames.indexOf(PIPELINE_SHEET) !== -1 && 
-      sheetNames.indexOf(TASKS_SHEET) !== -1 && 
-      sheetNames.indexOf(BRANCH_SPOC_SHEET) !== -1) {
-    return;
-  }
   
   if (!ss.getSheetByName(USERS_SHEET)) {
     var users = ss.insertSheet(USERS_SHEET);
@@ -798,8 +791,13 @@ function handleUpdateTask(payload) {
     } catch (e) {}
   }
 
-    for (var key in updates) {
+  for (var key in updates) {
     var colIndex = headers.indexOf(key);
+    if (colIndex === -1 && key === 'CanvaLink') {
+      colIndex = headers.length;
+      sheet.getRange(1, colIndex + 1).setValue('CanvaLink');
+      headers.push('CanvaLink');
+    }
     if (colIndex !== -1) {
       sheet.getRange(rowIndex, colIndex + 1).setValue(updates[key]);
     }
