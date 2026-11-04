@@ -1693,6 +1693,14 @@ class _DashboardScreenState extends State<DashboardScreen>
                   _confirmDeletePostWorkflow(post, provider, context.read<AuthProvider>());
                 },
               ),
+            TextButton.icon(
+              icon: const Icon(Icons.open_in_new, size: 16),
+              label: const Text('Open in new tab'),
+              onPressed: () {
+                Navigator.pop(ctx);
+                _openInNewTab('/admin-assign?postNo=$postNo');
+              },
+            ),
             TextButton(
               onPressed: () => Navigator.pop(ctx), 
               child: const Text('Close'),
@@ -2280,6 +2288,14 @@ class _DashboardScreenState extends State<DashboardScreen>
                 _showEditCombinedGroupDialog(group, provider, context.read<AuthProvider>());
               },
             ),
+            TextButton.icon(
+              icon: const Icon(Icons.open_in_new, size: 16),
+              label: const Text('Open in new tab'),
+              onPressed: () {
+                Navigator.pop(ctx);
+                _openInNewTab('/admin-assign?postNo=$groupId&isCombined=true');
+              },
+            ),
             TextButton(
               onPressed: () => Navigator.pop(ctx),
               child: const Text('Close'),
@@ -2552,6 +2568,17 @@ class _DashboardScreenState extends State<DashboardScreen>
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
                                     Text('#$postNo', style: const TextStyle(color: Colors.blue, decoration: TextDecoration.underline, fontWeight: FontWeight.bold)),
+                                    const SizedBox(width: 4),
+                                    Tooltip(
+                                      message: 'Open in new tab',
+                                      child: InkWell(
+                                        onTap: () => _openInNewTab('/admin-assign?postNo=$postNo'),
+                                        child: Padding(
+                                          padding: const EdgeInsets.all(2),
+                                          child: Icon(Icons.open_in_new, size: 13, color: Colors.blue.shade700),
+                                        ),
+                                      ),
+                                    ),
                                     const SizedBox(width: 6),
                                     _buildWorkflowStatusBadge(_getPostWorkflowStatus(postTasks)),
                                   ],
@@ -2779,6 +2806,17 @@ class _DashboardScreenState extends State<DashboardScreen>
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Text(groupId, style: const TextStyle(color: Colors.purple, decoration: TextDecoration.underline, fontWeight: FontWeight.bold)),
+                              const SizedBox(width: 4),
+                              Tooltip(
+                                message: 'Open in new tab',
+                                child: InkWell(
+                                  onTap: () => _openInNewTab('/admin-assign?postNo=$groupId&isCombined=true'),
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(2),
+                                    child: Icon(Icons.open_in_new, size: 13, color: Colors.purple.shade700),
+                                  ),
+                                ),
+                              ),
                               const SizedBox(width: 6),
                               _buildWorkflowStatusBadge(groupStatus),
                             ],
