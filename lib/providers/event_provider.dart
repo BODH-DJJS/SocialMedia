@@ -378,6 +378,17 @@ class EventProvider with ChangeNotifier {
         'groupId': groupId,
       });
       if (response['success'] == true) {
+        for (var p in _rawPosts) {
+          final pNo = p['PostNo']?.toString() ?? '';
+          if (postNos.contains(pNo)) {
+            p['GroupID'] = groupId;
+            final curStatus = p['PostStatus']?.toString().trim().toLowerCase() ?? '';
+            if (curStatus == 'data unavailable' || curStatus == 'dataunavailable') {
+              p['PostStatus'] = '';
+            }
+          }
+        }
+        notifyListeners();
         return true;
       }
     } catch (e) {

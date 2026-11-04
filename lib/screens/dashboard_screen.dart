@@ -1127,7 +1127,10 @@ class _DashboardScreenState extends State<DashboardScreen>
             return postStatus == 'Data Unavailable';
           }
           if (_postFilter == 'Inactive') {
-            return postStatus == 'Inactive';
+            return postStatus == 'Inactive' || 
+                   postStatus == 'Data Unavailable' || 
+                   postStatus == 'Later' || 
+                   postStatus == 'Skip';
           }
           if (_postFilter == 'Active') {
             return postStatus == 'Active';

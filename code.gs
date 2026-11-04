@@ -1658,6 +1658,11 @@ function handleGroupPosts(payload) {
   for (var i = 1; i < data.length; i++) {
     if (postNos.indexOf(data[i][0].toString()) !== -1 || postNos.indexOf(Number(data[i][0])) !== -1) {
       sheet.getRange(i + 1, 38).setValue(groupId); // Column AL (38)
+      // If post was marked 'Data Unavailable', reset PostStatus so it becomes clean/active under group
+      var curStatus = (data[i][40] || '').toString().trim().toLowerCase();
+      if (curStatus === 'data unavailable' || curStatus === 'dataunavailable') {
+        sheet.getRange(i + 1, 41).setValue(''); // Column AO (41) PostStatus
+      }
       updated++;
     }
   }
