@@ -1082,7 +1082,7 @@ class _DashboardScreenState extends State<DashboardScreen>
 
   // ── ALL POSTS ──
   Widget _buildAllPosts(EventProvider provider, AuthProvider auth) {
-    final filters = ['All', 'Active', 'Inactive', 'Done'];
+    final filters = ['All', 'Active', 'Inactive', 'Posted', 'Clean', 'Completed'];
 
     List<Map<String, dynamic>> rawFiltered =
         provider.rawPosts.where((post) {
@@ -1107,21 +1107,22 @@ class _DashboardScreenState extends State<DashboardScreen>
                   )
                   .toList();
 
-          final isInitialized = postTasks.isNotEmpty;
+          final postStatus = _getPostWorkflowStatus(postTasks);
 
-          if (_postFilter == 'Inactive' || _postFilter == 'Not Started') {
-            return !isInitialized;
+          if (_postFilter == 'Inactive') {
+            return postStatus == 'Inactive';
           }
-          if (_postFilter == 'Active' || _postFilter == 'In Pipeline') {
-            return isInitialized && postTasks.any((t) => t.status != 'Done');
+          if (_postFilter == 'Active') {
+            return postStatus == 'Active';
           }
-          if (_postFilter == 'Done') {
-            if (postTasks.isEmpty) return false;
-            final hasReadyDone = postTasks.any(
-              (t) => t.stage == 'Ready to Post' && t.status == 'Done',
-            );
-            if (hasReadyDone) return true;
-            return postTasks.every((t) => t.status == 'Done');
+          if (_postFilter == 'Posted') {
+            return postStatus == 'Posted' || postStatus == 'Clean' || postStatus == 'Completed';
+          }
+          if (_postFilter == 'Clean') {
+            return postStatus == 'Clean';
+          }
+          if (_postFilter == 'Completed') {
+            return postStatus == 'Completed';
           }
           return true;
         }).toList();
@@ -1323,16 +1324,23 @@ class _DashboardScreenState extends State<DashboardScreen>
                           ))
                     : (combinedGroups.isEmpty
                         ? const Center(child: Text('No combined posts found.'))
-                        : ListView.builder(
-                          padding: const EdgeInsets.symmetric(horizontal: 12),
-                          itemCount: combinedGroups.length,
-                          itemBuilder:
-                              (context, index) => _buildCombinedCard(
-                                combinedGroups[index],
-                                provider,
-                                auth,
-                              ),
-                        )),
+                        : LayoutBuilder(
+                            builder: (context, constraints) {
+                              if (constraints.maxWidth < 800) {
+                                return ListView.builder(
+                                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                                  itemCount: combinedGroups.length,
+                                  itemBuilder:
+                                      (context, index) => _buildCombinedCard(
+                                        combinedGroups[index],
+                                        provider,
+                                        auth,
+                                      ),
+                                );
+                              }
+                              return _buildCombinedPostsTable(combinedGroups, provider);
+                            },
+                          )),
           ),
         ],
       ),
@@ -1340,18 +1348,56 @@ class _DashboardScreenState extends State<DashboardScreen>
   }
 
   void _groupSelectedPosts() {
-    final ctrl = TextEditingController();
+    final provider = context.read<EventProvider>();
+    final selectedList = _selectedPosts.toList();
+    // Sort selected post numbers
+    selectedList.sort((a, b) {
+      final intA = int.tryParse(a) ?? 0;
+      final intB = int.tryParse(b) ?? 0;
+      return intA.compareTo(intB);
+    });
+
+    // Detect branch from selected posts
+    String branch = '';
+    for (final pNo in selectedList) {
+      final p = provider.rawPosts.firstWhere(
+        (rp) => rp['PostNo']?.toString() == pNo,
+        orElse: () => <String, dynamic>{},
+      );
+      if (p['Branch'] != null && p['Branch'].toString().trim().isNotEmpty) {
+        branch = p['Branch'].toString().trim();
+        break;
+      }
+    }
+    if (branch.isEmpty) branch = 'Group';
+
+    // Auto-generate default name: e.g. "Darbhanga Events (234, 256, 278)"
+    final defaultGroupName = '$branch Events (${selectedList.join(', ')})';
+    final ctrl = TextEditingController(text: defaultGroupName);
+
     showDialog(
       context: context,
       builder:
           (ctx) => AlertDialog(
             title: const Text('Group Posts'),
-            content: TextField(
-              controller: ctrl,
-              decoration: const InputDecoration(
-                labelText: 'Group ID (e.g., GRP-XYZ)',
-                hintText: 'Enter a unique name',
-              ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Name this combined group. The name is auto-generated based on the branch and post numbers, and you can edit it anytime.',
+                  style: TextStyle(fontSize: 13, color: Colors.black87),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: ctrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Group Name / ID',
+                    hintText: 'e.g., Darbhanga Events (234, 256)',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ],
             ),
             actions: [
               TextButton(
@@ -1360,11 +1406,11 @@ class _DashboardScreenState extends State<DashboardScreen>
               ),
               ElevatedButton(
                 onPressed: () async {
-                  if (ctrl.text.isEmpty) return;
-                  final groupId = ctrl.text;
+                  if (ctrl.text.trim().isEmpty) return;
+                  final groupId = ctrl.text.trim();
                   final success = await context
                       .read<EventProvider>()
-                      .groupPosts(_selectedPosts.toList(), groupId);
+                      .groupPosts(selectedList, groupId);
                   if (success && mounted) {
                     setState(() {
                       _isSelectionMode = false;
@@ -1377,10 +1423,89 @@ class _DashboardScreenState extends State<DashboardScreen>
                     Navigator.pop(ctx);
                   }
                 },
-                child: const Text('Group'),
+                child: const Text('Create Group'),
               ),
             ],
           ),
+    );
+  }
+
+  String _getPostWorkflowStatus(List<Event> postTasks) {
+    if (postTasks.isEmpty) return 'Inactive';
+
+    final readyTask = postTasks.where((t) {
+      final s = t.stage.trim().toLowerCase();
+      return s == 'ready to post' || s == 'ready topost' || s == 'ready';
+    }).firstOrNull;
+    final isReadyDone = readyTask != null && readyTask.status.trim().toLowerCase() == 'done';
+
+    final cleanTask = postTasks.where((t) {
+      final s = t.stage.trim().toLowerCase();
+      return s.contains('photos clean') || s.contains('photo clean') || s.contains('photosclean');
+    }).firstOrNull;
+    final isCleanDone = cleanTask != null && cleanTask.status.trim().toLowerCase() == 'done';
+
+    if (isReadyDone && isCleanDone) {
+      return 'Completed';
+    }
+    if (isReadyDone && !isCleanDone) {
+      return 'Clean';
+    }
+    if (isReadyDone) {
+      return 'Posted';
+    }
+    return 'Active';
+  }
+
+  Widget _buildWorkflowStatusBadge(String status) {
+    Color bg;
+    Color border;
+    Color text;
+
+    switch (status) {
+      case 'Completed':
+        bg = Colors.green.shade50;
+        border = Colors.green.shade400;
+        text = Colors.green.shade800;
+        break;
+      case 'Clean':
+        bg = Colors.amber.shade50;
+        border = Colors.amber.shade500;
+        text = Colors.amber.shade900;
+        break;
+      case 'Posted':
+        bg = Colors.teal.shade50;
+        border = Colors.teal.shade400;
+        text = Colors.teal.shade800;
+        break;
+      case 'Active':
+        bg = Colors.blue.shade50;
+        border = Colors.blue.shade400;
+        text = Colors.blue.shade700;
+        break;
+      case 'Inactive':
+      default:
+        bg = Colors.orange.shade50;
+        border = Colors.orange.shade300;
+        text = Colors.orange.shade800;
+        break;
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: border, width: 0.8),
+      ),
+      child: Text(
+        status,
+        style: TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.bold,
+          color: text,
+        ),
+      ),
     );
   }
 
@@ -1689,6 +1814,213 @@ class _DashboardScreenState extends State<DashboardScreen>
     );
   }
 
+  void _showEditCombinedGroupDialog(Map<String, dynamic> group, EventProvider provider, AuthProvider auth) {
+    final oldGroupId = group['GroupID']?.toString() ?? '';
+    final List<Map<String, dynamic>> currentPosts = (group['Posts'] as List<dynamic>?)?.cast<Map<String, dynamic>>() ?? [];
+    final currentPostNos = currentPosts.map((p) => p['PostNo']?.toString() ?? '').where((n) => n.isNotEmpty).toSet();
+
+    // Available unassigned posts or other posts that can be added to this group
+    final availableIndividualPosts = provider.rawPosts.where((p) {
+      final gId = p['GroupID']?.toString() ?? '';
+      final pNo = p['PostNo']?.toString() ?? '';
+      return gId.isEmpty && !currentPostNos.contains(pNo);
+    }).toList();
+
+    final nameController = TextEditingController(text: oldGroupId);
+    final selectedToAdd = <String>{};
+    final selectedToRemove = <String>{};
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          final effectiveCount = currentPosts.length - selectedToRemove.length + selectedToAdd.length;
+
+          return AlertDialog(
+            title: Row(
+              children: [
+                Icon(Icons.tune, color: Colors.purple.shade700),
+                const SizedBox(width: 8),
+                const Text('Edit Combined Group', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+              ],
+            ),
+            content: SizedBox(
+              width: 520,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Group Name', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                    const SizedBox(height: 6),
+                    TextField(
+                      controller: nameController,
+                      decoration: const InputDecoration(
+                        labelText: 'Group Name / ID',
+                        border: OutlineInputBorder(),
+                        prefixIcon: Icon(Icons.label_outline),
+                        helperText: 'You can change this name anytime',
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Section 1: Current Posts (Option to remove)
+                    Row(
+                      children: [
+                        const Text('Current Posts in Group', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                        const Spacer(),
+                        Text(
+                          '$effectiveCount post${effectiveCount == 1 ? '' : 's'}',
+                          style: TextStyle(fontSize: 12, color: Colors.purple.shade700, fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      constraints: const BoxConstraints(maxHeight: 180),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.grey.shade300),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: currentPosts.isEmpty
+                          ? const Center(child: Padding(padding: EdgeInsets.all(12), child: Text('No posts in this group.')))
+                          : ListView.separated(
+                              shrinkWrap: true,
+                              itemCount: currentPosts.length,
+                              separatorBuilder: (_, __) => const Divider(height: 1),
+                              itemBuilder: (ctx, idx) {
+                                final p = currentPosts[idx];
+                                final pNo = p['PostNo']?.toString() ?? '';
+                                final pTheme = p['Theme']?.toString() ?? '';
+                                final pBranch = p['Branch']?.toString() ?? '';
+                                final isMarkedForRemoval = selectedToRemove.contains(pNo);
+
+                                return ListTile(
+                                  dense: true,
+                                  title: Text(
+                                    '#$pNo - $pTheme ($pBranch)',
+                                    style: TextStyle(
+                                      decoration: isMarkedForRemoval ? TextDecoration.lineThrough : null,
+                                      color: isMarkedForRemoval ? Colors.red : null,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                  trailing: IconButton(
+                                    icon: Icon(
+                                      isMarkedForRemoval ? Icons.undo : Icons.remove_circle_outline,
+                                      color: isMarkedForRemoval ? Colors.green : Colors.red,
+                                      size: 20,
+                                    ),
+                                    tooltip: isMarkedForRemoval ? 'Keep in group' : 'Remove from group',
+                                    onPressed: () {
+                                      setDialogState(() {
+                                        if (isMarkedForRemoval) {
+                                          selectedToRemove.remove(pNo);
+                                        } else {
+                                          selectedToRemove.add(pNo);
+                                        }
+                                      });
+                                    },
+                                  ),
+                                );
+                              },
+                            ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Section 2: Add More Individual Posts
+                    const Text('Add More Posts to this Group', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                    const SizedBox(height: 8),
+                    Container(
+                      constraints: const BoxConstraints(maxHeight: 180),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.grey.shade300),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: availableIndividualPosts.isEmpty
+                          ? const Center(child: Padding(padding: EdgeInsets.all(12), child: Text('No available individual posts to add.', style: TextStyle(fontSize: 12, color: Colors.grey))))
+                          : ListView.separated(
+                              shrinkWrap: true,
+                              itemCount: availableIndividualPosts.length,
+                              separatorBuilder: (_, __) => const Divider(height: 1),
+                              itemBuilder: (ctx, idx) {
+                                final p = availableIndividualPosts[idx];
+                                final pNo = p['PostNo']?.toString() ?? '';
+                                final pTheme = p['Theme']?.toString() ?? '';
+                                final pBranch = p['Branch']?.toString() ?? '';
+                                final isSelected = selectedToAdd.contains(pNo);
+
+                                return CheckboxListTile(
+                                  dense: true,
+                                  value: isSelected,
+                                  title: Text('#$pNo - $pTheme ($pBranch)', style: const TextStyle(fontSize: 13)),
+                                  onChanged: (val) {
+                                    setDialogState(() {
+                                      if (val == true) {
+                                        selectedToAdd.add(pNo);
+                                      } else {
+                                        selectedToAdd.remove(pNo);
+                                      }
+                                    });
+                                  },
+                                );
+                              },
+                            ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.purple.shade700,
+                  foregroundColor: Colors.white,
+                ),
+                onPressed: () async {
+                  final newName = nameController.text.trim();
+                  if (newName.isEmpty) return;
+
+                  Navigator.pop(ctx);
+                  final messenger = ScaffoldMessenger.of(context);
+
+                  // 1. Process removal of posts
+                  for (final pNo in selectedToRemove) {
+                    await provider.ungroupPost(pNo);
+                  }
+
+                  // 2. Process adding of new posts
+                  if (selectedToAdd.isNotEmpty) {
+                    await provider.groupPosts(selectedToAdd.toList(), oldGroupId);
+                  }
+
+                  // 3. Process renaming of group if changed
+                  if (newName != oldGroupId) {
+                    await provider.renameGroup(oldGroupId, newName);
+                  }
+
+                  // Refresh data
+                  await provider.fetchEvents(auth.role, auth.username);
+                  messenger.showSnackBar(
+                    const SnackBar(
+                      content: Text('Combined group updated successfully!'),
+                      backgroundColor: Colors.teal,
+                    ),
+                  );
+                },
+                child: const Text('Save Changes'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
   void _openInNewTab(String path) {
     try {
       final currentUri = Uri.parse(html.window.location.href);
@@ -1744,6 +2076,17 @@ class _DashboardScreenState extends State<DashboardScreen>
             ],
           ),
         ),
+        if (isCombined)
+          const PopupMenuItem<String>(
+            value: 'edit_group',
+            child: Row(
+              children: [
+                Icon(Icons.tune, size: 18, color: Colors.purple),
+                SizedBox(width: 10),
+                Text('Edit Group (Add/Remove Posts)', style: TextStyle(fontSize: 13, color: Colors.purple)),
+              ],
+            ),
+          ),
         if (isInitialized)
           const PopupMenuItem<String>(
             value: 'delete_workflow',
@@ -1758,7 +2101,8 @@ class _DashboardScreenState extends State<DashboardScreen>
       ],
     ).then((value) {
       if (value == 'open_new_tab') {
-        _openInNewTab('/admin-assign?postNo=$postNo');
+        final combinedQuery = isCombined ? '&isCombined=true' : '';
+        _openInNewTab('/admin-assign?postNo=$postNo$combinedQuery');
       } else if (value == 'edit_workflow') {
         if (isCombined && group != null) {
           final List<Map<String, dynamic>> posts = (group['Posts'] as List<dynamic>?)?.cast<Map<String, dynamic>>() ?? [];
@@ -1778,6 +2122,10 @@ class _DashboardScreenState extends State<DashboardScreen>
           });
         } else {
           _openInNewTab('/admin-assign?postNo=$postNo');
+        }
+      } else if (value == 'edit_group') {
+        if (isCombined && group != null) {
+          _showEditCombinedGroupDialog(group, provider, auth);
         }
       } else if (value == 'delete_workflow') {
         if (isCombined && group != null) {
@@ -1924,6 +2272,14 @@ class _DashboardScreenState extends State<DashboardScreen>
                   _confirmDeleteCombinedWorkflow(group, provider, context.read<AuthProvider>());
                 },
               ),
+            TextButton.icon(
+              icon: const Icon(Icons.edit, size: 18, color: Colors.purple),
+              label: const Text('Edit Group (Posts & Name)', style: TextStyle(color: Colors.purple)),
+              onPressed: () {
+                Navigator.pop(ctx);
+                _showEditCombinedGroupDialog(group, provider, context.read<AuthProvider>());
+              },
+            ),
             TextButton(
               onPressed: () => Navigator.pop(ctx),
               child: const Text('Close'),
@@ -2197,25 +2553,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                                   children: [
                                     Text('#$postNo', style: const TextStyle(color: Colors.blue, decoration: TextDecoration.underline, fontWeight: FontWeight.bold)),
                                     const SizedBox(width: 6),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                                      decoration: BoxDecoration(
-                                        color: isInitialized ? Colors.blue.shade50 : Colors.orange.shade50,
-                                        borderRadius: BorderRadius.circular(4),
-                                        border: Border.all(
-                                          color: isInitialized ? Colors.blue.shade300 : Colors.orange.shade300,
-                                          width: 0.8,
-                                        ),
-                                      ),
-                                      child: Text(
-                                        isInitialized ? 'Active' : 'Inactive',
-                                        style: TextStyle(
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.bold,
-                                          color: isInitialized ? Colors.blue.shade700 : Colors.orange.shade800,
-                                        ),
-                                      ),
-                                    ),
+                                    _buildWorkflowStatusBadge(_getPostWorkflowStatus(postTasks)),
                                   ],
                                 ),
                               ),
@@ -2224,37 +2562,61 @@ class _DashboardScreenState extends State<DashboardScreen>
                           DataCell(
                             SizedBox(
                               width: _colWidths['activityType'] ?? _defaultColWidths['activityType']!,
-                              child: Text(activityType.isEmpty ? '—' : activityType, overflow: TextOverflow.ellipsis),
+                              child: InkWell(
+                                onTap: () => _showPostLifecycle(post, provider),
+                                onSecondaryTapDown: (details) => _showPostContextMenu(context, details, postNo, post: post),
+                                child: Text(activityType.isEmpty ? '—' : activityType, overflow: TextOverflow.ellipsis),
+                              ),
                             ),
                           ),
                           DataCell(
                             SizedBox(
                               width: _colWidths['branch'] ?? _defaultColWidths['branch']!,
-                              child: Text(branch, overflow: TextOverflow.ellipsis),
+                              child: InkWell(
+                                onTap: () => _showPostLifecycle(post, provider),
+                                onSecondaryTapDown: (details) => _showPostContextMenu(context, details, postNo, post: post),
+                                child: Text(branch, overflow: TextOverflow.ellipsis),
+                              ),
                             ),
                           ),
                           DataCell(
                             SizedBox(
                               width: _colWidths['venue'] ?? _defaultColWidths['venue']!,
-                              child: Text(venue, maxLines: 2, overflow: TextOverflow.ellipsis),
+                              child: InkWell(
+                                onTap: () => _showPostLifecycle(post, provider),
+                                onSecondaryTapDown: (details) => _showPostContextMenu(context, details, postNo, post: post),
+                                child: Text(venue, maxLines: 2, overflow: TextOverflow.ellipsis),
+                              ),
                             ),
                           ),
                           DataCell(
                             SizedBox(
                               width: _colWidths['theme'] ?? _defaultColWidths['theme']!,
-                              child: Text(theme, maxLines: 2, overflow: TextOverflow.ellipsis),
+                              child: InkWell(
+                                onTap: () => _showPostLifecycle(post, provider),
+                                onSecondaryTapDown: (details) => _showPostContextMenu(context, details, postNo, post: post),
+                                child: Text(theme, maxLines: 2, overflow: TextOverflow.ellipsis),
+                              ),
                             ),
                           ),
                           DataCell(
                             SizedBox(
                               width: _colWidths['date'] ?? _defaultColWidths['date']!,
-                              child: Text(date, overflow: TextOverflow.ellipsis),
+                              child: InkWell(
+                                onTap: () => _showPostLifecycle(post, provider),
+                                onSecondaryTapDown: (details) => _showPostContextMenu(context, details, postNo, post: post),
+                                child: Text(date, overflow: TextOverflow.ellipsis),
+                              ),
                             ),
                           ),
                           DataCell(
                             SizedBox(
                               width: _colWidths['totalBen'] ?? _defaultColWidths['totalBen']!,
-                              child: Text(totalBen, overflow: TextOverflow.ellipsis),
+                              child: InkWell(
+                                onTap: () => _showPostLifecycle(post, provider),
+                                onSecondaryTapDown: (details) => _showPostContextMenu(context, details, postNo, post: post),
+                                child: Text(totalBen, overflow: TextOverflow.ellipsis),
+                              ),
                             ),
                           ),
                           DataCell(
@@ -2350,7 +2712,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                 columnSpacing: 16,
                 sortColumnIndex: _combinedSortColumnIndex,
                 sortAscending: _combinedSortAscending,
-                headingRowColor: MaterialStateProperty.all(Colors.grey.shade100),
+                headingRowColor: WidgetStateProperty.all(Colors.grey.shade100),
                 columns: [
                   DataColumn(
                     label: const Text('Group ID'),
@@ -2382,6 +2744,9 @@ class _DashboardScreenState extends State<DashboardScreen>
                     numeric: true,
                     onSort: (col, asc) => _combinedSort((g) => 0, col, asc),
                   ),
+                  const DataColumn(
+                    label: Text('Actions', style: TextStyle(fontWeight: FontWeight.bold)),
+                  ),
                 ],
                 rows: groups.map((group) {
                   final groupId = group['GroupID']?.toString() ?? '';
@@ -2392,38 +2757,22 @@ class _DashboardScreenState extends State<DashboardScreen>
                   final theme = firstPost['Theme']?.toString() ?? '';
                   final date = firstPost['Date']?.toString() ?? '';
                   final totalBen = posts.fold<int>(0, (sum, p) => sum + (int.tryParse(p['TotalBeneficiary']?.toString() ?? '0') ?? 0));
-                  final isInitialized = provider.events.any((t) => t.postNo == groupId);
+                  final groupTasks = provider.events.where((t) => t.postNo == groupId).toList();
+                  final isInitialized = groupTasks.isNotEmpty;
+                  final groupStatus = _getPostWorkflowStatus(groupTasks);
 
                   return DataRow(
                     cells: [
                       DataCell(
                         InkWell(
                           onTap: () => _showCombinedLifecycle(group, provider),
-                          onSecondaryTapDown: (details) => _showPostContextMenu(context, details, groupId),
+                          onSecondaryTapDown: (details) => _showPostContextMenu(context, details, groupId, isCombined: true, group: group),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Text(groupId, style: const TextStyle(color: Colors.purple, decoration: TextDecoration.underline, fontWeight: FontWeight.bold)),
                               const SizedBox(width: 6),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: isInitialized ? Colors.blue.shade50 : Colors.orange.shade50,
-                                  borderRadius: BorderRadius.circular(4),
-                                  border: Border.all(
-                                    color: isInitialized ? Colors.blue.shade300 : Colors.orange.shade300,
-                                    width: 0.8,
-                                  ),
-                                ),
-                                child: Text(
-                                  isInitialized ? 'Active' : 'Inactive',
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.bold,
-                                    color: isInitialized ? Colors.blue.shade700 : Colors.orange.shade800,
-                                  ),
-                                ),
-                              ),
+                              _buildWorkflowStatusBadge(groupStatus),
                             ],
                           ),
                         ),
@@ -2431,20 +2780,98 @@ class _DashboardScreenState extends State<DashboardScreen>
                       DataCell(
                         Tooltip(
                           message: posts.map((p) => '#${p['PostNo']}').join(', '),
-                          child: Text('${posts.length} events (${posts.map((p) => '#${p['PostNo']}').take(2).join(', ')}${posts.length > 2 ? '...' : ''})'),
+                          child: InkWell(
+                            onTap: () => _showCombinedLifecycle(group, provider),
+                            onSecondaryTapDown: (details) => _showPostContextMenu(context, details, groupId, isCombined: true, group: group),
+                            child: Text('${posts.length} events (${posts.map((p) => '#${p['PostNo']}').take(2).join(', ')}${posts.length > 2 ? '...' : ''})'),
+                          ),
                         ),
                       ),
-                      DataCell(Text(branch)),
-                      DataCell(Container(
-                        constraints: const BoxConstraints(maxWidth: 180),
-                        child: Text(venue, maxLines: 2, overflow: TextOverflow.ellipsis),
-                      )),
-                      DataCell(Container(
-                        constraints: const BoxConstraints(maxWidth: 180),
-                        child: Text(theme, maxLines: 2, overflow: TextOverflow.ellipsis),
-                      )),
-                      DataCell(Text(date)),
-                      DataCell(Text(totalBen.toString())),
+                      DataCell(
+                        InkWell(
+                          onTap: () => _showCombinedLifecycle(group, provider),
+                          onSecondaryTapDown: (details) => _showPostContextMenu(context, details, groupId, isCombined: true, group: group),
+                          child: Text(branch),
+                        ),
+                      ),
+                      DataCell(
+                        InkWell(
+                          onTap: () => _showCombinedLifecycle(group, provider),
+                          onSecondaryTapDown: (details) => _showPostContextMenu(context, details, groupId, isCombined: true, group: group),
+                          child: Container(
+                            constraints: const BoxConstraints(maxWidth: 180),
+                            child: Text(venue, maxLines: 2, overflow: TextOverflow.ellipsis),
+                          ),
+                        ),
+                      ),
+                      DataCell(
+                        InkWell(
+                          onTap: () => _showCombinedLifecycle(group, provider),
+                          onSecondaryTapDown: (details) => _showPostContextMenu(context, details, groupId, isCombined: true, group: group),
+                          child: Container(
+                            constraints: const BoxConstraints(maxWidth: 180),
+                            child: Text(theme, maxLines: 2, overflow: TextOverflow.ellipsis),
+                          ),
+                        ),
+                      ),
+                      DataCell(
+                        InkWell(
+                          onTap: () => _showCombinedLifecycle(group, provider),
+                          onSecondaryTapDown: (details) => _showPostContextMenu(context, details, groupId, isCombined: true, group: group),
+                          child: Text(date),
+                        ),
+                      ),
+                      DataCell(
+                        InkWell(
+                          onTap: () => _showCombinedLifecycle(group, provider),
+                          onSecondaryTapDown: (details) => _showPostContextMenu(context, details, groupId, isCombined: true, group: group),
+                          child: Text(totalBen.toString()),
+                        ),
+                      ),
+                      DataCell(
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              icon: Icon(Icons.edit_outlined, size: 18, color: Colors.purple.shade700),
+                              tooltip: 'Edit Combined Group',
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(minWidth: 26, minHeight: 26),
+                              onPressed: () => _showEditCombinedGroupDialog(group, provider, context.read<AuthProvider>()),
+                            ),
+                            const SizedBox(width: 4),
+                            IconButton(
+                              icon: Icon(isInitialized ? Icons.tune : Icons.add_task, size: 18, color: Colors.blue.shade700),
+                              tooltip: isInitialized ? 'Edit Workflow' : 'Assign Workflow',
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(minWidth: 26, minHeight: 26),
+                              onPressed: () {
+                                context.push(
+                                  '/admin-assign',
+                                  extra: {
+                                    'postNo': groupId,
+                                    'isCombined': true,
+                                    'isInitialized': isInitialized,
+                                    'existingTasks': groupTasks,
+                                    'combinedPosts': posts,
+                                    if (posts.isNotEmpty) ...posts.first,
+                                  },
+                                );
+                              },
+                            ),
+                            if (isInitialized) ...[
+                              const SizedBox(width: 4),
+                              IconButton(
+                                icon: Icon(Icons.delete_outline, size: 18, color: Colors.red.shade600),
+                                tooltip: 'Delete Combined Workflow (Make Inactive)',
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints(minWidth: 26, minHeight: 26),
+                                onPressed: () => _confirmDeleteCombinedWorkflow(group, provider, context.read<AuthProvider>()),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
                     ],
                   );
                 }).toList(),
@@ -2564,6 +2991,8 @@ class _DashboardScreenState extends State<DashboardScreen>
                       ),
                     ),
                   ),
+                  const SizedBox(width: 8),
+                  _buildWorkflowStatusBadge(_getPostWorkflowStatus(postTasks)),
                   const SizedBox(width: 8),
                   if (publishPlatform.isNotEmpty)
                     Icon(
@@ -2831,6 +3260,8 @@ class _DashboardScreenState extends State<DashboardScreen>
                       ),
                     ),
                   ),
+                  const SizedBox(width: 8),
+                  _buildWorkflowStatusBadge(_getPostWorkflowStatus(postTasks)),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(

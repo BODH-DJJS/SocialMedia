@@ -193,6 +193,8 @@ function doPost(e) {
       return respond(handleGroupPosts(payload));
     } else if (action === 'ungroupPost') {
       return respond(handleUngroupPost(payload));
+    } else if (action === 'renameGroup') {
+      return respond(handleRenameGroup(payload));
     } else if (action === 'reverseTask') {
       var lock = LockService.getScriptLock();
       lock.waitLock(10000);
@@ -596,7 +598,9 @@ function handleGetTasks(payload) {
         var firstPost = combinedPosts[0];
         
         // Populate standard fields for the task card using the first post as a base, but aggregate totals
-        tObj['Theme'] = 'Combined Group (' + matchedRows.length + ' posts)';
+        var postNosList = combinedPosts.map(function(cp) { return cp.PostNo; }).filter(function(x) { return x; }).join(', ');
+        var branchName = firstPost.Branch || 'Combined';
+        tObj['Theme'] = branchName + ' Events (' + postNosList + ')';
         tObj['Date'] = firstPost.Date;
         tObj['Branch'] = firstPost.Branch;
         tObj['State'] = firstPost.State;
@@ -1566,6 +1570,7 @@ function handleGroupPosts(payload) {
       updated++;
     }
   }
+  try { CacheService.getScriptCache().remove('all_posts'); } catch(e) {}
   return { success: true, message: updated + ' posts grouped under ' + groupId };
 }
 
@@ -1577,10 +1582,55 @@ function handleUngroupPost(payload) {
   for (var i = 1; i < data.length; i++) {
     if (data[i][0] == payload.postNo) {
       sheet.getRange(i + 1, 38).setValue(''); // Clear GroupID
+      try { CacheService.getScriptCache().remove('all_posts'); } catch(e) {}
       return { success: true, message: 'Post ungrouped' };
     }
   }
   return { success: false, message: 'Post not found' };
+}
+
+function handleRenameGroup(payload) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var postsSheet = ss.getSheetByName(POSTS_SHEET);
+  var tasksSheet = ss.getSheetByName(TASKS_SHEET);
+  
+  var oldGroupId = (payload.oldGroupId || '').toString().trim();
+  var newGroupId = (payload.newGroupId || '').toString().trim();
+  
+  if (!oldGroupId || !newGroupId) {
+    return { success: false, message: 'Both oldGroupId and newGroupId are required' };
+  }
+  
+  // 1. Update GroupID in POSTS_SHEET (col 38)
+  var postsData = postsSheet.getDataRange().getValues();
+  var postsUpdated = 0;
+  for (var i = 1; i < postsData.length; i++) {
+    var g = postsData[i][37] ? postsData[i][37].toString().trim() : '';
+    if (g === oldGroupId) {
+      postsSheet.getRange(i + 1, 38).setValue(newGroupId);
+      postsUpdated++;
+    }
+  }
+  
+  // 2. Update PostNo in TASKS_SHEET if tasks were created under oldGroupId
+  if (tasksSheet) {
+    var tasksData = tasksSheet.getDataRange().getValues();
+    for (var t = 1; t < tasksData.length; t++) {
+      var tPostNo = tasksData[t][1] ? tasksData[t][1].toString().trim() : '';
+      if (tPostNo === oldGroupId) {
+        tasksSheet.getRange(t + 1, 2).setValue(newGroupId);
+        // Also update TaskID prefix
+        var curTaskId = tasksData[t][0] ? tasksData[t][0].toString() : '';
+        if (curTaskId.indexOf(oldGroupId + '-') === 0) {
+          var newTaskId = newGroupId + curTaskId.substring(oldGroupId.length);
+          tasksSheet.getRange(t + 1, 1).setValue(newTaskId);
+        }
+      }
+    }
+  }
+  
+  try { CacheService.getScriptCache().remove('all_posts'); } catch(e) {}
+  return { success: true, message: 'Group renamed from "' + oldGroupId + '" to "' + newGroupId + '"' };
 }
 
 function handleDeleteWorkflow(payload) {

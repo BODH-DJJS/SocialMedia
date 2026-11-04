@@ -59,17 +59,35 @@ class BodhSocialMediaApp extends StatelessWidget {
               postData = state.extra as Map<String, dynamic>;
             } else {
               final postNo = state.uri.queryParameters['postNo'] ?? '';
+              final isCombinedParam = state.uri.queryParameters['isCombined'] == 'true';
               final provider = context.read<EventProvider>();
-              final foundPost = provider.rawPosts.firstWhere(
-                (p) => p['PostNo']?.toString() == postNo,
-                orElse: () => {'PostNo': postNo},
-              );
-              final postTasks = provider.events.where((t) => t.postNo == postNo).toList();
-              postData = {
-                ...foundPost,
-                'isInitialized': postTasks.isNotEmpty,
-                'existingTasks': postTasks,
-              };
+
+              if (isCombinedParam) {
+                final combinedPosts = provider.rawPosts
+                    .where((p) => p['GroupID']?.toString() == postNo)
+                    .toList();
+                final postTasks = provider.events.where((t) => t.postNo == postNo).toList();
+                postData = {
+                  'postNo': postNo,
+                  'GroupID': postNo,
+                  'isCombined': true,
+                  'isInitialized': postTasks.isNotEmpty,
+                  'existingTasks': postTasks,
+                  'combinedPosts': combinedPosts,
+                  if (combinedPosts.isNotEmpty) ...combinedPosts.first,
+                };
+              } else {
+                final foundPost = provider.rawPosts.firstWhere(
+                  (p) => p['PostNo']?.toString() == postNo,
+                  orElse: () => {'PostNo': postNo},
+                );
+                final postTasks = provider.events.where((t) => t.postNo == postNo).toList();
+                postData = {
+                  ...foundPost,
+                  'isInitialized': postTasks.isNotEmpty,
+                  'existingTasks': postTasks,
+                };
+              }
             }
             return AdminAssignScreen(postData: postData);
           },

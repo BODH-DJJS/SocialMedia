@@ -14,7 +14,6 @@ class EventProvider with ChangeNotifier {
 
   // ── In-memory caches ──
   final Map<String, Map<String, String>> _folderCache = {};
-  DateTime? _lastPostsFetch;
 
   // Cache keys for localStorage
   static const _cacheKeyEvents = 'cache_events';
@@ -371,6 +370,7 @@ class EventProvider with ChangeNotifier {
   }
 
   Future<bool> groupPosts(List<String> postNos, String groupId) async {
+    invalidateCache();
     try {
       final response = await _apiService.postData({
         'action': 'groupPosts',
@@ -382,6 +382,39 @@ class EventProvider with ChangeNotifier {
       }
     } catch (e) {
       debugPrint('Error grouping posts: $e');
+    }
+    return false;
+  }
+
+  Future<bool> ungroupPost(String postNo) async {
+    invalidateCache();
+    try {
+      final response = await _apiService.postData({
+        'action': 'ungroupPost',
+        'postNo': postNo,
+      });
+      if (response['success'] == true) {
+        return true;
+      }
+    } catch (e) {
+      debugPrint('Error ungrouping post: $e');
+    }
+    return false;
+  }
+
+  Future<bool> renameGroup(String oldGroupId, String newGroupId) async {
+    invalidateCache();
+    try {
+      final response = await _apiService.postData({
+        'action': 'renameGroup',
+        'oldGroupId': oldGroupId,
+        'newGroupId': newGroupId,
+      });
+      if (response['success'] == true) {
+        return true;
+      }
+    } catch (e) {
+      debugPrint('Error renaming group: $e');
     }
     return false;
   }
