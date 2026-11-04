@@ -37,7 +37,7 @@ class _DashboardScreenState extends State<DashboardScreen>
     'theme': 220.0,
     'date': 115.0,
     'totalBen': 90.0,
-    'actions': 90.0,
+    'actions': 120.0,
   };
   final Map<String, double> _colWidths = Map.from(_defaultColWidths);
 
@@ -2626,6 +2626,14 @@ class _DashboardScreenState extends State<DashboardScreen>
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   IconButton(
+                                    icon: Icon(Icons.open_in_new, size: 16, color: Colors.blue.shade700),
+                                    tooltip: 'Open in new tab',
+                                    padding: EdgeInsets.zero,
+                                    constraints: const BoxConstraints(minWidth: 26, minHeight: 26),
+                                    onPressed: () => _openInNewTab('/admin-assign?postNo=$postNo'),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  IconButton(
                                     icon: Icon(Icons.edit_outlined, size: 18, color: Colors.blue.shade700),
                                     tooltip: 'Edit Workflow',
                                     padding: EdgeInsets.zero,
@@ -2833,6 +2841,14 @@ class _DashboardScreenState extends State<DashboardScreen>
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             IconButton(
+                              icon: Icon(Icons.open_in_new, size: 16, color: Colors.purple.shade700),
+                              tooltip: 'Open in new tab',
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(minWidth: 26, minHeight: 26),
+                              onPressed: () => _openInNewTab('/admin-assign?postNo=$groupId&isCombined=true'),
+                            ),
+                            const SizedBox(width: 4),
+                            IconButton(
                               icon: Icon(Icons.edit_outlined, size: 18, color: Colors.purple.shade700),
                               tooltip: 'Edit Combined Group',
                               padding: EdgeInsets.zero,
@@ -3035,6 +3051,11 @@ class _DashboardScreenState extends State<DashboardScreen>
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
+                  ),
+                  IconButton(
+                    icon: Icon(Icons.open_in_new, size: 18, color: Colors.blue.shade700),
+                    tooltip: 'Open in new tab',
+                    onPressed: () => _openInNewTab('/admin-assign?postNo=$postNo'),
                   ),
                   // Edit Workflow button
                   IconButton(
@@ -3271,6 +3292,16 @@ class _DashboardScreenState extends State<DashboardScreen>
                         fontSize: 14,
                       ),
                     ),
+                  ),
+                  IconButton(
+                    icon: Icon(Icons.open_in_new, size: 18, color: Colors.purple.shade700),
+                    tooltip: 'Open in new tab',
+                    onPressed: () => _openInNewTab('/admin-assign?postNo=$groupId&isCombined=true'),
+                  ),
+                  IconButton(
+                    icon: Icon(Icons.tune, size: 18, color: Colors.purple.shade700),
+                    tooltip: 'Edit Group (Add/Remove Posts & Name)',
+                    onPressed: () => _showEditCombinedGroupDialog(group, provider, auth),
                   ),
                   // Edit Combined Workflow button
                   IconButton(
