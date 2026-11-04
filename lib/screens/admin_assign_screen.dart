@@ -69,6 +69,25 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
   String _publishPlatform = 'WhatsApp';
   String _postType = 'Individual';
   String _mediaMode = 'Photos';
+  String _postStatus = 'Active';
+  String _activityType = '';
+
+  static const List<String> _activityTypeOptions = [
+    'Mass Sensitization Program',
+    'Youth Awareness Workshop',
+    'Community Awareness Program',
+    'Counseling & Treatment',
+    'Workplace Awareness Program',
+    'Projects in Collaboration',
+    'Training Workshops',
+  ];
+
+  static const List<String> _postStatusOptions = [
+    'Active',
+    'Later',
+    'Skip',
+    'Data Unavailable',
+  ];
 
   final _descController = TextEditingController();
 
@@ -219,6 +238,9 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
       _mediaMode = _postData['MediaMode']?.toString().isNotEmpty == true 
           ? _postData['MediaMode'] 
           : 'Photos';
+      final rawStatus = _postData['PostStatus']?.toString().trim() ?? '';
+      _postStatus = rawStatus.isNotEmpty ? rawStatus : 'Active';
+      _activityType = _postData['ActivityType']?.toString().trim() ?? '';
       _descController.text = _postData['Description']?.toString() ?? '';
       
       for (final task in existingTasks) {
@@ -688,13 +710,142 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Post #$postNo', style: TextStyle(color: theme.colorScheme.primary, fontWeight: FontWeight.bold)),
-                        const SizedBox(height: 4),
-                        Text(themeName, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                        if (_postData['Program']?.toString().isNotEmpty == true) ...[
-                          const SizedBox(height: 2),
-                          Text(_postData['Program'].toString(), style: TextStyle(color: Colors.grey.shade700, fontSize: 13)),
-                        ],
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('Post #$postNo', style: TextStyle(color: theme.colorScheme.primary, fontWeight: FontWeight.bold)),
+                                  const SizedBox(height: 4),
+                                  Text(themeName, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                                  if (_postData['Program']?.toString().isNotEmpty == true) ...[
+                                    const SizedBox(height: 2),
+                                    Text(_postData['Program'].toString(), style: TextStyle(color: Colors.grey.shade700, fontSize: 13)),
+                                  ],
+                                ],
+                              ),
+                            ),
+                            // Status selector: Active, Later, Skip, Data Unavailable
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: _getStatusBadgeBg(_postStatus),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: _getStatusBadgeBorder(_postStatus)),
+                              ),
+                              child: DropdownButtonHideUnderline(
+                                child: DropdownButton<String>(
+                                  value: _postStatusOptions.contains(_postStatus) ? _postStatus : 'Active',
+                                  icon: Icon(Icons.arrow_drop_down, color: _getStatusBadgeText(_postStatus), size: 20),
+                                  isDense: true,
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 13,
+                                    color: _getStatusBadgeText(_postStatus),
+                                  ),
+                                  items: _postStatusOptions.map((opt) {
+                                    return DropdownMenuItem<String>(
+                                      value: opt,
+                                      child: Text(
+                                        opt,
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          color: _getStatusBadgeText(opt),
+                                          fontSize: 13,
+                                        ),
+                                      ),
+                                    );
+                                  }).toList(),
+                                  onChanged: (newVal) async {
+                                    if (newVal == null || newVal == _postStatus) return;
+                                    setState(() {
+                                      _postStatus = newVal;
+                                      _postData['PostStatus'] = newVal;
+                                    });
+                                    final ok = await provider.updatePostMeta(postNo.toString(), {'postStatus': newVal});
+                                    if (mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text(ok ? 'Status updated to "$newVal"' : 'Failed to update status'),
+                                          backgroundColor: ok ? Colors.green : Colors.red,
+                                          duration: const Duration(seconds: 2),
+                                        ),
+                                      );
+                                    }
+                                  },
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        const Divider(height: 1),
+                        const SizedBox(height: 10),
+                        // Activity Type Dropdown (Editable & persists to sheet)
+                        Row(
+                          children: [
+                            Icon(Icons.category, size: 16, color: Colors.grey.shade600),
+                            const SizedBox(width: 8),
+                            const Text(
+                              'Activity Type:',
+                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(color: Colors.grey.shade300),
+                                ),
+                                child: DropdownButtonHideUnderline(
+                                  child: DropdownButton<String>(
+                                    value: _activityTypeOptions.contains(_activityType)
+                                        ? _activityType
+                                        : null,
+                                    hint: Text(
+                                      _activityType.isNotEmpty ? _activityType : 'Select Activity Type',
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        color: _activityType.isNotEmpty ? Colors.black87 : Colors.grey.shade600,
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    isExpanded: true,
+                                    isDense: true,
+                                    style: const TextStyle(fontSize: 13, color: Colors.black87),
+                                    items: _activityTypeOptions.map((opt) {
+                                      return DropdownMenuItem<String>(
+                                        value: opt,
+                                        child: Text(opt, style: const TextStyle(fontSize: 13)),
+                                      );
+                                    }).toList(),
+                                    onChanged: (newVal) async {
+                                      if (newVal == null || newVal == _activityType) return;
+                                      setState(() {
+                                        _activityType = newVal;
+                                        _postData['ActivityType'] = newVal;
+                                      });
+                                      final ok = await provider.updatePostMeta(postNo.toString(), {'activityType': newVal});
+                                      if (mounted) {
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          SnackBar(
+                                            content: Text(ok ? 'Activity Type updated to "$newVal"' : 'Failed to update Activity Type'),
+                                            backgroundColor: ok ? Colors.green : Colors.red,
+                                            duration: const Duration(seconds: 2),
+                                          ),
+                                        );
+                                      }
+                                    },
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ],
                     ),
                   ),
@@ -1298,6 +1449,48 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
         ),
       ),
     );
+  }
+
+  Color _getStatusBadgeBg(String status) {
+    switch (status) {
+      case 'Later':
+        return Colors.purple.shade50;
+      case 'Skip':
+        return Colors.grey.shade100;
+      case 'Data Unavailable':
+        return Colors.red.shade50;
+      case 'Active':
+      default:
+        return Colors.blue.shade50;
+    }
+  }
+
+  Color _getStatusBadgeBorder(String status) {
+    switch (status) {
+      case 'Later':
+        return Colors.purple.shade300;
+      case 'Skip':
+        return Colors.grey.shade400;
+      case 'Data Unavailable':
+        return Colors.red.shade300;
+      case 'Active':
+      default:
+        return Colors.blue.shade300;
+    }
+  }
+
+  Color _getStatusBadgeText(String status) {
+    switch (status) {
+      case 'Later':
+        return Colors.purple.shade800;
+      case 'Skip':
+        return Colors.grey.shade800;
+      case 'Data Unavailable':
+        return Colors.red.shade800;
+      case 'Active':
+      default:
+        return Colors.blue.shade800;
+    }
   }
 }
 

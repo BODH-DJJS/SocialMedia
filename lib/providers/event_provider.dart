@@ -425,6 +425,35 @@ class EventProvider with ChangeNotifier {
       payload.addAll(updates);
       final response = await _apiService.postData(payload);
       if (response['success'] == true) {
+        // Update in-memory rawPosts if present
+        for (var p in _rawPosts) {
+          if (p['PostNo']?.toString() == postNo || (p['GroupID']?.toString().isNotEmpty == true && p['GroupID']?.toString() == postNo)) {
+            if (updates.containsKey('activityType')) {
+              p['ActivityType'] = updates['activityType'];
+            }
+            if (updates.containsKey('postStatus')) {
+              p['PostStatus'] = updates['postStatus'];
+            }
+            if (updates.containsKey('publishPlatform')) {
+              p['PublishPlatform'] = updates['publishPlatform'];
+            }
+            if (updates.containsKey('postType')) {
+              p['PostType'] = updates['postType'];
+            }
+            if (updates.containsKey('mediaMode')) {
+              p['MediaMode'] = updates['mediaMode'];
+            }
+            if (updates.containsKey('description')) {
+              p['Description'] = updates['description'];
+            }
+          }
+        }
+        // Save to localStorage cache
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          prefs.setString(_cacheKeyPosts, json.encode(_rawPosts));
+        } catch (_) {}
+        notifyListeners();
         return true;
       }
     } catch (e) {

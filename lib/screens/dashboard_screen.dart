@@ -1082,7 +1082,7 @@ class _DashboardScreenState extends State<DashboardScreen>
 
   // ── ALL POSTS ──
   Widget _buildAllPosts(EventProvider provider, AuthProvider auth) {
-    final filters = ['All', 'Active', 'Inactive', 'Posted', 'Clean', 'Completed'];
+    final filters = ['All', 'Active', 'Inactive', 'Posted', 'Clean', 'Completed', 'Later', 'Skip', 'Data Unavailable'];
 
     // Pre-index tasks by postNo / groupId for O(1) instant lookup
     final Map<String, List<Event>> tasksByPostNo = {};
@@ -1104,7 +1104,6 @@ class _DashboardScreenState extends State<DashboardScreen>
             return false;
           }
 
-          if (_postFilter == 'All') return true;
           final rawPostNo = post['PostNo']?.toString() ?? '';
           final groupId = post['GroupID']?.toString() ?? '';
 
@@ -1113,8 +1112,20 @@ class _DashboardScreenState extends State<DashboardScreen>
             postTasks = tasksByPostNo[groupId] ?? [];
           }
 
-          final postStatus = _getPostWorkflowStatus(postTasks);
+          final customPostStatus = post['PostStatus']?.toString().trim() ?? '';
+          final postStatus = _getPostWorkflowStatus(postTasks, postStatus: customPostStatus);
 
+          if (_postFilter == 'All') return true;
+
+          if (_postFilter == 'Later') {
+            return postStatus == 'Later';
+          }
+          if (_postFilter == 'Skip') {
+            return postStatus == 'Skip';
+          }
+          if (_postFilter == 'Data Unavailable') {
+            return postStatus == 'Data Unavailable';
+          }
           if (_postFilter == 'Inactive') {
             return postStatus == 'Inactive';
           }
@@ -1447,7 +1458,12 @@ class _DashboardScreenState extends State<DashboardScreen>
     );
   }
 
-  String _getPostWorkflowStatus(List<Event> postTasks) {
+  String _getPostWorkflowStatus(List<Event> postTasks, {String postStatus = ''}) {
+    final trimmedStatus = postStatus.trim().toLowerCase();
+    if (trimmedStatus == 'later') return 'Later';
+    if (trimmedStatus == 'skip') return 'Skip';
+    if (trimmedStatus == 'data unavailable' || trimmedStatus == 'dataunavailable') return 'Data Unavailable';
+
     if (postTasks.isEmpty) return 'Inactive';
 
     final readyTask = postTasks.where((t) {
@@ -1477,6 +1493,21 @@ class _DashboardScreenState extends State<DashboardScreen>
     Color text;
 
     switch (status) {
+      case 'Later':
+        bg = Colors.purple.shade50;
+        border = Colors.purple.shade300;
+        text = Colors.purple.shade700;
+        break;
+      case 'Skip':
+        bg = Colors.grey.shade100;
+        border = Colors.grey.shade400;
+        text = Colors.grey.shade700;
+        break;
+      case 'Data Unavailable':
+        bg = Colors.red.shade50;
+        border = Colors.red.shade300;
+        text = Colors.red.shade800;
+        break;
       case 'Completed':
         bg = Colors.green.shade50;
         border = Colors.green.shade400;
@@ -2604,7 +2635,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                                   const SizedBox(width: 6),
                                   InkWell(
                                     onTap: () => _showPostLifecycle(post, provider),
-                                    child: _buildWorkflowStatusBadge(_getPostWorkflowStatus(postTasks)),
+                                    child: _buildWorkflowStatusBadge(_getPostWorkflowStatus(postTasks, postStatus: post['PostStatus']?.toString() ?? '')),
                                   ),
                                 ],
                               ),
@@ -2818,7 +2849,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                   final totalBen = posts.fold<int>(0, (sum, p) => sum + (int.tryParse(p['TotalBeneficiary']?.toString() ?? '0') ?? 0));
                   final groupTasks = tasksByPostNo?[groupId] ?? provider.events.where((t) => t.postNo == groupId).toList();
                   final isInitialized = groupTasks.isNotEmpty;
-                  final groupStatus = _getPostWorkflowStatus(groupTasks);
+                  final groupStatus = _getPostWorkflowStatus(groupTasks, postStatus: firstPost['PostStatus']?.toString() ?? '');
 
                   return DataRow(
                     cells: [
@@ -3074,7 +3105,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                     ),
                   ),
                   const SizedBox(width: 8),
-                  _buildWorkflowStatusBadge(_getPostWorkflowStatus(postTasks)),
+                  _buildWorkflowStatusBadge(_getPostWorkflowStatus(postTasks, postStatus: post['PostStatus']?.toString() ?? '')),
                   const SizedBox(width: 8),
                   if (publishPlatform.isNotEmpty)
                     Icon(
@@ -3349,7 +3380,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                     ),
                   ),
                   const SizedBox(width: 8),
-                  _buildWorkflowStatusBadge(_getPostWorkflowStatus(postTasks)),
+                  _buildWorkflowStatusBadge(_getPostWorkflowStatus(postTasks, postStatus: posts.isNotEmpty ? (posts.first['PostStatus']?.toString() ?? '') : '')),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(

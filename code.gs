@@ -297,7 +297,8 @@ function buildPostObj(pRow) {
     'PostType': pRow[36] || '',
     'GroupID': pRow[37] || '',
     'MediaMode': pRow[38] || '',
-    'Description': pRow[39] || ''
+    'Description': pRow[39] || '',
+    'PostStatus': pRow[40] || ''
   };
 }
 
@@ -1637,6 +1638,9 @@ function handleUpdatePostMeta(payload) {
       if (payload.groupId !== undefined) sheet.getRange(rowIdx, 38).setValue(payload.groupId);
       if (payload.mediaMode !== undefined) sheet.getRange(rowIdx, 39).setValue(payload.mediaMode);
       if (payload.description !== undefined) sheet.getRange(rowIdx, 40).setValue(payload.description);
+      if (payload.activityType !== undefined) sheet.getRange(rowIdx, 23).setValue(payload.activityType);
+      if (payload.postStatus !== undefined) sheet.getRange(rowIdx, 41).setValue(payload.postStatus);
+      try { CacheService.getScriptCache().remove('all_posts'); } catch(e) {}
       return { success: true, message: 'Post metadata updated' };
     }
   }
@@ -1854,6 +1858,7 @@ function createTasksForPostV2(payload) {
   postsSheet.getRange(2, 38).setValue('GroupID');
   postsSheet.getRange(2, 39).setValue('MediaMode');
   postsSheet.getRange(2, 40).setValue('Description');
+  postsSheet.getRange(2, 41).setValue('PostStatus');
 
   // Update post metadata for all posts in group
   for (var gp = 0; gp < groupPosts.length; gp++) {
