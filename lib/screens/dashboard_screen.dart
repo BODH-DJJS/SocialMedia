@@ -2570,33 +2570,43 @@ class _DashboardScreenState extends State<DashboardScreen>
                           DataCell(
                             SizedBox(
                               width: _colWidths['postNo'] ?? _defaultColWidths['postNo']!,
-                              child: InkWell(
-                                onTap: () => _showPostLifecycle(post, provider),
-                                onSecondaryTapDown: (details) => _showPostContextMenu(
-                                  context, 
-                                  details, 
-                                  postNo, 
-                                  post: post,
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Text('#$postNo', style: const TextStyle(color: Colors.blue, decoration: TextDecoration.underline, fontWeight: FontWeight.bold)),
-                                    const SizedBox(width: 4),
-                                    Tooltip(
-                                      message: 'Open in new tab',
-                                      child: InkWell(
-                                        onTap: () => _openInNewTab('/admin-assign?postNo=$postNo'),
-                                        child: Padding(
-                                          padding: const EdgeInsets.all(2),
-                                          child: Icon(Icons.open_in_new, size: 13, color: Colors.blue.shade700),
-                                        ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  InkWell(
+                                    onTap: () => _showPostLifecycle(post, provider),
+                                    onSecondaryTapDown: (details) => _showPostContextMenu(
+                                      context, 
+                                      details, 
+                                      postNo, 
+                                      post: post,
+                                    ),
+                                    child: Text(
+                                      '#$postNo', 
+                                      style: const TextStyle(
+                                        color: Colors.blue, 
+                                        decoration: TextDecoration.underline, 
+                                        fontWeight: FontWeight.bold,
                                       ),
                                     ),
-                                    const SizedBox(width: 6),
-                                    _buildWorkflowStatusBadge(_getPostWorkflowStatus(postTasks)),
-                                  ],
-                                ),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Tooltip(
+                                    message: 'Open in new tab',
+                                    child: InkWell(
+                                      onTap: () => _openInNewTab('/admin-assign?postNo=$postNo'),
+                                      child: Padding(
+                                        padding: const EdgeInsets.all(2),
+                                        child: Icon(Icons.open_in_new, size: 13, color: Colors.blue.shade700),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  InkWell(
+                                    onTap: () => _showPostLifecycle(post, provider),
+                                    child: _buildWorkflowStatusBadge(_getPostWorkflowStatus(postTasks)),
+                                  ),
+                                ],
                               ),
                             ),
                           ),
@@ -2813,28 +2823,31 @@ class _DashboardScreenState extends State<DashboardScreen>
                   return DataRow(
                     cells: [
                       DataCell(
-                        InkWell(
-                          onTap: () => _showCombinedLifecycle(group, provider),
-                          onSecondaryTapDown: (details) => _showPostContextMenu(context, details, groupId, isCombined: true, group: group),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(groupId, style: const TextStyle(color: Colors.purple, decoration: TextDecoration.underline, fontWeight: FontWeight.bold)),
-                              const SizedBox(width: 4),
-                              Tooltip(
-                                message: 'Open in new tab',
-                                child: InkWell(
-                                  onTap: () => _openInNewTab('/admin-assign?postNo=$groupId&isCombined=true'),
-                                  child: Padding(
-                                    padding: const EdgeInsets.all(2),
-                                    child: Icon(Icons.open_in_new, size: 13, color: Colors.purple.shade700),
-                                  ),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            InkWell(
+                              onTap: () => _showCombinedLifecycle(group, provider),
+                              onSecondaryTapDown: (details) => _showPostContextMenu(context, details, groupId, isCombined: true, group: group),
+                              child: Text(groupId, style: const TextStyle(color: Colors.purple, decoration: TextDecoration.underline, fontWeight: FontWeight.bold)),
+                            ),
+                            const SizedBox(width: 4),
+                            Tooltip(
+                              message: 'Open in new tab',
+                              child: InkWell(
+                                onTap: () => _openInNewTab('/admin-assign?postNo=$groupId&isCombined=true'),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(2),
+                                  child: Icon(Icons.open_in_new, size: 13, color: Colors.purple.shade700),
                                 ),
                               ),
-                              const SizedBox(width: 6),
-                              _buildWorkflowStatusBadge(groupStatus),
-                            ],
-                          ),
+                            ),
+                            const SizedBox(width: 6),
+                            InkWell(
+                              onTap: () => _showCombinedLifecycle(group, provider),
+                              child: _buildWorkflowStatusBadge(groupStatus),
+                            ),
+                          ],
                         ),
                       ),
                       DataCell(

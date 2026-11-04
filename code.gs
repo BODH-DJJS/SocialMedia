@@ -146,6 +146,8 @@ function doPost(e) {
       return respond(handleGetTasks(payload));
     } else if (action === 'getPosts') {
       return respond(handleGetPosts(payload));
+    } else if (action === 'getPostDetails') {
+      return respond(handleGetPostDetails(payload));
     } else if (action === 'getMediaFolders') {
       return respond(handleGetMediaFolders(payload));
     } else if (action === 'getPhotos') {
@@ -656,6 +658,91 @@ function handleGetPosts(payload) {
   } catch(cErr) {}
 
   return { success: true, posts: result };
+}
+
+function handleGetPostDetails(payload) {
+  var postNo = (payload.postNo || '').toString().trim();
+  var isCombined = payload.isCombined === true || payload.isCombined === 'true';
+  if (!postNo) return { success: false, message: 'Missing postNo' };
+
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var postsData = ss.getSheetByName(POSTS_SHEET).getDataRange().getValues();
+  var tasksData = ss.getSheetByName(TASKS_SHEET).getDataRange().getValues();
+  var usersData = ss.getSheetByName(USERS_SHEET).getDataRange().getValues();
+
+  var userMap = {};
+  for (var u = 1; u < usersData.length; u++) {
+    if (usersData[u][0]) {
+      userMap[usersData[u][0].toString().trim().toLowerCase()] = usersData[u][1] || usersData[u][0];
+    }
+  }
+
+  var matchedPosts = [];
+  var postNoCol = 0;
+  var groupIdCol = 37; // GroupID column in Events sheet (0-indexed)
+
+  for (var i = 1; i < postsData.length; i++) {
+    var r = postsData[i];
+    var rPNo = (r[postNoCol] || '').toString().trim();
+    var rGId = (r[groupIdCol] || '').toString().trim();
+
+    if (isCombined) {
+      if (rGId === postNo || rPNo === postNo) {
+        matchedPosts.push(buildPostObj(r));
+      }
+    } else {
+      if (rPNo === postNo) {
+        matchedPosts.push(buildPostObj(r));
+        break;
+      }
+    }
+  }
+
+  // Also check if post was queried without isCombined but is a GroupID
+  if (matchedPosts.length === 0 && !isCombined) {
+    for (var i = 1; i < postsData.length; i++) {
+      var r = postsData[i];
+      var rGId = (r[groupIdCol] || '').toString().trim();
+      if (rGId === postNo) {
+        matchedPosts.push(buildPostObj(r));
+        isCombined = true;
+      }
+    }
+  }
+
+  var postObj = matchedPosts.length > 0 ? matchedPosts[0] : { 'PostNo': postNo };
+
+  // Fetch tasks for this postNo or GroupID
+  var taskHeaders = tasksData[0];
+  var resultTasks = [];
+  for (var t = 1; t < tasksData.length; t++) {
+    var trow = tasksData[t];
+    var tPostNo = (trow[1] || '').toString().trim();
+    if (tPostNo === postNo) {
+      var tObj = {};
+      for (var j = 0; j < taskHeaders.length; j++) {
+        var val = trow[j];
+        var headerName = taskHeaders[j].toString();
+        if (val instanceof Date || (headerName === 'DueDate' && val) || (headerName === 'AllottedDate' && val) || (headerName === 'Date' && val)) {
+          tObj[headerName] = formatDate(val);
+        } else {
+          tObj[headerName] = val;
+        }
+      }
+      tObj['PostNo'] = trow[1];
+      tObj['rowIndex'] = t + 1;
+      tObj['AssigneeName'] = userMap[(tObj['Assignee'] || '').toString().trim().toLowerCase()] || tObj['Assignee'];
+      resultTasks.push(tObj);
+    }
+  }
+
+  return {
+    success: true,
+    postData: postObj,
+    combinedPosts: matchedPosts,
+    tasks: resultTasks,
+    isCombined: isCombined || matchedPosts.length > 1
+  };
 }
 
 function handleGetDashboardStats() {

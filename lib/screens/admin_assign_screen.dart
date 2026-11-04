@@ -1,7 +1,9 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../providers/event_provider.dart';
 import '../providers/auth_provider.dart';
 import '../models/event.dart';
@@ -81,125 +83,202 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
 
       provider.fetchUsers();
 
-      // Check if opened in a fresh tab without cached rawPosts or events
+      // Check if opened in a fresh tab without post details
       final postNo = (_postData['postNo'] ?? _postData['PostNo'])?.toString() ?? '';
       final isCombined = _postData['isCombined'] == true;
       final isDataMissing = _postData['Theme'] == null ||
           _postData['Theme'].toString().isEmpty ||
-          (isCombined && (_postData['combinedPosts'] as List<dynamic>? ?? []).isEmpty) ||
-          provider.rawPosts.isEmpty;
+          (isCombined && (_postData['combinedPosts'] as List<dynamic>? ?? []).isEmpty);
 
-      if (isDataMissing) {
-        setState(() => _isLoading = true);
-        await provider.fetchEvents(auth.role, auth.username);
+      if (isDataMissing && postNo.isNotEmpty) {
+        // STEP 1: Instant check from local browser cache (localStorage)
+        final prefs = await SharedPreferences.getInstance();
+        final cachedPostsJson = prefs.getString('cached_raw_posts');
+        final cachedEventsJson = prefs.getString('cached_events');
+        bool foundInLocalCache = false;
 
-        if (isCombined) {
-          final combinedPosts = provider.rawPosts
-              .where((p) => p['GroupID']?.toString() == postNo)
-              .toList();
-          final postTasks = provider.events.where((t) => t.postNo == postNo).toList();
-          _postData = {
-            'postNo': postNo,
-            'GroupID': postNo,
-            'isCombined': true,
-            'isInitialized': postTasks.isNotEmpty,
-            'existingTasks': postTasks,
-            'combinedPosts': combinedPosts,
-            if (combinedPosts.isNotEmpty) ...combinedPosts.first,
-          };
-        } else {
-          final foundPost = provider.rawPosts.firstWhere(
-            (p) => p['PostNo']?.toString() == postNo,
-            orElse: () => {'PostNo': postNo},
-          );
-          final postTasks = provider.events.where((t) => t.postNo == postNo).toList();
-          _postData = {
-            ...foundPost,
-            'isInitialized': postTasks.isNotEmpty,
-            'existingTasks': postTasks,
-          };
+        if (cachedPostsJson != null && cachedPostsJson.isNotEmpty) {
+          try {
+            final List<dynamic> allCachedPosts = json.decode(cachedPostsJson);
+            final List<dynamic> allCachedEvents = cachedEventsJson != null ? json.decode(cachedEventsJson) : [];
+            final cachedEvents = allCachedEvents.map((j) => Event.fromJson(j as Map<String, dynamic>)).toList();
+
+            if (isCombined) {
+              final combinedPosts = allCachedPosts
+                  .where((p) => p['GroupID']?.toString() == postNo)
+                  .cast<Map<String, dynamic>>()
+                  .toList();
+              if (combinedPosts.isNotEmpty) {
+                final postTasks = cachedEvents.where((t) => t.postNo == postNo).toList();
+                _postData = {
+                  'postNo': postNo,
+                  'GroupID': postNo,
+                  'isCombined': true,
+                  'isInitialized': postTasks.isNotEmpty,
+                  'existingTasks': postTasks,
+                  'combinedPosts': combinedPosts,
+                  ...combinedPosts.first,
+                };
+                foundInLocalCache = true;
+              }
+            } else {
+              final found = allCachedPosts.firstWhere(
+                (p) => p['PostNo']?.toString() == postNo,
+                orElse: () => null,
+              );
+              if (found != null) {
+                final postTasks = cachedEvents.where((t) => t.postNo == postNo).toList();
+                _postData = {
+                  ...found as Map<String, dynamic>,
+                  'isInitialized': postTasks.isNotEmpty,
+                  'existingTasks': postTasks,
+                };
+                foundInLocalCache = true;
+              }
+            }
+          } catch (e) {
+            debugPrint('Local cache extraction error: $e');
+          }
         }
-        setState(() => _isLoading = false);
+
+        // STEP 2: If found in local cache, render immediately! Otherwise fetch ONLY this post in 1-2s
+        if (foundInLocalCache) {
+          _populateExistingTasksAndDueDates();
+          // Silently refresh in background
+          provider.fetchSinglePostDetails(postNo, isCombined: isCombined).then((freshDetails) {
+            if (freshDetails != null && mounted) {
+              final pObj = freshDetails['postData'] as Map<String, dynamic>? ?? {};
+              final cPosts = freshDetails['combinedPosts'] as List<Map<String, dynamic>>? ?? [];
+              final tasks = freshDetails['tasks'] as List<Event>? ?? [];
+              setState(() {
+                _postData = {
+                  ...pObj,
+                  'isInitialized': tasks.isNotEmpty,
+                  'existingTasks': tasks,
+                  'combinedPosts': cPosts,
+                  'isCombined': freshDetails['isCombined'] == true,
+                };
+                _populateExistingTasksAndDueDates();
+              });
+            }
+          });
+        } else {
+          // Fast single-post fetch (only row 698, ~1-2 seconds)
+          setState(() => _isLoading = true);
+          final singleDetails = await provider.fetchSinglePostDetails(postNo, isCombined: isCombined);
+          if (singleDetails != null) {
+            final pObj = singleDetails['postData'] as Map<String, dynamic>? ?? {};
+            final cPosts = singleDetails['combinedPosts'] as List<Map<String, dynamic>>? ?? [];
+            final tasks = singleDetails['tasks'] as List<Event>? ?? [];
+            _postData = {
+              ...pObj,
+              'postNo': postNo,
+              'isInitialized': tasks.isNotEmpty,
+              'existingTasks': tasks,
+              'combinedPosts': cPosts,
+              'isCombined': singleDetails['isCombined'] == true,
+            };
+          } else {
+            // Ultimate fallback: fetch full events if single-post API failed
+            await provider.fetchEvents(auth.role, auth.username);
+            final foundPost = provider.rawPosts.firstWhere(
+              (p) => p['PostNo']?.toString() == postNo,
+              orElse: () => {'PostNo': postNo},
+            );
+            final postTasks = provider.events.where((t) => t.postNo == postNo).toList();
+            _postData = {
+              ...foundPost,
+              'isInitialized': postTasks.isNotEmpty,
+              'existingTasks': postTasks,
+            };
+          }
+          setState(() => _isLoading = false);
+          _populateExistingTasksAndDueDates();
+        }
+      } else {
+        _populateExistingTasksAndDueDates();
       }
 
-      // Init from existing data
-      final existingTasks = _postData['existingTasks'] as List<Event>? ?? [];
-      debugPrint('=== AdminAssignScreen existingTasks ===');
-      debugPrint('Total existingTasks: ${existingTasks.length}');
+      _fetchMediaLinks();
+    });
+  }
+
+  void _populateExistingTasksAndDueDates() {
+    if (!mounted) return;
+    final existingTasks = _postData['existingTasks'] as List<Event>? ?? [];
+    debugPrint('=== AdminAssignScreen existingTasks ===');
+    debugPrint('Total existingTasks: ${existingTasks.length}');
+
+    setState(() {
+      _publishPlatform = _postData['PublishPlatform']?.toString().isNotEmpty == true 
+          ? _postData['PublishPlatform'] 
+          : 'WhatsApp';
+      _postType = _postData['PostType']?.toString().isNotEmpty == true 
+          ? _postData['PostType'] 
+          : 'Individual';
+      _mediaMode = _postData['MediaMode']?.toString().isNotEmpty == true 
+          ? _postData['MediaMode'] 
+          : 'Photos';
+      _descController.text = _postData['Description']?.toString() ?? '';
       
-      setState(() {
-        _publishPlatform = _postData['PublishPlatform']?.toString().isNotEmpty == true 
-            ? _postData['PublishPlatform'] 
-            : 'WhatsApp';
-        _postType = _postData['PostType']?.toString().isNotEmpty == true 
-            ? _postData['PostType'] 
-            : 'Individual';
-        _mediaMode = _postData['MediaMode']?.toString().isNotEmpty == true 
-            ? _postData['MediaMode'] 
-            : 'Photos';
-        _descController.text = _postData['Description']?.toString() ?? '';
-        
-        for (final task in existingTasks) {
-          final stage = task.stage.toLowerCase().replaceAll(' ', '');
-          final assignee = task.assignee.isEmpty ? null : task.assignee.trim();
-          debugPrint('Task: stage="${task.stage}" -> norm="$stage", assignee="$assignee"');
-          DateTime? dueDate;
-          if (task.dueDate.isNotEmpty) {
-            try {
-              final format = DateFormat('d-MMM-yyyy');
-              dueDate = format.parse(task.dueDate);
-            } catch (e) {
-              // Ignore parse errors
-            }
-          }
-          
-          if (stage == 'writing') {
-            _selectedWriter = assignee;
-            _writingDue = dueDate;
-          } else if (stage == 'editing') {
-            _selectedEditor = assignee;
-            _editingDue = dueDate;
-          } else if (stage == 'proofreading') {
-            _selectedProofreader = assignee;
-            _proofreadingDue = dueDate;
-          } else if (stage == 'crosscheck' || stage == 'textcrosscheck') {
-            _selectedCrosscheck = assignee;
-            _crosscheckDue = dueDate;
-          } else if (stage == 'readytopost') {
-            _selectedUploader = assignee;
-            _uploaderDue = dueDate;
-          } else if (stage == 'thumbnailselection') {
-            _selectedThumbnailSelect = assignee;
-            _thumbnailSelectDue = dueDate;
-          } else if (stage == 'thumbnailprocessing') {
-            _selectedThumbnailProcess = assignee;
-            _thumbnailProcessDue = dueDate;
-          } else if (stage == 'thumbnailcrosschecking') {
-            _selectedThumbnailCrosscheck = assignee;
-            _thumbnailCrosscheckDue = dueDate;
-          } else if (stage == 'photosclean') {
-            _selectedPhotosClean = assignee;
-            _photosCleanDue = dueDate;
-          } else if (stage == 'photoediting') {
-            _selectedPhotoEdit = assignee;
-            _photoEditDue = dueDate;
-          } else if (stage == 'videoediting') {
-            _selectedVideoEdit = assignee;
-            _videoEditDue = dueDate;
-          } else if (stage == 'mediacrosscheck') {
-            _selectedMediaCheck = assignee;
-            _mediaCheckDue = dueDate;
-          } else if (stage == 'mediafinalcrosscheck' || stage == 'mediafinalcrosschecking') {
-            _selectedMediaFinalCheck = assignee;
-            _mediaFinalCheckDue = dueDate;
+      for (final task in existingTasks) {
+        final stage = task.stage.toLowerCase().replaceAll(' ', '');
+        final assignee = task.assignee.isEmpty ? null : task.assignee.trim();
+        debugPrint('Task: stage="${task.stage}" -> norm="$stage", assignee="$assignee"');
+        DateTime? dueDate;
+        if (task.dueDate.isNotEmpty) {
+          try {
+            final format = DateFormat('d-MMM-yyyy');
+            dueDate = format.parse(task.dueDate);
+          } catch (e) {
+            // Ignore parse errors
           }
         }
+        
+        if (stage == 'writing') {
+          _selectedWriter = assignee;
+          _writingDue = dueDate;
+        } else if (stage == 'editing') {
+          _selectedEditor = assignee;
+          _editingDue = dueDate;
+        } else if (stage == 'proofreading') {
+          _selectedProofreader = assignee;
+          _proofreadingDue = dueDate;
+        } else if (stage == 'crosscheck' || stage == 'textcrosscheck') {
+          _selectedCrosscheck = assignee;
+          _crosscheckDue = dueDate;
+        } else if (stage == 'readytopost') {
+          _selectedUploader = assignee;
+          _uploaderDue = dueDate;
+        } else if (stage == 'thumbnailselection') {
+          _selectedThumbnailSelect = assignee;
+          _thumbnailSelectDue = dueDate;
+        } else if (stage == 'thumbnailprocessing') {
+          _selectedThumbnailProcess = assignee;
+          _thumbnailProcessDue = dueDate;
+        } else if (stage == 'thumbnailcrosschecking') {
+          _selectedThumbnailCrosscheck = assignee;
+          _thumbnailCrosscheckDue = dueDate;
+        } else if (stage == 'photosclean') {
+          _selectedPhotosClean = assignee;
+          _photosCleanDue = dueDate;
+        } else if (stage == 'photoediting') {
+          _selectedPhotoEdit = assignee;
+          _photoEditDue = dueDate;
+        } else if (stage == 'videoediting') {
+          _selectedVideoEdit = assignee;
+          _videoEditDue = dueDate;
+        } else if (stage == 'mediacrosscheck') {
+          _selectedMediaCheck = assignee;
+          _mediaCheckDue = dueDate;
+        } else if (stage == 'mediafinalcrosscheck' || stage == 'mediafinalcrosschecking') {
+          _selectedMediaFinalCheck = assignee;
+          _mediaFinalCheckDue = dueDate;
+        }
+      }
 
-        // Auto-populate default due dates for any unassigned due dates
-        _applyDefaultDueDates(force: false);
-      });
-
-      _fetchMediaLinks();
+      // Auto-populate default due dates for any unassigned due dates
+      _applyDefaultDueDates(force: false);
     });
   }
 

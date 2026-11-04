@@ -563,4 +563,36 @@ class EventProvider with ChangeNotifier {
     }
     return [];
   }
+
+  /// Fast targeted fetch for single post or combined group (completes in ~1-2 seconds)
+  Future<Map<String, dynamic>?> fetchSinglePostDetails(String postNo, {bool isCombined = false}) async {
+    try {
+      final response = await _apiService.postData({
+        'action': 'getPostDetails',
+        'postNo': postNo,
+        'isCombined': isCombined,
+      });
+
+      if (response['success'] == true) {
+        final postData = response['postData'] as Map<String, dynamic>? ?? {};
+        final combinedPosts = (response['combinedPosts'] as List<dynamic>?)?.cast<Map<String, dynamic>>() ?? [];
+        final rawTasks = response['tasks'] as List<dynamic>? ?? [];
+        final tasks = rawTasks.map((j) => Event.fromJson(j as Map<String, dynamic>)).toList();
+
+        // Update in-memory tasks so other UI components can see them
+        _events.removeWhere((t) => t.postNo == postNo);
+        _events.addAll(tasks);
+
+        return {
+          'postData': postData,
+          'combinedPosts': combinedPosts,
+          'tasks': tasks,
+          'isCombined': response['isCombined'] == true,
+        };
+      }
+    } catch (e) {
+      debugPrint('Error fetching single post details: $e');
+    }
+    return null;
+  }
 }
