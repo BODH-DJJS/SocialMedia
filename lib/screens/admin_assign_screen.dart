@@ -84,6 +84,7 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
 
   static const List<String> _postStatusOptions = [
     'Active',
+    'Posted',
     'Later',
     'Skip',
     'Data Unavailable',
@@ -1453,6 +1454,8 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
 
   Color _getStatusBadgeBg(String status) {
     switch (status) {
+      case 'Posted':
+        return Colors.teal.shade50;
       case 'Later':
         return Colors.purple.shade50;
       case 'Skip':
@@ -1467,6 +1470,8 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
 
   Color _getStatusBadgeBorder(String status) {
     switch (status) {
+      case 'Posted':
+        return Colors.teal.shade400;
       case 'Later':
         return Colors.purple.shade300;
       case 'Skip':
@@ -1481,6 +1486,8 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
 
   Color _getStatusBadgeText(String status) {
     switch (status) {
+      case 'Posted':
+        return Colors.teal.shade800;
       case 'Later':
         return Colors.purple.shade800;
       case 'Skip':

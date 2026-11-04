@@ -1460,6 +1460,7 @@ class _DashboardScreenState extends State<DashboardScreen>
 
   String _getPostWorkflowStatus(List<Event> postTasks, {String postStatus = ''}) {
     final trimmedStatus = postStatus.trim().toLowerCase();
+    if (trimmedStatus == 'posted') return 'Posted';
     if (trimmedStatus == 'later') return 'Later';
     if (trimmedStatus == 'skip') return 'Skip';
     if (trimmedStatus == 'data unavailable' || trimmedStatus == 'dataunavailable') return 'Data Unavailable';
