@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../providers/event_provider.dart';
+import '../providers/auth_provider.dart';
 import '../models/event.dart';
 import 'package:intl/intl.dart';
 
@@ -25,6 +26,7 @@ class AdminAssignScreen extends StatefulWidget {
 }
 
 class _AdminAssignScreenState extends State<AdminAssignScreen> {
+  late Map<String, dynamic> _postData;
   bool _isLoading = false;
   bool _isLoadingMedia = true;
   String _rawFolderLink = '';
@@ -71,84 +73,131 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<EventProvider>().fetchUsers();
-            // Init from existing data if any
-        final existingTasks = widget.postData['existingTasks'] as List<Event>? ?? [];
-        debugPrint('=== AdminAssignScreen existingTasks ===');
-        debugPrint('Total existingTasks: ${existingTasks.length}');
+    _postData = Map<String, dynamic>.from(widget.postData);
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final provider = context.read<EventProvider>();
+      final auth = context.read<AuthProvider>();
+
+      provider.fetchUsers();
+
+      // Check if opened in a fresh tab without cached rawPosts or events
+      final postNo = (_postData['postNo'] ?? _postData['PostNo'])?.toString() ?? '';
+      final isCombined = _postData['isCombined'] == true;
+      final isDataMissing = _postData['Theme'] == null ||
+          _postData['Theme'].toString().isEmpty ||
+          (isCombined && (_postData['combinedPosts'] as List<dynamic>? ?? []).isEmpty) ||
+          provider.rawPosts.isEmpty;
+
+      if (isDataMissing) {
+        setState(() => _isLoading = true);
+        await provider.fetchEvents(auth.role, auth.username);
+
+        if (isCombined) {
+          final combinedPosts = provider.rawPosts
+              .where((p) => p['GroupID']?.toString() == postNo)
+              .toList();
+          final postTasks = provider.events.where((t) => t.postNo == postNo).toList();
+          _postData = {
+            'postNo': postNo,
+            'GroupID': postNo,
+            'isCombined': true,
+            'isInitialized': postTasks.isNotEmpty,
+            'existingTasks': postTasks,
+            'combinedPosts': combinedPosts,
+            if (combinedPosts.isNotEmpty) ...combinedPosts.first,
+          };
+        } else {
+          final foundPost = provider.rawPosts.firstWhere(
+            (p) => p['PostNo']?.toString() == postNo,
+            orElse: () => {'PostNo': postNo},
+          );
+          final postTasks = provider.events.where((t) => t.postNo == postNo).toList();
+          _postData = {
+            ...foundPost,
+            'isInitialized': postTasks.isNotEmpty,
+            'existingTasks': postTasks,
+          };
+        }
+        setState(() => _isLoading = false);
+      }
+
+      // Init from existing data
+      final existingTasks = _postData['existingTasks'] as List<Event>? ?? [];
+      debugPrint('=== AdminAssignScreen existingTasks ===');
+      debugPrint('Total existingTasks: ${existingTasks.length}');
+      
+      setState(() {
+        _publishPlatform = _postData['PublishPlatform']?.toString().isNotEmpty == true 
+            ? _postData['PublishPlatform'] 
+            : 'WhatsApp';
+        _postType = _postData['PostType']?.toString().isNotEmpty == true 
+            ? _postData['PostType'] 
+            : 'Individual';
+        _mediaMode = _postData['MediaMode']?.toString().isNotEmpty == true 
+            ? _postData['MediaMode'] 
+            : 'Photos';
+        _descController.text = _postData['Description']?.toString() ?? '';
         
-        setState(() {
-          _publishPlatform = widget.postData['PublishPlatform']?.toString().isNotEmpty == true 
-              ? widget.postData['PublishPlatform'] 
-              : 'WhatsApp';
-          _postType = widget.postData['PostType']?.toString().isNotEmpty == true 
-              ? widget.postData['PostType'] 
-              : 'Individual';
-          _mediaMode = widget.postData['MediaMode']?.toString().isNotEmpty == true 
-              ? widget.postData['MediaMode'] 
-              : 'Photos';
-          _descController.text = widget.postData['Description']?.toString() ?? '';
-          
-          for (final task in existingTasks) {
-            final stage = task.stage.toLowerCase().replaceAll(' ', '');
-            final assignee = task.assignee.isEmpty ? null : task.assignee.trim();
-            debugPrint('Task: stage="${task.stage}" -> norm="$stage", assignee="$assignee"');
-            DateTime? dueDate;
-            if (task.dueDate.isNotEmpty) {
-              try {
-                final format = DateFormat('d-MMM-yyyy');
-                dueDate = format.parse(task.dueDate);
-              } catch (e) {
-                // Ignore parse errors
-              }
-            }
-            
-            if (stage == 'writing') {
-              _selectedWriter = assignee;
-              _writingDue = dueDate;
-            } else if (stage == 'editing') {
-              _selectedEditor = assignee;
-              _editingDue = dueDate;
-            } else if (stage == 'proofreading') {
-              _selectedProofreader = assignee;
-              _proofreadingDue = dueDate;
-            } else if (stage == 'crosscheck' || stage == 'textcrosscheck') {
-              _selectedCrosscheck = assignee;
-              _crosscheckDue = dueDate;
-            } else if (stage == 'readytopost') {
-              _selectedUploader = assignee;
-              _uploaderDue = dueDate;
-            } else if (stage == 'thumbnailselection') {
-              _selectedThumbnailSelect = assignee;
-              _thumbnailSelectDue = dueDate;
-            } else if (stage == 'thumbnailprocessing') {
-              _selectedThumbnailProcess = assignee;
-              _thumbnailProcessDue = dueDate;
-            } else if (stage == 'thumbnailcrosschecking') {
-              _selectedThumbnailCrosscheck = assignee;
-              _thumbnailCrosscheckDue = dueDate;
-            } else if (stage == 'photosclean') {
-              _selectedPhotosClean = assignee;
-              _photosCleanDue = dueDate;
-            } else if (stage == 'photoediting') {
-              _selectedPhotoEdit = assignee;
-              _photoEditDue = dueDate;
-            } else if (stage == 'videoediting') {
-              _selectedVideoEdit = assignee;
-              _videoEditDue = dueDate;
-            } else if (stage == 'mediacrosscheck') {
-              _selectedMediaCheck = assignee;
-              _mediaCheckDue = dueDate;
-            } else if (stage == 'mediafinalcrosscheck' || stage == 'mediafinalcrosschecking') {
-              _selectedMediaFinalCheck = assignee;
-              _mediaFinalCheckDue = dueDate;
+        for (final task in existingTasks) {
+          final stage = task.stage.toLowerCase().replaceAll(' ', '');
+          final assignee = task.assignee.isEmpty ? null : task.assignee.trim();
+          debugPrint('Task: stage="${task.stage}" -> norm="$stage", assignee="$assignee"');
+          DateTime? dueDate;
+          if (task.dueDate.isNotEmpty) {
+            try {
+              final format = DateFormat('d-MMM-yyyy');
+              dueDate = format.parse(task.dueDate);
+            } catch (e) {
+              // Ignore parse errors
             }
           }
+          
+          if (stage == 'writing') {
+            _selectedWriter = assignee;
+            _writingDue = dueDate;
+          } else if (stage == 'editing') {
+            _selectedEditor = assignee;
+            _editingDue = dueDate;
+          } else if (stage == 'proofreading') {
+            _selectedProofreader = assignee;
+            _proofreadingDue = dueDate;
+          } else if (stage == 'crosscheck' || stage == 'textcrosscheck') {
+            _selectedCrosscheck = assignee;
+            _crosscheckDue = dueDate;
+          } else if (stage == 'readytopost') {
+            _selectedUploader = assignee;
+            _uploaderDue = dueDate;
+          } else if (stage == 'thumbnailselection') {
+            _selectedThumbnailSelect = assignee;
+            _thumbnailSelectDue = dueDate;
+          } else if (stage == 'thumbnailprocessing') {
+            _selectedThumbnailProcess = assignee;
+            _thumbnailProcessDue = dueDate;
+          } else if (stage == 'thumbnailcrosschecking') {
+            _selectedThumbnailCrosscheck = assignee;
+            _thumbnailCrosscheckDue = dueDate;
+          } else if (stage == 'photosclean') {
+            _selectedPhotosClean = assignee;
+            _photosCleanDue = dueDate;
+          } else if (stage == 'photoediting') {
+            _selectedPhotoEdit = assignee;
+            _photoEditDue = dueDate;
+          } else if (stage == 'videoediting') {
+            _selectedVideoEdit = assignee;
+            _videoEditDue = dueDate;
+          } else if (stage == 'mediacrosscheck') {
+            _selectedMediaCheck = assignee;
+            _mediaCheckDue = dueDate;
+          } else if (stage == 'mediafinalcrosscheck' || stage == 'mediafinalcrosschecking') {
+            _selectedMediaFinalCheck = assignee;
+            _mediaFinalCheckDue = dueDate;
+          }
+        }
 
-          // Auto-populate default due dates for any unassigned due dates
-          _applyDefaultDueDates(force: false);
-        });
+        // Auto-populate default due dates for any unassigned due dates
+        _applyDefaultDueDates(force: false);
+      });
 
       _fetchMediaLinks();
     });
@@ -209,8 +258,8 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
 
   Future<void> _fetchMediaLinks() async {
     final provider = context.read<EventProvider>();
-    final isCombined = widget.postData['isCombined'] == true;
-    final combinedPosts = widget.postData['combinedPosts'] as List<dynamic>? ?? [];
+    final isCombined = _postData['isCombined'] == true;
+    final combinedPosts = _postData['combinedPosts'] as List<dynamic>? ?? [];
 
     if (isCombined && combinedPosts.isNotEmpty) {
       List<GroupMediaLink> groupLinks = [];
@@ -242,10 +291,10 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
         });
       }
     } else {
-      final folderLink = widget.postData['FolderLink']?.toString() ?? '';
-      final eventDate = widget.postData['Date']?.toString() ?? '';
-      final venue = widget.postData['Venue']?.toString() ?? '';
-      final postNo = widget.postData['PostNo']?.toString() ?? '';
+      final folderLink = _postData['FolderLink']?.toString() ?? '';
+      final eventDate = _postData['Date']?.toString() ?? '';
+      final venue = _postData['Venue']?.toString() ?? '';
+      final postNo = _postData['PostNo']?.toString() ?? '';
 
       if (folderLink.isNotEmpty) {
         final links = await provider.fetchMediaFolders(folderLink, eventDate, 'AdminAssign', venue: venue, postNo: postNo);
@@ -446,9 +495,9 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
 
   Future<void> _submit() async {
     final provider = context.read<EventProvider>();
-    final isCombined = widget.postData['isCombined'] == true;
-    final postNo = isCombined ? widget.postData['postNo']?.toString() : widget.postData['PostNo']?.toString();
-    final isInitialized = widget.postData['isInitialized'] == true;
+    final isCombined = _postData['isCombined'] == true;
+    final postNo = isCombined ? _postData['postNo']?.toString() : _postData['PostNo']?.toString();
+    final isInitialized = _postData['isInitialized'] == true;
     if (postNo == null) return;
     
     setState(() => _isLoading = true);
@@ -532,10 +581,10 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isCombined = widget.postData['isCombined'] == true;
-    final isInitialized = widget.postData['isInitialized'] == true;
-    final postNo = isCombined ? widget.postData['postNo'] : widget.postData['PostNo'];
-    final themeName = isCombined ? 'Combined Group' : (widget.postData['Theme'] ?? 'No Theme');
+    final isCombined = _postData['isCombined'] == true;
+    final isInitialized = _postData['isInitialized'] == true;
+    final postNo = isCombined ? _postData['postNo'] : _postData['PostNo'];
+    final themeName = isCombined ? 'Combined Group' : (_postData['Theme'] ?? 'No Theme');
     final provider = context.watch<EventProvider>();
 
     return Scaffold(
@@ -563,9 +612,9 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
                         Text('Post #$postNo', style: TextStyle(color: theme.colorScheme.primary, fontWeight: FontWeight.bold)),
                         const SizedBox(height: 4),
                         Text(themeName, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                        if (widget.postData['Program']?.toString().isNotEmpty == true) ...[
+                        if (_postData['Program']?.toString().isNotEmpty == true) ...[
                           const SizedBox(height: 2),
-                          Text(widget.postData['Program'].toString(), style: TextStyle(color: Colors.grey.shade700, fontSize: 13)),
+                          Text(_postData['Program'].toString(), style: TextStyle(color: Colors.grey.shade700, fontSize: 13)),
                         ],
                       ],
                     ),
@@ -573,7 +622,7 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
                   const SizedBox(height: 14),
 
                   // Combined Events Breakdown (if combined)
-                  if (isCombined && (widget.postData['combinedPosts'] as List<dynamic>? ?? []).isNotEmpty) ...[
+                  if (isCombined && (_postData['combinedPosts'] as List<dynamic>? ?? []).isNotEmpty) ...[
                     Card(
                       color: Colors.purple.shade50,
                       shape: RoundedRectangleBorder(
@@ -590,7 +639,7 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
                                 Icon(Icons.merge_type, size: 18, color: Colors.purple.shade700),
                                 const SizedBox(width: 6),
                                 Text(
-                                  'Combined Events (${(widget.postData['combinedPosts'] as List).length})',
+                                  'Combined Events (${(_postData['combinedPosts'] as List).length})',
                                   style: TextStyle(
                                     fontWeight: FontWeight.bold,
                                     fontSize: 15,
@@ -600,7 +649,7 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
                               ],
                             ),
                             const SizedBox(height: 12),
-                            ...(widget.postData['combinedPosts'] as List).asMap().entries.map((entry) {
+                            ...( _postData['combinedPosts'] as List).asMap().entries.map((entry) {
                               final idx = entry.key;
                               final p = entry.value as Map<String, dynamic>;
                               final pNo = p['PostNo']?.toString() ?? '';
@@ -726,24 +775,24 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
                           children: [
                             const Text('Event Details', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
                             const SizedBox(height: 12),
-                            if (widget.postData['Date']?.toString().isNotEmpty == true)
-                              _infoRow(Icons.calendar_today, 'Date', widget.postData['Date'].toString()),
-                            if (widget.postData['Branch']?.toString().isNotEmpty == true)
-                              _infoRow(Icons.location_city, 'Branch', '${widget.postData['Branch'] ?? ''}${widget.postData['State']?.toString().isNotEmpty == true ? ', ${widget.postData['State']}' : ''}'),
-                            if (widget.postData['Venue']?.toString().isNotEmpty == true)
-                              _infoRow(Icons.place, 'Venue', widget.postData['Venue'].toString()),
-                            if (widget.postData['Organizers']?.toString().isNotEmpty == true)
-                              _infoRow(Icons.people, 'Organizers', widget.postData['Organizers'].toString()),
-                            if (widget.postData['Partners']?.toString().isNotEmpty == true)
-                              _infoRow(Icons.handshake, 'Partners', widget.postData['Partners'].toString()),
-                            if (widget.postData['Timings']?.toString().isNotEmpty == true)
-                              _infoRow(Icons.access_time, 'Timings', widget.postData['Timings'].toString()),
-                            if (widget.postData['ActivityType']?.toString().isNotEmpty == true)
-                              _infoRow(Icons.category, 'Activity Type', widget.postData['ActivityType'].toString()),
-                            if (widget.postData['MOP']?.toString().isNotEmpty == true)
-                              _infoRow(Icons.campaign, 'Promotion (MOP)', widget.postData['MOP'].toString()),
-                            if (widget.postData['ImportantInfo']?.toString().isNotEmpty == true)
-                              _infoRow(Icons.info_outline, 'Important', widget.postData['ImportantInfo'].toString()),
+                            if (_postData['Date']?.toString().isNotEmpty == true)
+                              _infoRow(Icons.calendar_today, 'Date', _postData['Date'].toString()),
+                            if (_postData['Branch']?.toString().isNotEmpty == true)
+                              _infoRow(Icons.location_city, 'Branch', '${_postData['Branch'] ?? ''}${_postData['State']?.toString().isNotEmpty == true ? ', ${_postData['State']}' : ''}'),
+                            if (_postData['Venue']?.toString().isNotEmpty == true)
+                              _infoRow(Icons.place, 'Venue', _postData['Venue'].toString()),
+                            if (_postData['Organizers']?.toString().isNotEmpty == true)
+                              _infoRow(Icons.people, 'Organizers', _postData['Organizers'].toString()),
+                            if (_postData['Partners']?.toString().isNotEmpty == true)
+                              _infoRow(Icons.handshake, 'Partners', _postData['Partners'].toString()),
+                            if (_postData['Timings']?.toString().isNotEmpty == true)
+                              _infoRow(Icons.access_time, 'Timings', _postData['Timings'].toString()),
+                            if (_postData['ActivityType']?.toString().isNotEmpty == true)
+                              _infoRow(Icons.category, 'Activity Type', _postData['ActivityType'].toString()),
+                            if (_postData['MOP']?.toString().isNotEmpty == true)
+                              _infoRow(Icons.campaign, 'Promotion (MOP)', _postData['MOP'].toString()),
+                            if (_postData['ImportantInfo']?.toString().isNotEmpty == true)
+                              _infoRow(Icons.info_outline, 'Important', _postData['ImportantInfo'].toString()),
                           ],
                         ),
                       ),
@@ -751,10 +800,10 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
                     const SizedBox(height: 14),
 
                     // Guest / Speaker / Participant Card (if any)
-                    if (widget.postData['GuestName']?.toString().isNotEmpty == true ||
-                        widget.postData['GuestOrg']?.toString().isNotEmpty == true ||
-                        widget.postData['GuestType']?.toString().isNotEmpty == true ||
-                        widget.postData['GuestDesignation']?.toString().isNotEmpty == true) ...[
+                    if (_postData['GuestName']?.toString().isNotEmpty == true ||
+                        _postData['GuestOrg']?.toString().isNotEmpty == true ||
+                        _postData['GuestType']?.toString().isNotEmpty == true ||
+                        _postData['GuestDesignation']?.toString().isNotEmpty == true) ...[
                       Card(
                         child: Padding(
                           padding: const EdgeInsets.all(16),
@@ -766,14 +815,14 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
                                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF1A1A2E)),
                               ),
                               const SizedBox(height: 12),
-                              if (widget.postData['GuestType']?.toString().isNotEmpty == true)
-                                _infoRow(Icons.person_pin, 'Type', widget.postData['GuestType'].toString()),
-                              if (widget.postData['GuestName']?.toString().isNotEmpty == true)
-                                _infoRow(Icons.person, 'Name', widget.postData['GuestName'].toString()),
-                              if (widget.postData['GuestDesignation']?.toString().isNotEmpty == true)
-                                _infoRow(Icons.work, 'Designation', widget.postData['GuestDesignation'].toString()),
-                              if (widget.postData['GuestOrg']?.toString().isNotEmpty == true)
-                                _infoRow(Icons.business, 'Organization', widget.postData['GuestOrg'].toString()),
+                              if (_postData['GuestType']?.toString().isNotEmpty == true)
+                                _infoRow(Icons.person_pin, 'Type', _postData['GuestType'].toString()),
+                              if (_postData['GuestName']?.toString().isNotEmpty == true)
+                                _infoRow(Icons.person, 'Name', _postData['GuestName'].toString()),
+                              if (_postData['GuestDesignation']?.toString().isNotEmpty == true)
+                                _infoRow(Icons.work, 'Designation', _postData['GuestDesignation'].toString()),
+                              if (_postData['GuestOrg']?.toString().isNotEmpty == true)
+                                _infoRow(Icons.business, 'Organization', _postData['GuestOrg'].toString()),
                             ],
                           ),
                         ),
@@ -793,10 +842,10 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                               children: [
-                                _benCircle('👨', 'Male', int.tryParse(widget.postData['Male']?.toString() ?? '') ?? 0, const Color(0xFF42A5F5)),
-                                _benCircle('👩', 'Female', int.tryParse(widget.postData['Female']?.toString() ?? '') ?? 0, const Color(0xFFE91E63)),
-                                _benCircle('🧒', 'Children', int.tryParse(widget.postData['Children']?.toString() ?? '') ?? 0, const Color(0xFFFF9800)),
-                                _benCircle('👥', 'Total', int.tryParse(widget.postData['TotalBeneficiary']?.toString() ?? '') ?? 0, theme.colorScheme.primary),
+                                _benCircle('👨', 'Male', int.tryParse(_postData['Male']?.toString() ?? '') ?? 0, const Color(0xFF42A5F5)),
+                                _benCircle('👩', 'Female', int.tryParse(_postData['Female']?.toString() ?? '') ?? 0, const Color(0xFFE91E63)),
+                                _benCircle('🧒', 'Children', int.tryParse(_postData['Children']?.toString() ?? '') ?? 0, const Color(0xFFFF9800)),
+                                _benCircle('👥', 'Total', int.tryParse(_postData['TotalBeneficiary']?.toString() ?? '') ?? 0, theme.colorScheme.primary),
                               ],
                             ),
                           ],

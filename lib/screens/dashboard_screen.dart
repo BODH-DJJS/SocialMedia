@@ -1084,28 +1084,34 @@ class _DashboardScreenState extends State<DashboardScreen>
   Widget _buildAllPosts(EventProvider provider, AuthProvider auth) {
     final filters = ['All', 'Active', 'Inactive', 'Posted', 'Clean', 'Completed'];
 
+    // Pre-index tasks by postNo / groupId for O(1) instant lookup
+    final Map<String, List<Event>> tasksByPostNo = {};
+    for (final t in provider.events) {
+      if (t.postNo.isNotEmpty) {
+        tasksByPostNo.putIfAbsent(t.postNo, () => []).add(t);
+      }
+    }
+
+    final searchQuery = _searchController.text.trim().toLowerCase();
+
     List<Map<String, dynamic>> rawFiltered =
         provider.rawPosts.where((post) {
           final postNo = post['PostNo']?.toString().toLowerCase() ?? '';
           final branch = post['Branch']?.toString().toLowerCase() ?? '';
 
           // Search text filter by Post No OR Branch
-          final searchQuery = _searchController.text.trim().toLowerCase();
           if (searchQuery.isNotEmpty && !postNo.contains(searchQuery) && !branch.contains(searchQuery)) {
             return false;
           }
 
           if (_postFilter == 'All') return true;
-          // For combined, we might check tasks for the GroupID, but for now we check tasks for PostNo or GroupID
+          final rawPostNo = post['PostNo']?.toString() ?? '';
           final groupId = post['GroupID']?.toString() ?? '';
-          final postTasks =
-              provider.events
-                  .where(
-                    (t) =>
-                        t.postNo == post['PostNo']?.toString() ||
-                        (groupId.isNotEmpty && t.postNo == groupId),
-                  )
-                  .toList();
+
+          List<Event> postTasks = tasksByPostNo[rawPostNo] ?? [];
+          if (postTasks.isEmpty && groupId.isNotEmpty) {
+            postTasks = tasksByPostNo[groupId] ?? [];
+          }
 
           final postStatus = _getPostWorkflowStatus(postTasks);
 
@@ -1116,10 +1122,21 @@ class _DashboardScreenState extends State<DashboardScreen>
             return postStatus == 'Active';
           }
           if (_postFilter == 'Posted') {
-            return postStatus == 'Posted' || postStatus == 'Clean' || postStatus == 'Completed';
+            return postStatus == 'Posted' || postStatus == 'Completed';
           }
           if (_postFilter == 'Clean') {
-            return postStatus == 'Clean';
+            // Clean mns Photos Clean pending: Ready is done, but Photos Clean is not done yet
+            final readyTask = postTasks.where((t) {
+              final s = t.stage.trim().toLowerCase();
+              return s == 'ready to post' || s == 'ready topost' || s == 'ready';
+            }).firstOrNull;
+            final isReadyDone = readyTask != null && readyTask.status.trim().toLowerCase() == 'done';
+            final cleanTask = postTasks.where((t) {
+              final s = t.stage.trim().toLowerCase();
+              return s.contains('photos clean') || s.contains('photo clean') || s.contains('photosclean');
+            }).firstOrNull;
+            final isCleanDone = cleanTask != null && cleanTask.status.trim().toLowerCase() == 'done';
+            return isReadyDone && !isCleanDone;
           }
           if (_postFilter == 'Completed') {
             return postStatus == 'Completed';
@@ -1140,8 +1157,7 @@ class _DashboardScreenState extends State<DashboardScreen>
       for (var p in rawFiltered) {
         final g = p['GroupID']?.toString() ?? '';
         if (g.isNotEmpty) {
-          if (!groups.containsKey(g)) groups[g] = [];
-          groups[g]!.add(p);
+          groups.putIfAbsent(g, () => []).add(p);
         }
       }
       for (var entry in groups.entries) {
@@ -1316,10 +1332,10 @@ class _DashboardScreenState extends State<DashboardScreen>
                                 return ListView.builder(
                                   padding: const EdgeInsets.symmetric(horizontal: 12),
                                   itemCount: tabFiltered.length,
-                                  itemBuilder: (context, index) => _buildPostCard(tabFiltered[index], provider, auth),
+                                  itemBuilder: (context, index) => _buildPostCard(tabFiltered[index], provider, auth, tasksByPostNo: tasksByPostNo),
                                 );
                               }
-                              return _buildPostsTable(tabFiltered, provider);
+                              return _buildPostsTable(tabFiltered, provider, tasksByPostNo: tasksByPostNo);
                             },
                           ))
                     : (combinedGroups.isEmpty
@@ -1335,10 +1351,11 @@ class _DashboardScreenState extends State<DashboardScreen>
                                         combinedGroups[index],
                                         provider,
                                         auth,
+                                        tasksByPostNo: tasksByPostNo,
                                       ),
                                 );
                               }
-                              return _buildCombinedPostsTable(combinedGroups, provider);
+                              return _buildCombinedPostsTable(combinedGroups, provider, tasksByPostNo: tasksByPostNo);
                             },
                           )),
           ),
@@ -1447,9 +1464,6 @@ class _DashboardScreenState extends State<DashboardScreen>
 
     if (isReadyDone && isCleanDone) {
       return 'Completed';
-    }
-    if (isReadyDone && !isCleanDone) {
-      return 'Clean';
     }
     if (isReadyDone) {
       return 'Posted';
@@ -2407,7 +2421,7 @@ class _DashboardScreenState extends State<DashboardScreen>
     );
   }
 
-  Widget _buildPostsTable(List<Map<String, dynamic>> posts, EventProvider provider) {
+  Widget _buildPostsTable(List<Map<String, dynamic>> posts, EventProvider provider, {Map<String, List<Event>>? tasksByPostNo}) {
     if (_sortColumnIndex != null) {
       posts.sort((a, b) {
         dynamic valA;
@@ -2539,7 +2553,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                       final totalBen = post['TotalBeneficiary']?.toString() ?? '0';
 
                       final isSelected = _isSelectionMode && _selectedPosts.contains(postNo);
-                      final postTasks = provider.events.where((t) => t.postNo == postNo).toList();
+                      final postTasks = tasksByPostNo?[postNo] ?? provider.events.where((t) => t.postNo == postNo).toList();
                       final isInitialized = postTasks.isNotEmpty;
 
                       return DataRow(
@@ -2701,7 +2715,7 @@ class _DashboardScreenState extends State<DashboardScreen>
   }
 
 
-  Widget _buildCombinedPostsTable(List<Map<String, dynamic>> groups, EventProvider provider) {
+  Widget _buildCombinedPostsTable(List<Map<String, dynamic>> groups, EventProvider provider, {Map<String, List<Event>>? tasksByPostNo}) {
     if (_combinedSortColumnIndex != null) {
       groups.sort((a, b) {
         dynamic valA;
@@ -2792,7 +2806,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                   final theme = firstPost['Theme']?.toString() ?? '';
                   final date = firstPost['Date']?.toString() ?? '';
                   final totalBen = posts.fold<int>(0, (sum, p) => sum + (int.tryParse(p['TotalBeneficiary']?.toString() ?? '0') ?? 0));
-                  final groupTasks = provider.events.where((t) => t.postNo == groupId).toList();
+                  final groupTasks = tasksByPostNo?[groupId] ?? provider.events.where((t) => t.postNo == groupId).toList();
                   final isInitialized = groupTasks.isNotEmpty;
                   final groupStatus = _getPostWorkflowStatus(groupTasks);
 
@@ -2940,8 +2954,9 @@ class _DashboardScreenState extends State<DashboardScreen>
   Widget _buildPostCard(
     Map<String, dynamic> post,
     EventProvider provider,
-    AuthProvider auth,
-  ) {
+    AuthProvider auth, {
+    Map<String, List<Event>>? tasksByPostNo,
+  }) {
     final postNo = post['PostNo']?.toString() ?? '';
     final theme = post['Theme']?.toString() ?? '';
     final date = post['Date']?.toString() ?? '';
@@ -2954,7 +2969,7 @@ class _DashboardScreenState extends State<DashboardScreen>
     final children = post['Children'] ?? 0;
     final totalBen = post['TotalBeneficiary'] ?? 0;
 
-    final postTasks = provider.events.where((t) => t.postNo == postNo).toList();
+    final postTasks = tasksByPostNo?[postNo] ?? provider.events.where((t) => t.postNo == postNo).toList();
     final isInitialized = postTasks.isNotEmpty;
 
     // Workflow status indicators
@@ -3276,13 +3291,14 @@ class _DashboardScreenState extends State<DashboardScreen>
   Widget _buildCombinedCard(
     Map<String, dynamic> group,
     EventProvider provider,
-    AuthProvider auth,
-  ) {
+    AuthProvider auth, {
+    Map<String, List<Event>>? tasksByPostNo,
+  }) {
     final groupId = group['GroupID'] as String;
     final List<Map<String, dynamic>> posts = group['Posts'];
 
     final postTasks =
-        provider.events.where((t) => t.postNo == groupId).toList();
+        tasksByPostNo?[groupId] ?? provider.events.where((t) => t.postNo == groupId).toList();
     final isInitialized = postTasks.isNotEmpty;
 
     // For media handling later, we will use the posts array.
