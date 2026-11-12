@@ -471,52 +471,26 @@ function cleanupAndSyncTasks(ss) {
     });
   }
 
-  // 3. Ensure Media Final Cross check exists for all active posts
-  var now = new Date().toLocaleString();
-  var newRows = [];
-  for (var pNo in postTasksMap) {
-    var tList = postTasksMap[pNo];
-    var hasFinalCheck = tList.some(function(t) {
-      return t.stage === 'mediafinalcrosscheck' || t.stage === 'mediafinalcrosschecking';
-    });
-
-    if (!hasFinalCheck && tList.length > 0) {
-      var mediaCheckTask = null;
-      var proofTask = null;
-      for (var k = 0; k < tList.length; k++) {
-        if (tList[k].stage === 'mediacrosscheck') { mediaCheckTask = tList[k]; }
-        if (tList[k].stage === 'proofreading') { proofTask = tList[k]; }
+  // 3. Deduplicate and ensure Media Final Cross check exists for active posts
+  // First, remove duplicate Media Final Cross check tasks if multiple exist for a post
+  var finalCheckSeen = {};
+  var duplicateRows = [];
+  for (var i = data.length - 1; i >= 1; i--) {
+    var pNo = (data[i][postNoCol] || '').toString().trim();
+    var sNorm = normalizeStageName(data[i][stageCol]);
+    if (sNorm === 'mediafinalcrosscheck' || sNorm === 'mediafinalcrosschecking') {
+      if (finalCheckSeen[pNo]) {
+        duplicateRows.push(i + 1);
+      } else {
+        finalCheckSeen[pNo] = true;
       }
-      var assignee = mediaCheckTask ? mediaCheckTask.assignee : '';
-      var isMediaDone = mediaCheckTask && mediaCheckTask.status === 'Done';
-      var isProofDone = !proofTask || proofTask.status === 'Done';
-      var initialStatus = (isMediaDone && isProofDone) ? 'Ready' : 'Waiting';
-      var allottedDate = assignee ? now : '';
-
-      var rowData = [
-        pNo + '-Media Final Cross check',
-        pNo,
-        'Media Final Cross check',
-        assignee,
-        initialStatus,
-        now,
-        '',
-        ''
-      ];
-      if (allottedCol !== -1) {
-        while (rowData.length <= allottedCol) rowData.push('');
-        rowData[allottedCol] = allottedDate;
-      }
-      if (dueDateCol !== -1) {
-        while (rowData.length <= dueDateCol) rowData.push('');
-        rowData[dueDateCol] = '';
-      }
-      newRows.push(rowData);
     }
   }
-
-  if (newRows.length > 0) {
-    taskSheet.getRange(data.length + 1, 1, newRows.length, headers.length).setValues(newRows);
+  if (duplicateRows.length > 0) {
+    for (var d = 0; d < duplicateRows.length; d++) {
+      taskSheet.deleteRow(duplicateRows[d]);
+    }
+    data = taskSheet.getDataRange().getValues();
   }
 
   // 4. Run fixStuckTasks to fix any dependencies and unblock Ready to Post
@@ -1846,7 +1820,15 @@ function createTasksForPostV2(payload) {
         }
       }
     }
+    // Re-fetch and re-index existing tasks after row deletions
     existingTasks = tasks.getDataRange().getValues();
+    existingTaskRows = {};
+    for (var t = 1; t < existingTasks.length; t++) {
+      if (existingTasks[t][1] == postNo) {
+        var st = normalizeStageName(existingTasks[t][2]);
+        existingTaskRows[st] = t + 1;
+      }
+    }
   }
 
   // Find all posts in the group (or just the single post)
@@ -2249,7 +2231,14 @@ function handleReverseTask(payload) {
     } else if (currentNorm === 'thumbnailprocessing') {
       targetStage = 'Thumbnail Selection';
     } else if (currentNorm === 'mediacrosscheck') {
-      targetStage = 'Photo Editing';
+      var hasVideoEdit = false;
+      for (var r = 1; r < data.length; r++) {
+        if (data[r][postNoCol] == postNo && normalizeStageName(data[r][stageCol]) === 'videoediting') {
+          hasVideoEdit = true;
+          break;
+        }
+      }
+      targetStage = hasVideoEdit ? 'Video Editing' : 'Photo Editing';
     } else if (currentNorm === 'mediafinalcrosscheck' || currentNorm === 'mediafinalcrosschecking') {
       targetStage = 'Media Cross Check';
     } else if (currentNorm === 'photosclean') {
