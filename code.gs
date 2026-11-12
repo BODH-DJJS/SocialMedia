@@ -1829,6 +1829,26 @@ function createTasksForPostV2(payload) {
     existingTasks = tasks.getDataRange().getValues();
   }
 
+  // Delete Video Editing or Photo Editing if current Media Mode does not include it
+  if (isUpdate) {
+    for (var t = existingTasks.length - 1; t >= 1; t--) {
+      if (existingTasks[t][1] == postNo) {
+        var stNorm = normalizeStageName(existingTasks[t][2]);
+        // If mediaMode is Video (does not contain 'photo'), delete Photo Editing
+        if (modLower.indexOf('photo') === -1 && stNorm === 'photoediting') {
+          tasks.deleteRow(t + 1);
+          delete existingTaskRows[stNorm];
+        }
+        // If mediaMode is Photos (does not contain 'video'), delete Video Editing
+        if (modLower.indexOf('video') === -1 && stNorm === 'videoediting') {
+          tasks.deleteRow(t + 1);
+          delete existingTaskRows[stNorm];
+        }
+      }
+    }
+    existingTasks = tasks.getDataRange().getValues();
+  }
+
   // Find all posts in the group (or just the single post)
   var groupPosts = [];
   var groupId = null;

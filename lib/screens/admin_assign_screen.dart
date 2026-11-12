@@ -1167,7 +1167,18 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
                           const Divider(height: 24),
                           _buildRadioGroup('Post Type', ['Individual', 'Combined'], _postType, (v) => setState(() => _postType = v)),
                           const Divider(height: 24),
-                          _buildRadioGroup('Media Mode', ['Photos', 'Video'], _mediaMode, (v) => setState(() => _mediaMode = v)),
+                          _buildRadioGroup('Media Mode', ['Photos', 'Video'], _mediaMode, (v) {
+                            setState(() {
+                              _mediaMode = v;
+                              if (v.toLowerCase() == 'video') {
+                                _selectedPhotoEdit = null;
+                                _photoEditDue = null;
+                              } else if (v.toLowerCase() == 'photos') {
+                                _selectedVideoEdit = null;
+                                _videoEditDue = null;
+                              }
+                            });
+                          }),
                           const Divider(height: 24),
                           const Text('Content Description', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                           const SizedBox(height: 8),
