@@ -1285,17 +1285,10 @@ function copyForwardCanvaLink(rowIndex, headers, taskSheet, updates) {
   var postNo = row[postNoCol];
   var stageNorm = normalizeStageName(row[stageCol]);
 
-  // Forward Canva link from Photo/Video Editing or Media stages to downstream Media stages
-  var isSourceStage = (stageNorm === 'photoediting' || stageNorm === 'videoediting' || stageNorm === 'mediacrosscheck');
-  if (!isSourceStage) return;
-
-  var targetStages = ['mediacrosscheck', 'mediafinalcrosscheck', 'readytopost'];
+  // Forward Canva link to downstream stages (or all workflow stages of this post so everyone has access)
   for (var i = 1; i < data.length; i++) {
     if (data[i][postNoCol] == postNo) {
-      var tStageNorm = normalizeStageName(data[i][stageCol]);
-      if (targetStages.indexOf(tStageNorm) !== -1) {
-        taskSheet.getRange(i + 1, canvaLinkCol + 1).setValue(currentLink);
-      }
+      taskSheet.getRange(i + 1, canvaLinkCol + 1).setValue(currentLink);
     }
   }
 }

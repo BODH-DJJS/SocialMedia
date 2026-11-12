@@ -188,13 +188,10 @@ class EventProvider with ChangeNotifier {
     }
     if (updates.containsKey('CanvaLink')) {
       event.canvaLink = updates['CanvaLink']?.toString() ?? '';
-      // Also update sibling downstream media tasks of the same post in local cache
+      // Also update sibling tasks of the same post in local cache
       final postTasks = _events.where((t) => t.postNo == event.postNo);
       for (final t in postTasks) {
-        final s = t.stage.toLowerCase().replaceAll(' ', '');
-        if (s == 'mediacrosscheck' || s == 'mediafinalcrosscheck' || s == 'readytopost') {
-          t.canvaLink = event.canvaLink;
-        }
+        t.canvaLink = event.canvaLink;
       }
       notifyListeners();
     }
