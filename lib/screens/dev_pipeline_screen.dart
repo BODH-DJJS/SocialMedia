@@ -25,6 +25,60 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
     'Blogs / Articles'
   ];
 
+  String _searchQuery = '';
+  String _statusFilter = 'All'; // All, Ready, Waiting, Done
+
+  final List<Map<String, dynamic>> _stageConfigs = [
+    {
+      'name': 'Ideation',
+      'icon': Icons.lightbulb_outline_rounded,
+      'color': Color(0xFFF39C12),
+      'cadence': 4,
+    },
+    {
+      'name': 'Research',
+      'icon': Icons.travel_explore_rounded,
+      'color': Color(0xFF2980B9),
+      'cadence': 8,
+    },
+    {
+      'name': 'Selection and sequencing',
+      'icon': Icons.checklist_rtl_rounded,
+      'color': Color(0xFF16A085),
+      'cadence': 12,
+    },
+    {
+      'name': 'Writing',
+      'icon': Icons.draw_outlined,
+      'color': Color(0xFF8E44AD),
+      'cadence': 16,
+    },
+    {
+      'name': 'PPT Development',
+      'icon': Icons.co_present_rounded,
+      'color': Color(0xFFD35400),
+      'cadence': 20,
+    },
+    {
+      'name': 'Proofreading',
+      'icon': Icons.spellcheck_rounded,
+      'color': Color(0xFF00897B),
+      'cadence': 24,
+    },
+    {
+      'name': 'Editing',
+      'icon': Icons.auto_fix_high_rounded,
+      'color': Color(0xFF3F51B5),
+      'cadence': 28,
+    },
+    {
+      'name': 'Final Check',
+      'icon': Icons.verified_outlined,
+      'color': Color(0xFF27AE60),
+      'cadence': 32,
+    },
+  ];
+
   @override
   void initState() {
     super.initState();
@@ -63,41 +117,65 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
     final isAdmin = auth.role.toLowerCase() == 'admin';
 
     return Scaffold(
+      backgroundColor: const Color(0xFFF4F6F9),
       appBar: AppBar(
+        backgroundColor: const Color(0xFF1A237E),
+        elevation: 2,
         title: Row(
           children: [
             Container(
-              padding: const EdgeInsets.all(6),
+              padding: const EdgeInsets.all(7),
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.15),
-                borderRadius: BorderRadius.circular(8),
+                color: Colors.white.withOpacity(0.18),
+                borderRadius: BorderRadius.circular(10),
               ),
-              child: const Icon(Icons.hub_outlined, size: 20),
+              child: const Icon(Icons.hub_rounded, size: 22, color: Colors.white),
             ),
-            const SizedBox(width: 10),
-            const Text('Development Pipeline', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-            const SizedBox(width: 16),
-            // Pipeline switcher pill
+            const SizedBox(width: 12),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Development Pipeline',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.white),
+                ),
+                Text(
+                  'Delhi (IN) • Head Office • BODH Drive',
+                  style: TextStyle(fontSize: 11, color: Colors.white.withOpacity(0.7)),
+                ),
+              ],
+            ),
+            const SizedBox(width: 20),
+            // Pipeline Switcher Pill
             Container(
+              padding: const EdgeInsets.all(3),
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.2),
-                borderRadius: BorderRadius.circular(20),
+                color: Colors.black.withOpacity(0.25),
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(color: Colors.white.withOpacity(0.2)),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   InkWell(
                     onTap: widget.onSwitchToSocialMedia,
-                    borderRadius: const BorderRadius.horizontal(left: Radius.circular(20)),
+                    borderRadius: BorderRadius.circular(20),
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                      child: Text(
-                        'Social Media',
-                        style: TextStyle(
-                          color: Colors.white.withOpacity(0.8),
-                          fontSize: 13,
-                          fontWeight: FontWeight.normal,
-                        ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.photo_library_outlined, size: 15, color: Colors.white.withOpacity(0.8)),
+                          const SizedBox(width: 6),
+                          Text(
+                            'Social Media',
+                            style: TextStyle(
+                              color: Colors.white.withOpacity(0.85),
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
@@ -106,14 +184,27 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.15),
+                          blurRadius: 4,
+                          offset: const Offset(0, 1),
+                        ),
+                      ],
                     ),
-                    child: const Text(
-                      'Development',
-                      style: TextStyle(
-                        color: Color(0xFF6C5CE7),
-                        fontSize: 13,
-                        fontWeight: FontWeight.bold,
-                      ),
+                    child: Row(
+                      children: const [
+                        Icon(Icons.layers_rounded, size: 15, color: Color(0xFF1A237E)),
+                        SizedBox(width: 6),
+                        Text(
+                          'Development',
+                          style: TextStyle(
+                            color: Color(0xFF1A237E),
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
@@ -124,127 +215,337 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
         actions: [
           IconButton(
             tooltip: 'Refresh Data',
-            icon: const Icon(Icons.refresh),
+            icon: const Icon(Icons.refresh_rounded, color: Colors.white),
             onPressed: () => devProvider.fetchDevData(role: auth.role, username: auth.username),
           ),
           if (isAdmin)
             Padding(
-              padding: const EdgeInsets.only(right: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               child: ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.white,
-                  foregroundColor: const Color(0xFF6C5CE7),
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  backgroundColor: const Color(0xFFFF6F00),
+                  foregroundColor: Colors.white,
+                  elevation: 2,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
                 ),
-                icon: const Icon(Icons.add, size: 18),
-                label: const Text('Create New Event / Topic', style: TextStyle(fontWeight: FontWeight.bold)),
+                icon: const Icon(Icons.add_rounded, size: 19),
+                label: const Text('Create Event / Topic', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                 onPressed: () => _showCreateProjectDialog(context),
               ),
             ),
         ],
-        bottom: TabBar(
-          controller: _tabController,
-          isScrollable: true,
-          indicatorColor: Colors.white,
-          indicatorWeight: 3,
-          labelColor: Colors.white,
-          unselectedLabelColor: Colors.white70,
-          tabs: _streams.map((s) => Tab(text: s)).toList(),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(48),
+          child: Container(
+            color: const Color(0xFF151C65),
+            child: TabBar(
+              controller: _tabController,
+              isScrollable: true,
+              indicatorColor: const Color(0xFFFF6F00),
+              indicatorWeight: 3.5,
+              labelColor: Colors.white,
+              unselectedLabelColor: Colors.white60,
+              labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+              tabs: [
+                _buildTab('Campaign Development', Icons.campaign_rounded),
+                _buildTab('SM Development', Icons.share_rounded),
+                _buildTab('Website Reporting', Icons.language_rounded),
+                _buildTab('Blogs / Articles', Icons.article_rounded),
+              ],
+            ),
+          ),
         ),
       ),
       body: devProvider.isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircularProgressIndicator(color: Color(0xFF1A237E)),
+                  SizedBox(height: 16),
+                  Text('Loading Development Pipeline...', style: TextStyle(color: Colors.grey)),
+                ],
+              ),
+            )
           : _tabController.index == 0
               ? _buildCampaignPipelineView(devProvider)
               : _buildComingSoonStreamView(_streams[_tabController.index]),
     );
   }
 
-  Widget _buildComingSoonStreamView(String streamName) {
-    return Center(
-      child: Column(
+  Tab _buildTab(String title, IconData icon) {
+    return Tab(
+      child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.construction_outlined, size: 64, color: Colors.grey.shade400),
-          const SizedBox(height: 16),
-          Text(
-            streamName,
-            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black87),
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            'The folder structure and backend support are configured.\nStream-specific sequential workflows will be enabled here.',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: Colors.grey),
-          ),
+          Icon(icon, size: 16),
+          const SizedBox(width: 8),
+          Text(title),
         ],
       ),
     );
   }
 
-  Widget _buildCampaignPipelineView(DevPipelineProvider provider) {
-    final stages = [
-      'Ideation',
-      'Research',
-      'Selection and sequencing',
-      'Writing',
-      'PPT Development',
-      'Proofreading',
-      'Editing',
-      'Final Check'
-    ];
+  Widget _buildComingSoonStreamView(String streamName) {
+    return Center(
+      child: Card(
+        margin: const EdgeInsets.all(24),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        elevation: 3,
+        child: Container(
+          width: 520,
+          padding: const EdgeInsets.all(36),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1A237E).withOpacity(0.08),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.architecture_rounded, size: 54, color: Color(0xFF1A237E)),
+              ),
+              const SizedBox(height: 20),
+              Text(
+                streamName,
+                style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF1A1A2E)),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                'The Shared Drive folder structure under Delhi (IN) > Head Office is mapped and ready.',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 14, color: Colors.grey.shade700),
+              ),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.amber.shade50,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.amber.shade200),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.info_outline, size: 16, color: Colors.amber.shade900),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Sequential workflow steps will be enabled for this stream soon.',
+                      style: TextStyle(fontSize: 12, color: Colors.amber.shade900, fontWeight: FontWeight.w500),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
+  Widget _buildCampaignPipelineView(DevPipelineProvider provider) {
     if (provider.tasks.isEmpty && provider.projects.isEmpty) {
       return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.assignment_outlined, size: 64, color: Colors.grey.shade400),
-            const SizedBox(height: 16),
-            const Text(
-              'No Campaign Development Projects Yet',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        child: Card(
+          elevation: 2,
+          margin: const EdgeInsets.all(32),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          child: Container(
+            width: 480,
+            padding: const EdgeInsets.all(36),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1A237E).withOpacity(0.08),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.post_add_rounded, size: 52, color: Color(0xFF1A237E)),
+                ),
+                const SizedBox(height: 20),
+                const Text(
+                  'No Campaign Development Projects Yet',
+                  style: TextStyle(fontSize: 19, fontWeight: FontWeight.bold, color: Color(0xFF1A1A2E)),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Click "Create Event / Topic" above to start a new campaign topic with its 8-step sequential workflow and 4-day cadence.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+                ),
+              ],
             ),
-            const SizedBox(height: 8),
-            const Text(
-              'Click "Create New Event / Topic" above to start a campaign session and its 8-step workflow.',
-              style: TextStyle(color: Colors.grey),
-            ),
-          ],
+          ),
         ),
       );
     }
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        return Scrollbar(
-          thumbVisibility: true,
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: ConstrainedBox(
-              constraints: BoxConstraints(minWidth: constraints.maxWidth),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: stages.asMap().entries.map((entry) {
-                  final idx = entry.key;
-                  final stageName = entry.value;
-                  final stageTasks = provider.tasks
-                      .where((t) => t.stage.toLowerCase() == stageName.toLowerCase())
-                      .toList();
+    // Filter tasks
+    var filteredTasks = provider.tasks;
+    if (_searchQuery.trim().isNotEmpty) {
+      final q = _searchQuery.trim().toLowerCase();
+      filteredTasks = filteredTasks.where((t) =>
+        t.campaignName.toLowerCase().contains(q) ||
+        t.sessionName.toLowerCase().contains(q) ||
+        t.assignee.toLowerCase().contains(q) ||
+        t.projectId.toLowerCase().contains(q)
+      ).toList();
+    }
+    if (_statusFilter != 'All') {
+      filteredTasks = filteredTasks.where((t) => t.status.toLowerCase() == _statusFilter.toLowerCase()).toList();
+    }
 
-                  return _buildKanbanColumn(
-                    stepNum: idx + 1,
-                    stageName: stageName,
-                    tasks: stageTasks,
-                    offsetDays: (idx + 1) * 4,
-                  );
-                }).toList(),
+    // Counts for stats banner
+    final totalProjects = provider.projects.length;
+    final totalTasks = provider.tasks.length;
+    final readyTasks = provider.tasks.where((t) => t.status.toLowerCase() == 'ready').length;
+    final doneTasks = provider.tasks.where((t) => t.status.toLowerCase() == 'done').length;
+
+    return Column(
+      children: [
+        // Summary & Filter Bar
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
+          ),
+          child: Row(
+            children: [
+              // KPI Badges
+              _buildKpiChip('Campaigns', '$totalProjects', const Color(0xFF1A237E)),
+              const SizedBox(width: 8),
+              _buildKpiChip('Ready for Action', '$readyTasks', const Color(0xFF00897B)),
+              const SizedBox(width: 8),
+              _buildKpiChip('Completed Steps', '$doneTasks', Colors.green.shade700),
+              const SizedBox(width: 8),
+              _buildKpiChip('Total Tasks', '$totalTasks', Colors.grey.shade700),
+              const Spacer(),
+              // Search Field
+              SizedBox(
+                width: 220,
+                height: 36,
+                child: TextField(
+                  onChanged: (val) => setState(() => _searchQuery = val),
+                  decoration: InputDecoration(
+                    hintText: 'Search campaign / session...',
+                    hintStyle: const TextStyle(fontSize: 12),
+                    prefixIcon: const Icon(Icons.search, size: 18),
+                    contentPadding: EdgeInsets.zero,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: Colors.grey.shade300)),
+                    filled: true,
+                    fillColor: Colors.grey.shade50,
+                  ),
+                ),
               ),
+              const SizedBox(width: 12),
+              // Status Filter Dropdown
+              Container(
+                height: 36,
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.grey.shade300),
+                  color: Colors.grey.shade50,
+                ),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<String>(
+                    value: _statusFilter,
+                    style: const TextStyle(fontSize: 12, color: Colors.black87, fontWeight: FontWeight.w500),
+                    items: const [
+                      DropdownMenuItem(value: 'All', child: Text('Filter: All')),
+                      DropdownMenuItem(value: 'Ready', child: Text('Filter: Ready')),
+                      DropdownMenuItem(value: 'Waiting', child: Text('Filter: Waiting')),
+                      DropdownMenuItem(value: 'Done', child: Text('Filter: Done')),
+                    ],
+                    onChanged: (v) => setState(() => _statusFilter = v ?? 'All'),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        // Horizontal Kanban Board
+        Expanded(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              return Scrollbar(
+                thumbVisibility: true,
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(minWidth: constraints.maxWidth),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: _stageConfigs.asMap().entries.map((entry) {
+                          final idx = entry.key;
+                          final cfg = entry.value;
+                          final stageName = cfg['name'] as String;
+                          final stageColor = cfg['color'] as Color;
+                          final stageIcon = cfg['icon'] as IconData;
+                          final cadence = cfg['cadence'] as int;
+
+                          final stageTasks = filteredTasks
+                              .where((t) => t.stage.toLowerCase() == stageName.toLowerCase())
+                              .toList();
+
+                          return _buildKanbanColumn(
+                            stepNum: idx + 1,
+                            stageName: stageName,
+                            tasks: stageTasks,
+                            offsetDays: cadence,
+                            stageColor: stageColor,
+                            stageIcon: stageIcon,
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildKpiChip(String label, String count, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withOpacity(0.25)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+            decoration: BoxDecoration(
+              color: color,
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Text(
+              count,
+              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white),
             ),
           ),
-        );
-      },
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: color),
+          ),
+        ],
+      ),
     );
   }
 
@@ -253,171 +554,276 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
     required String stageName,
     required List<DevTask> tasks,
     required int offsetDays,
+    required Color stageColor,
+    required IconData stageIcon,
   }) {
+    final readyCount = tasks.where((t) => t.status.toLowerCase() == 'ready').length;
+
     return Container(
-      width: 290,
-      margin: const EdgeInsets.all(12),
+      width: 310,
+      margin: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
       decoration: BoxDecoration(
-        color: Colors.grey.shade100,
-        borderRadius: BorderRadius.circular(12),
+        color: const Color(0xFFF0F3F7),
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(color: Colors.grey.shade300),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Column Header
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(11)),
-              border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(13)),
+              border: Border(bottom: BorderSide(color: Colors.grey.shade200, width: 1.5)),
             ),
-            child: Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                CircleAvatar(
-                  radius: 12,
-                  backgroundColor: const Color(0xFF6C5CE7).withOpacity(0.15),
-                  child: Text(
-                    '$stepNum',
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF6C5CE7),
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: stageColor.withOpacity(0.12),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Icon(stageIcon, size: 16, color: stageColor),
                     ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        stageName,
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                        overflow: TextOverflow.ellipsis,
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Step $stepNum: $stageName',
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF1A1A2E)),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          Row(
+                            children: [
+                              Text(
+                                'Cadence: +$offsetDays days',
+                                style: TextStyle(fontSize: 10, color: Colors.grey.shade600, fontWeight: FontWeight.w500),
+                              ),
+                              if (readyCount > 0) ...[
+                                const SizedBox(width: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF00897B).withOpacity(0.15),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Text(
+                                    '$readyCount Ready',
+                                    style: const TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Color(0xFF00897B)),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ],
                       ),
-                      Text(
-                        '+$offsetDays days cadence',
-                        style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: stageColor.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(12),
                       ),
-                    ],
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade200,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Text(
-                    '${tasks.length}',
-                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-                  ),
+                      child: Text(
+                        '${tasks.length}',
+                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: stageColor),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
           ),
+
+          // Task List
           Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.all(8),
-              itemCount: tasks.length,
-              itemBuilder: (context, i) => _buildTaskCard(tasks[i], stepNum),
-            ),
+            child: tasks.isEmpty
+                ? Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.inbox_outlined, size: 36, color: Colors.grey.shade300),
+                          const SizedBox(height: 6),
+                          Text(
+                            'No tasks in this step',
+                            style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                : ListView.builder(
+                    padding: const EdgeInsets.all(10),
+                    itemCount: tasks.length,
+                    itemBuilder: (context, i) => _buildTaskCard(tasks[i], stepNum, stageColor),
+                  ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildTaskCard(DevTask task, int stepNum) {
-    Color statusColor;
-    switch (task.status.toLowerCase()) {
-      case 'done':
-        statusColor = Colors.green;
-        break;
-      case 'ready':
-        statusColor = const Color(0xFF0984E3);
-        break;
-      default:
-        statusColor = Colors.grey;
+  Widget _buildTaskCard(DevTask task, int stepNum, Color stageColor) {
+    final isDone = task.status.toLowerCase() == 'done';
+    final isReady = task.status.toLowerCase() == 'ready';
+
+    Color statusBadgeBg;
+    Color statusBadgeText;
+    String statusDisplay;
+
+    if (isDone) {
+      statusBadgeBg = Colors.green.shade50;
+      statusBadgeText = Colors.green.shade700;
+      statusDisplay = 'Done';
+    } else if (isReady) {
+      statusBadgeBg = const Color(0xFFE0F2F1);
+      statusBadgeText = const Color(0xFF00897B);
+      statusDisplay = 'Ready / Active';
+    } else {
+      statusBadgeBg = Colors.grey.shade100;
+      statusBadgeText = Colors.grey.shade700;
+      statusDisplay = 'Waiting';
     }
 
     return Card(
-      elevation: 1,
+      elevation: isReady ? 3 : 1,
       margin: const EdgeInsets.only(bottom: 10),
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(12),
         side: BorderSide(
-          color: task.status.toLowerCase() == 'ready' ? const Color(0xFF0984E3).withOpacity(0.4) : Colors.grey.shade200,
-          width: task.status.toLowerCase() == 'ready' ? 1.5 : 1,
+          color: isReady
+              ? const Color(0xFF00897B).withOpacity(0.6)
+              : (isDone ? Colors.green.shade200 : Colors.grey.shade300),
+          width: isReady ? 1.8 : 1,
         ),
       ),
       child: InkWell(
-        borderRadius: BorderRadius.circular(10),
-        onTap: () => _showTaskDetailsDialog(task, stepNum),
-        child: Padding(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () => _showTaskDetailsDialog(task, stepNum, stageColor),
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border(
+              left: BorderSide(
+                color: isDone ? Colors.green : (isReady ? const Color(0xFF00897B) : stageColor),
+                width: 4,
+              ),
+            ),
+          ),
           padding: const EdgeInsets.all(12),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Header Row: Project ID & Status Pill
               Row(
                 children: [
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF6C5CE7).withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(4),
+                      color: const Color(0xFF1A237E).withOpacity(0.08),
+                      borderRadius: BorderRadius.circular(5),
                     ),
                     child: Text(
-                      task.projectId,
+                      '#${task.projectId}',
                       style: const TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.bold,
-                        color: Color(0xFF6C5CE7),
+                        color: Color(0xFF1A237E),
                       ),
                     ),
                   ),
                   const Spacer(),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
-                      color: statusColor.withOpacity(0.12),
-                      borderRadius: BorderRadius.circular(12),
+                      color: statusBadgeBg,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: statusBadgeText.withOpacity(0.3)),
                     ),
-                    child: Text(
-                      task.status,
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                        color: statusColor,
-                      ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (isReady) ...[
+                          Container(
+                            width: 6,
+                            height: 6,
+                            decoration: const BoxDecoration(
+                              color: Color(0xFF00897B),
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                        ],
+                        if (isDone) ...[
+                          const Icon(Icons.check, size: 10, color: Colors.green),
+                          const SizedBox(width: 3),
+                        ],
+                        Text(
+                          statusDisplay,
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            color: statusBadgeText,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
               ),
               const SizedBox(height: 8),
+
+              // Campaign & Session Name
               Text(
                 task.campaignName.isNotEmpty ? task.campaignName : 'Campaign Topic',
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, height: 1.25),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
               ),
               if (task.sessionName.isNotEmpty) ...[
-                const SizedBox(height: 2),
-                Text(
-                  'Session: ${task.sessionName}',
-                  style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+                const SizedBox(height: 3),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.shade50,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    'Session: ${task.sessionName}',
+                    style: TextStyle(fontSize: 11, color: Colors.blue.shade900, fontWeight: FontWeight.w500),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
               ],
               const SizedBox(height: 8),
+
+              // Assignee & Due Date
               Row(
                 children: [
-                  const Icon(Icons.person_outline, size: 14, color: Colors.grey),
-                  const SizedBox(width: 4),
+                  CircleAvatar(
+                    radius: 9,
+                    backgroundColor: Colors.grey.shade300,
+                    child: Text(
+                      task.assignee.isNotEmpty ? task.assignee[0].toUpperCase() : '?',
+                      style: const TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.black87),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
                   Expanded(
                     child: Text(
                       task.assignee.isNotEmpty ? task.assignee : 'Unassigned',
-                      style: const TextStyle(fontSize: 12, color: Colors.black87),
+                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: Colors.black87),
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
@@ -426,31 +832,33 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
               const SizedBox(height: 4),
               Row(
                 children: [
-                  const Icon(Icons.calendar_today_outlined, size: 13, color: Colors.grey),
+                  const Icon(Icons.calendar_today_outlined, size: 12, color: Colors.grey),
                   const SizedBox(width: 4),
                   Text(
                     'Due: ${task.dueDate.isNotEmpty ? task.dueDate : 'TBD'}',
-                    style: const TextStyle(fontSize: 11, color: Colors.grey),
+                    style: TextStyle(fontSize: 11, color: Colors.grey.shade700),
                   ),
                 ],
               ),
+
+              // Revision / Redo Alert Banner
               if (task.notes.isNotEmpty) ...[
                 const SizedBox(height: 6),
                 Container(
-                  padding: const EdgeInsets.all(6),
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
                     color: Colors.amber.shade50,
                     borderRadius: BorderRadius.circular(6),
-                    border: Border.all(color: Colors.amber.shade200),
+                    border: Border.all(color: Colors.amber.shade300),
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.replay, size: 12, color: Colors.amber),
-                      const SizedBox(width: 4),
+                      Icon(Icons.replay_rounded, size: 12, color: Colors.amber.shade900),
+                      const SizedBox(width: 5),
                       Expanded(
                         child: Text(
                           task.notes.split('\n').last,
-                          style: TextStyle(fontSize: 11, color: Colors.amber.shade900),
+                          style: TextStyle(fontSize: 10, color: Colors.amber.shade900, fontWeight: FontWeight.w500),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -459,6 +867,55 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
                   ),
                 ),
               ],
+
+              const Divider(height: 16),
+
+              // Quick Actions on Card
+              Row(
+                children: [
+                  if (task.docLink.isNotEmpty)
+                    InkWell(
+                      onTap: () => _openUrl(task.docLink),
+                      borderRadius: BorderRadius.circular(6),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.blue.shade50,
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: Colors.blue.shade200),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: const [
+                            Icon(Icons.description_outlined, size: 13, color: Colors.blue),
+                            SizedBox(width: 4),
+                            Text('Doc', style: TextStyle(fontSize: 11, color: Colors.blue, fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                      ),
+                    ),
+                  const Spacer(),
+                  // Prominent Details / Handoff trigger
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: isReady ? const Color(0xFF00897B) : const Color(0xFF1A237E),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(isDone ? Icons.visibility_rounded : Icons.touch_app_rounded, size: 12, color: Colors.white),
+                        const SizedBox(width: 4),
+                        Text(
+                          isDone ? 'View' : 'Open & Action',
+                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ],
           ),
         ),
@@ -466,138 +923,392 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
     );
   }
 
-  void _showTaskDetailsDialog(DevTask task, int stepNum) {
+  /// Full Task Details & Action Dialog (Mirrors Social Media Flow)
+  void _showTaskDetailsDialog(DevTask task, int stepNum, Color stageColor) {
+    bool isSaving = false;
+
     showDialog(
       context: context,
       builder: (ctx) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF6C5CE7).withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Icon(Icons.task_alt, color: Color(0xFF6C5CE7)),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Step $stepNum: ${task.stage}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                    Text('${task.projectId} | ${task.campaignName}', style: const TextStyle(fontSize: 12, color: Colors.grey)),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          content: SizedBox(
-            width: 480,
-            child: SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
+        return StatefulBuilder(
+          builder: (ctx, setDialogState) {
+            final isDone = task.status.toLowerCase() == 'done';
+            final hasPreviousStage = stepNum > 1;
+
+            return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              contentPadding: const EdgeInsets.fromLTRB(24, 20, 24, 16),
+              title: Row(
                 children: [
-                  _infoRow('Session', task.sessionName.isNotEmpty ? task.sessionName : 'General'),
-                  _infoRow('Assignee', '${task.assignee} ${task.assigneeEmail.isNotEmpty ? "(${task.assigneeEmail})" : ""}'),
-                  _infoRow('Status', task.status),
-                  _infoRow('Due Date', task.dueDate),
-                  if (task.allottedDate.isNotEmpty) _infoRow('Allotted', task.allottedDate),
-                  if (task.completedAt.isNotEmpty) _infoRow('Completed At', task.completedAt),
-                  const SizedBox(height: 12),
-                  if (task.notes.isNotEmpty) ...[
-                    const Text('Revision / Redo History:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                    const SizedBox(height: 4),
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: Colors.amber.shade50,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.amber.shade200),
-                      ),
-                      child: Text(task.notes, style: const TextStyle(fontSize: 12)),
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: stageColor.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(10),
                     ),
-                    const SizedBox(height: 12),
-                  ],
-                  const Divider(),
-                  const SizedBox(height: 8),
-                  const Text('Shared Work Document:', style: TextStyle(fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 4),
-                  const Text(
-                    'All 8 steps share this collaborative document with full editing history.',
-                    style: TextStyle(fontSize: 12, color: Colors.grey),
+                    child: Icon(Icons.task_alt_rounded, color: stageColor, size: 24),
                   ),
-                  const SizedBox(height: 8),
-                  if (task.docLink.isNotEmpty)
-                    ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF0984E3),
-                        foregroundColor: Colors.white,
-                        minimumSize: const Size(double.infinity, 42),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      ),
-                      icon: const Icon(Icons.description, size: 18),
-                      label: const Text('Open Google Document'),
-                      onPressed: () => _openUrl(task.docLink),
-                    )
-                  else
-                    const Text('No document URL attached yet', style: TextStyle(color: Colors.grey)),
-                  if (task.folderLink.isNotEmpty) ...[
-                    const SizedBox(height: 8),
-                    OutlinedButton.icon(
-                      style: OutlinedButton.styleFrom(
-                        minimumSize: const Size(double.infinity, 38),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      ),
-                      icon: const Icon(Icons.folder_open, size: 18),
-                      label: const Text('Open Session Drive Folder'),
-                      onPressed: () => _openUrl(task.folderLink),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Step $stepNum: ${task.stage}',
+                          style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+                        ),
+                        Text(
+                          '#${task.projectId} • ${task.campaignName}',
+                          style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
+                  // Status badge
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: isDone ? Colors.green.shade50 : (task.status == 'Ready' ? const Color(0xFFE0F2F1) : Colors.grey.shade100),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: isDone ? Colors.green : (task.status == 'Ready' ? const Color(0xFF00897B) : Colors.grey)),
+                    ),
+                    child: Text(
+                      isDone ? 'Done' : (task.status == 'Ready' ? 'Ready / Active' : 'Waiting'),
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: isDone ? Colors.green.shade800 : (task.status == 'Ready' ? const Color(0xFF00897B) : Colors.grey.shade800),
+                      ),
+                    ),
+                  ),
                 ],
               ),
-            ),
-          ),
-          actions: [
-            if (stepNum > 1 && task.status.toLowerCase() != 'waiting')
-              TextButton.icon(
-                icon: const Icon(Icons.replay, color: Colors.redAccent),
-                label: const Text('Redo (Send Back)', style: TextStyle(color: Colors.redAccent)),
-                onPressed: () {
-                  Navigator.pop(ctx);
-                  _showRedoDialog(task, stepNum);
-                },
-              ),
-            if (task.status.toLowerCase() == 'ready')
-              ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green,
-                  foregroundColor: Colors.white,
+              content: SizedBox(
+                width: 520,
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Project Details Card
+                      Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade50,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.grey.shade200),
+                        ),
+                        child: Column(
+                          children: [
+                            _infoRow('Campaign', task.campaignName),
+                            if (task.sessionName.isNotEmpty) _infoRow('Session', task.sessionName),
+                            _infoRow('Assignee', '${task.assignee} ${task.assigneeEmail.isNotEmpty ? "(${task.assigneeEmail})" : ""}'),
+                            _infoRow('Due Date', task.dueDate.isNotEmpty ? task.dueDate : 'TBD'),
+                            if (task.allottedDate.isNotEmpty) _infoRow('Allotted On', task.allottedDate),
+                            if (task.completedAt.isNotEmpty) _infoRow('Completed At', task.completedAt),
+                          ],
+                        ),
+                      ),
+
+                      // Revision / Redo Notes
+                      if (task.notes.isNotEmpty) ...[
+                        const SizedBox(height: 12),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.amber.shade50,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: Colors.amber.shade300),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(Icons.replay_rounded, size: 16, color: Colors.amber.shade900),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    'Revision / Redo History',
+                                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.amber.shade900),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 6),
+                              Text(task.notes, style: TextStyle(fontSize: 12, color: Colors.amber.shade900)),
+                            ],
+                          ),
+                        ),
+                      ],
+
+                      const SizedBox(height: 16),
+
+                      // Document Access Section
+                      Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF0F4FF),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0xFFD0DCFF)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                const Icon(Icons.description, color: Color(0xFF1A237E), size: 20),
+                                const SizedBox(width: 8),
+                                Text(
+                                  'Step $stepNum Document: ${task.stage}',
+                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF1A237E)),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              'Each stage has its own document with edit access for the assigned owner. When marked Done, content is automatically carried over to the next stage.',
+                              style: TextStyle(fontSize: 11, color: Colors.grey.shade700),
+                            ),
+                            const SizedBox(height: 12),
+                            if (task.docLink.isNotEmpty)
+                              SizedBox(
+                                width: double.infinity,
+                                height: 44,
+                                child: ElevatedButton.icon(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: const Color(0xFF1A237E),
+                                    foregroundColor: Colors.white,
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                  ),
+                                  icon: const Icon(Icons.open_in_new, size: 18),
+                                  label: Text('Open ${task.stage} Doc', style: const TextStyle(fontWeight: FontWeight.bold)),
+                                  onPressed: () => _openUrl(task.docLink),
+                                ),
+                              )
+                            else
+                              const Text('No document URL attached yet', style: TextStyle(color: Colors.grey, fontSize: 12)),
+
+                            if (task.folderLink.isNotEmpty) ...[
+                              const SizedBox(height: 8),
+                              SizedBox(
+                                width: double.infinity,
+                                height: 38,
+                                child: OutlinedButton.icon(
+                                  style: OutlinedButton.styleFrom(
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                    side: const BorderSide(color: Color(0xFF1A237E)),
+                                  ),
+                                  icon: const Icon(Icons.folder_open, size: 17, color: Color(0xFF1A237E)),
+                                  label: const Text('Open Session Drive Folder', style: TextStyle(color: Color(0xFF1A237E), fontSize: 13)),
+                                  onPressed: () => _openUrl(task.folderLink),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+
+                      const SizedBox(height: 20),
+
+                      // ── Action Buttons: Exactly matching Social Media Flow ──
+                      if (!isDone) ...[
+                        if (hasPreviousStage) ...[
+                          Row(
+                            children: [
+                              // Send Back (Redo) Button
+                              Expanded(
+                                flex: 2,
+                                child: SizedBox(
+                                  height: 54,
+                                  child: OutlinedButton.icon(
+                                    icon: const Icon(Icons.replay_rounded, color: Colors.orange),
+                                    label: const Text(
+                                      'Send Back',
+                                      style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold, fontSize: 14),
+                                    ),
+                                    style: OutlinedButton.styleFrom(
+                                      side: const BorderSide(color: Colors.orange, width: 1.5),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                    ),
+                                    onPressed: isSaving
+                                        ? null
+                                        : () {
+                                            Navigator.pop(ctx);
+                                            _showRedoDialog(task, stepNum);
+                                          },
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              // Mark Done & Handoff Button
+                              Expanded(
+                                flex: 3,
+                                child: SizedBox(
+                                  height: 54,
+                                  child: ElevatedButton.icon(
+                                    icon: isSaving
+                                        ? const SizedBox(
+                                            width: 20,
+                                            height: 20,
+                                            child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                                          )
+                                        : const Icon(Icons.check_circle, size: 20),
+                                    label: Text(
+                                      isSaving ? 'Saving...' : 'Mark Done & Handoff',
+                                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                                    ),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(0xFF00897B),
+                                      foregroundColor: Colors.white,
+                                      elevation: 2,
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                    ),
+                                    onPressed: isSaving
+                                        ? null
+                                        : () {
+                                            setDialogState(() => isSaving = true);
+                                            _executeMarkDone(ctx, task, setDialogState);
+                                          },
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ] else ...[
+                          // Step 1: Full-width Mark Done & Handoff
+                          SizedBox(
+                            width: double.infinity,
+                            height: 54,
+                            child: ElevatedButton.icon(
+                              icon: isSaving
+                                  ? const SizedBox(
+                                      width: 20,
+                                      height: 20,
+                                      child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                                    )
+                                  : const Icon(Icons.check_circle, size: 20),
+                              label: Text(
+                                isSaving ? 'Saving...' : 'Mark Done & Handoff',
+                                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                              ),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF00897B),
+                                foregroundColor: Colors.white,
+                                elevation: 2,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              ),
+                              onPressed: isSaving
+                                  ? null
+                                  : () {
+                                      setDialogState(() => isSaving = true);
+                                      _executeMarkDone(ctx, task, setDialogState);
+                                    },
+                            ),
+                          ),
+                        ],
+                      ] else ...[
+                        // Already Completed Badge
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          decoration: BoxDecoration(
+                            color: Colors.green.shade50,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.green.shade300),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.check_circle_rounded, color: Colors.green.shade700, size: 22),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Step Completed ${task.completedAt.isNotEmpty ? "(${task.completedAt})" : ""}',
+                                style: TextStyle(fontWeight: FontWeight.bold, color: Colors.green.shade800, fontSize: 14),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
                 ),
-                icon: const Icon(Icons.check, size: 18),
-                label: const Text('Mark Done & Unlock Next Step'),
-                onPressed: () async {
-                  Navigator.pop(ctx);
-                  await context.read<DevPipelineProvider>().updateTaskStatus(task, 'Done');
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Step marked Done! Next step unlocked.'), backgroundColor: Colors.green),
-                    );
-                  }
-                },
               ),
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Close'),
-            ),
-          ],
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Close', style: TextStyle(color: Colors.grey)),
+                ),
+              ],
+            );
+          },
         );
       },
     );
+  }
+
+  Future<void> _executeMarkDone(
+    BuildContext dialogCtx,
+    DevTask task,
+    void Function(void Function()) setDialogState,
+  ) async {
+    // If task is waiting, show a friendly confirmation
+    if (task.status.toLowerCase() == 'waiting') {
+      final confirm = await showDialog<bool>(
+        context: context,
+        builder: (c) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Text('Advance Step Early?'),
+          content: const Text(
+            'This step is currently in "Waiting" status because previous steps may not have finished.\n\nDo you want to proceed and Mark Done & Handoff to unlock the next step?',
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancel')),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00897B), foregroundColor: Colors.white),
+              onPressed: () => Navigator.pop(c, true),
+              child: const Text('Yes, Mark Done & Handoff'),
+            ),
+          ],
+        ),
+      );
+      if (confirm != true) return;
+    }
+
+    if (!mounted) return;
+    setDialogState(() {});
+    Navigator.pop(dialogCtx);
+
+    final scaffold = ScaffoldMessenger.of(context);
+    scaffold.showSnackBar(
+      const SnackBar(
+        content: Row(
+          children: [
+            SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)),
+            SizedBox(width: 12),
+            Text('Marking done and handing off to next stage...'),
+          ],
+        ),
+        duration: Duration(seconds: 4),
+      ),
+    );
+
+    final success = await context.read<DevPipelineProvider>().updateTaskStatus(task, 'Done');
+    if (mounted) {
+      scaffold.hideCurrentSnackBar();
+      if (success) {
+        scaffold.showSnackBar(
+          SnackBar(
+            content: Text('✓ Step "${task.stage}" marked Done & Handed off to next stage!'),
+            backgroundColor: const Color(0xFF00897B),
+          ),
+        );
+      } else {
+        scaffold.showSnackBar(
+          const SnackBar(content: Text('Failed to update task. Please try again.'), backgroundColor: Colors.red),
+        );
+      }
+    }
   }
 
   void _showRedoDialog(DevTask task, int stepNum) {
@@ -605,20 +1316,30 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Send Back for Redo'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: const [
+            Icon(Icons.replay_rounded, color: Colors.orange),
+            SizedBox(width: 8),
+            Text('Send Back for Redo', style: TextStyle(fontWeight: FontWeight.bold)),
+          ],
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('This will set this step to Waiting and return the previous step to Ready so the predecessor can revise the work.'),
-            const SizedBox(height: 12),
+            const Text(
+              'This will set this step to Waiting and return the previous step to Ready so the predecessor can revise the work.',
+              style: TextStyle(fontSize: 13, color: Colors.black87),
+            ),
+            const SizedBox(height: 16),
             TextField(
               controller: reasonController,
               maxLines: 3,
-              decoration: const InputDecoration(
-                labelText: 'Revision / Redo Reason',
-                hintText: 'Enter notes explaining what needs to be changed...',
-                border: OutlineInputBorder(),
+              decoration: InputDecoration(
+                labelText: 'Revision / Redo Reason *',
+                hintText: 'Enter specific feedback explaining what needs to be revised...',
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
               ),
             ),
           ],
@@ -626,7 +1347,11 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent, foregroundColor: Colors.white),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.orange.shade800,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
             onPressed: () async {
               if (reasonController.text.trim().isEmpty) return;
               Navigator.pop(ctx);
@@ -646,13 +1371,13 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
 
   Widget _infoRow(String label, String value) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3),
+      padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
             width: 110,
-            child: Text(label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.grey)),
+            child: Text(label, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.grey.shade600)),
           ),
           Expanded(child: Text(value, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500))),
         ],
@@ -701,71 +1426,96 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
           builder: (ctx, setDialogState) {
             return AlertDialog(
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              title: const Text('Create Campaign Development Event / Session', style: TextStyle(fontWeight: FontWeight.bold)),
+              title: Row(
+                children: const [
+                  Icon(Icons.add_task_rounded, color: Color(0xFF1A237E)),
+                  SizedBox(width: 10),
+                  Text('Create Campaign Event / Session', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                ],
+              ),
               content: SizedBox(
-                width: 600,
+                width: 620,
                 child: SingleChildScrollView(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Text(
-                        'This will create the Delhi -> Head Office -> Campaign Development folder, document, and 8 sequential tasks with 4-day due date cadence.',
-                        style: TextStyle(fontSize: 12, color: Colors.grey),
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: Colors.blue.shade50,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.blue.shade100),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.folder_shared_rounded, color: Color(0xFF1A237E), size: 20),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Will create Delhi (IN) > Head Office > Campaign Development folder, 8 separate stage docs, and assign permissions.',
+                                style: TextStyle(fontSize: 12, color: Colors.blue.shade900),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                       const SizedBox(height: 16),
+
+                      const Text('1. Campaign & Session Details', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                      const SizedBox(height: 8),
                       TextField(
                         controller: campNameCtrl,
-                        decoration: const InputDecoration(
-                          labelText: '1. Campaign Name *',
+                        decoration: InputDecoration(
+                          labelText: 'Campaign Name *',
                           hintText: 'e.g. Anti-Drug Youth Campaign 2026',
-                          border: OutlineInputBorder(),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                         ),
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 10),
                       TextField(
                         controller: sessNameCtrl,
-                        decoration: const InputDecoration(
-                          labelText: '2. Session Name (Sub-section)',
+                        decoration: InputDecoration(
+                          labelText: 'Session Name (Sub-section)',
                           hintText: 'e.g. Session 1 - Understanding Addiction',
-                          border: OutlineInputBorder(),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                         ),
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 10),
                       Row(
                         children: [
                           Expanded(
                             child: TextField(
                               controller: durationCtrl,
-                              decoration: const InputDecoration(
-                                labelText: '3. Duration',
+                              decoration: InputDecoration(
+                                labelText: 'Duration',
                                 hintText: 'e.g. 2 Hours / 3 Days',
-                                border: OutlineInputBorder(),
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                               ),
                             ),
                           ),
-                          const SizedBox(width: 12),
+                          const SizedBox(width: 10),
                           Expanded(
                             child: TextField(
                               controller: festivalsCtrl,
-                              decoration: const InputDecoration(
-                                labelText: '4. Festivals & Days Included',
+                              decoration: InputDecoration(
+                                labelText: 'Festivals & Days Included',
                                 hintText: 'e.g. World Health Day',
-                                border: OutlineInputBorder(),
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                               ),
                             ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 10),
                       Row(
                         children: [
                           Expanded(
-                            child: ListTile(
-                              contentPadding: EdgeInsets.zero,
-                              title: const Text('5. Start Date', style: TextStyle(fontSize: 13)),
-                              subtitle: Text(DateFormat('d-MMM-yyyy').format(startDate), style: const TextStyle(fontWeight: FontWeight.bold)),
-                              trailing: const Icon(Icons.calendar_today, size: 18),
+                            child: InkWell(
                               onTap: () async {
                                 final picked = await showDatePicker(
                                   context: ctx,
@@ -775,15 +1525,31 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
                                 );
                                 if (picked != null) setDialogState(() => startDate = picked);
                               },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                decoration: BoxDecoration(
+                                  border: Border.all(color: Colors.grey.shade400),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.calendar_today, size: 16, color: Colors.grey),
+                                    const SizedBox(width: 8),
+                                    Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        const Text('Start Date', style: TextStyle(fontSize: 10, color: Colors.grey)),
+                                        Text(DateFormat('d-MMM-yyyy').format(startDate), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ),
                           ),
-                          const SizedBox(width: 12),
+                          const SizedBox(width: 10),
                           Expanded(
-                            child: ListTile(
-                              contentPadding: EdgeInsets.zero,
-                              title: const Text('6. Completion Date', style: TextStyle(fontSize: 13)),
-                              subtitle: Text(DateFormat('d-MMM-yyyy').format(completionDate), style: const TextStyle(fontWeight: FontWeight.bold)),
-                              trailing: const Icon(Icons.calendar_today, size: 18),
+                            child: InkWell(
                               onTap: () async {
                                 final picked = await showDatePicker(
                                   context: ctx,
@@ -793,40 +1559,72 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
                                 );
                                 if (picked != null) setDialogState(() => completionDate = picked);
                               },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                decoration: BoxDecoration(
+                                  border: Border.all(color: Colors.grey.shade400),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.event_available, size: 16, color: Colors.grey),
+                                    const SizedBox(width: 8),
+                                    Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        const Text('Completion Date', style: TextStyle(fontSize: 10, color: Colors.grey)),
+                                        Text(DateFormat('d-MMM-yyyy').format(completionDate), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ),
                           ),
                         ],
                       ),
-                      const Divider(height: 24),
-                      const Text('7. IEC Material Sub-divisions:', style: TextStyle(fontWeight: FontWeight.bold)),
+
+                      const Divider(height: 28),
+                      const Text('2. IEC Material Sub-divisions', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                      const SizedBox(height: 8),
                       Wrap(
                         spacing: 8,
+                        runSpacing: 6,
                         children: [
                           FilterChip(
                             label: const Text('Content Writing'),
                             selected: iecContent,
+                            selectedColor: const Color(0xFF1A237E).withOpacity(0.15),
+                            checkmarkColor: const Color(0xFF1A237E),
                             onSelected: (v) => setDialogState(() => iecContent = v),
                           ),
                           FilterChip(
                             label: const Text('Designing'),
                             selected: iecDesigning,
+                            selectedColor: const Color(0xFF1A237E).withOpacity(0.15),
+                            checkmarkColor: const Color(0xFF1A237E),
                             onSelected: (v) => setDialogState(() => iecDesigning = v),
                           ),
                           FilterChip(
                             label: const Text('Proofread'),
                             selected: iecProofread,
+                            selectedColor: const Color(0xFF1A237E).withOpacity(0.15),
+                            checkmarkColor: const Color(0xFF1A237E),
                             onSelected: (v) => setDialogState(() => iecProofread = v),
                           ),
                           FilterChip(
                             label: const Text('Final Cross check'),
                             selected: iecFinalCheck,
+                            selectedColor: const Color(0xFF1A237E).withOpacity(0.15),
+                            checkmarkColor: const Color(0xFF1A237E),
                             onSelected: (v) => setDialogState(() => iecFinalCheck = v),
                           ),
                         ],
                       ),
-                      const Divider(height: 24),
-                      const Text('8. Assign Stage Owners (4-day cadence):', style: TextStyle(fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 8),
+
+                      const Divider(height: 28),
+                      const Text('3. Assign Stage Owners (4-day cadence)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                      const SizedBox(height: 10),
                       ...stages.asMap().entries.map((entry) {
                         final idx = entry.key;
                         final st = entry.value;
@@ -837,7 +1635,7 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
                           child: Row(
                             children: [
                               SizedBox(
-                                width: 190,
+                                width: 210,
                                 child: Text(
                                   '${idx + 1}. $st (+$offset d):',
                                   style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
@@ -893,11 +1691,15 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
                   onPressed: () => Navigator.pop(ctx),
                   child: const Text('Cancel'),
                 ),
-                ElevatedButton(
+                ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF6C5CE7),
+                    backgroundColor: const Color(0xFF1A237E),
                     foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
                   ),
+                  icon: const Icon(Icons.check, size: 18),
+                  label: const Text('Create Project & Setup Flow', style: TextStyle(fontWeight: FontWeight.bold)),
                   onPressed: () async {
                     if (campNameCtrl.text.trim().isEmpty) {
                       ScaffoldMessenger.of(context).showSnackBar(
@@ -939,7 +1741,6 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
                       }
                     }
                   },
-                  child: const Text('Create Project & Setup Flow'),
                 ),
               ],
             );
