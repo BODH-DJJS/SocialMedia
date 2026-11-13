@@ -2395,7 +2395,8 @@ function handleCheckFolderNotEmpty(payload) {
 function ensureDevSheets(ss) {
   var iecAndPptCols = [
     'PptFolderLink', 'IecFolderLink', 'IecWritingDocLink',
-    'IecDesigningFolderLink', 'IecProofreadDocLink', 'IecFinalCheckDocLink'
+    'IecDesigningFolderLink', 'IecProofreadDocLink', 'IecFinalCheckDocLink',
+    'ResearchedDataLink', 'ResearchedDocLink', 'ThumbnailFolderLink'
   ];
 
   var pSheet = ss.getSheetByName(DEV_PROJECTS_SHEET);
@@ -2661,6 +2662,9 @@ function handleGetDevTasks(payload) {
     if (t.Stage && t.Stage.toLowerCase() === 'ppt development') {
       t.PrevDocLink = projectWritingDocMap[t.ProjectID] || '';
     }
+    t.ResearchedDataLink = proj.ResearchedDataLink || t.ResearchedDataLink || '';
+    t.ResearchedDocLink = proj.ResearchedDocLink || t.ResearchedDocLink || '';
+    t.ThumbnailFolderLink = proj.ThumbnailFolderLink || t.ThumbnailFolderLink || '';
 
     if (projectId && t.ProjectID !== projectId) continue;
 
@@ -2682,29 +2686,32 @@ function handleCreateDevProject(payload) {
   var tSheet = ss.getSheetByName(DEV_TASKS_SHEET);
 
   var stream = payload.stream || 'Campaign Development';
-  var campaignName = (payload.campaignName || '').toString().trim();
-  var sessionName = (payload.sessionName || '').toString().trim();
+  var isSmDev = (stream.indexOf('SM') !== -1 || stream.indexOf('Social Media') !== -1);
+  var isWebRep = (stream.indexOf('Website') !== -1 || stream.indexOf('Web') !== -1);
+  var isBlogArt = (stream.indexOf('Blog') !== -1 || stream.indexOf('Article') !== -1);
+  var campaignName = (payload.campaignName || payload.postName || payload.idea || '').toString().trim();
+  var sessionName = (payload.sessionName || payload.postTopic || '').toString().trim();
   var duration = payload.duration || '';
   var festivals = payload.festivals || '';
   var startDate = payload.startDate ? formatDate(payload.startDate) : formatDate(new Date());
   var completionDate = payload.completionDate ? formatDate(payload.completionDate) : '';
-  var iecContent = payload.iecContent === true ? 'Yes' : 'No';
-  var iecDesigning = payload.iecDesigning === true ? 'Yes' : 'No';
-  var iecProofread = payload.iecProofread === true ? 'Yes' : 'No';
-  var iecFinalCheck = payload.iecFinalCheck === true ? 'Yes' : 'No';
-  var assignees = payload.assignees || {}; // { 'Ideation': { name: '', email: '' } }
+  var iecContent = (!isSmDev && !isWebRep && !isBlogArt) && payload.iecContent === true ? 'Yes' : 'No';
+  var iecDesigning = (!isSmDev && !isWebRep && !isBlogArt) && payload.iecDesigning === true ? 'Yes' : 'No';
+  var iecProofread = (!isSmDev && !isWebRep && !isBlogArt) && payload.iecProofread === true ? 'Yes' : 'No';
+  var iecFinalCheck = (!isSmDev && !isWebRep && !isBlogArt) && payload.iecFinalCheck === true ? 'Yes' : 'No';
+  var assignees = payload.assignees || {};
 
   if (!campaignName) {
-    return { success: false, message: 'Campaign name is required.' };
+    return { success: false, message: (isWebRep || isBlogArt ? 'Idea' : (isSmDev ? 'Post Name' : 'Campaign Name')) + ' is required.' };
   }
 
-  // Generate unique ProjectID e.g. CAMP-001
+  // Generate unique ProjectID e.g. CAMP-001, SMD-001, WEB-001, BLOG-001
   var lastRow = pSheet.getLastRow();
-  var prefix = stream.indexOf('Campaign') !== -1 ? 'CAMP' : (stream.indexOf('SM') !== -1 ? 'SMD' : (stream.indexOf('Web') !== -1 ? 'WEB' : 'BLOG'));
+  var prefix = isSmDev ? 'SMD' : (stream.indexOf('Campaign') !== -1 ? 'CAMP' : (isWebRep ? 'WEB' : (isBlogArt ? 'BLOG' : 'DEV')));
   var projectNo = (lastRow >= 2 ? lastRow : 1);
   var projectId = prefix + '-' + String(projectNo).padStart(3, '0');
 
-  // Create folder: Delhi -> Head Office -> [Stream] -> [Campaign Name] -> [Session Name]
+  // Create folder: Delhi -> Head Office -> [Stream] -> [Campaign / Post Name / Idea]
   var streamFolder = getOrCreateDevStreamFolder(stream);
   var campFolder;
   var cSearch = streamFolder.searchFolders("title = '" + campaignName + "' and trashed = false");
@@ -2715,7 +2722,7 @@ function handleCreateDevProject(payload) {
   }
 
   var sessionFolder = campFolder;
-  if (sessionName) {
+  if (!isSmDev && !isWebRep && !isBlogArt && sessionName) {
     var sessSearch = campFolder.searchFolders("title = '" + sessionName + "' and trashed = false");
     if (sessSearch.hasNext()) {
       sessionFolder = sessSearch.next();
@@ -2724,29 +2731,143 @@ function handleCreateDevProject(payload) {
     }
   }
 
-  // Sequential 8 Steps for Campaign Development
-  var stages = [
-    { name: 'Ideation', offset: 4 },
-    { name: 'Research', offset: 8 },
-    { name: 'Selection and sequencing', offset: 12 },
-    { name: 'Writing', offset: 16 },
-    { name: 'PPT Development', offset: 20 },
-    { name: 'Proofreading', offset: 24 },
-    { name: 'Editing', offset: 28 },
-    { name: 'Final Check', offset: 32 }
-  ];
+  // Subfolders for SM Development (Raw, Selected, Edited)
+  var rawFolder, selFolder, editFolder;
+  if (isSmDev) {
+    var rSearch = campFolder.searchFolders("title = 'Raw' and trashed = false");
+    rawFolder = rSearch.hasNext() ? rSearch.next() : campFolder.createFolder('Raw');
+    try { rawFolder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.EDIT); } catch(pe) {}
 
-  // Create SEPARATE Google Docs for stages (except Step 5 PPT Development which gets its dedicated upload folder)
+    var sSearch = campFolder.searchFolders("title = 'Selected' and trashed = false");
+    selFolder = sSearch.hasNext() ? sSearch.next() : campFolder.createFolder('Selected');
+    try { selFolder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.EDIT); } catch(pe) {}
+
+    var eSearch = campFolder.searchFolders("title = 'Edited' and trashed = false");
+    editFolder = eSearch.hasNext() ? eSearch.next() : campFolder.createFolder('Edited');
+    try { editFolder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.EDIT); } catch(pe) {}
+  }
+
+  // Subfolders and Researched Data Sheet for Website Reporting
+  var researchedDataUrl = '';
+  var rawPhotosFolder, selPhotosFolder, thumbFolder;
+  if (isWebRep) {
+    try {
+      var resSheet = SpreadsheetApp.create('Researched Data');
+      var resSheetFile = DriveApp.getFileById(resSheet.getId());
+      resSheetFile.moveTo(campFolder);
+      try { resSheetFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.EDIT); } catch(pe) {}
+      researchedDataUrl = resSheetFile.getUrl();
+    } catch(rsErr) {
+      researchedDataUrl = '';
+    }
+
+    var rSearch = campFolder.searchFolders("title = 'Raw Photos' and trashed = false");
+    rawPhotosFolder = rSearch.hasNext() ? rSearch.next() : campFolder.createFolder('Raw Photos');
+    try { rawPhotosFolder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.EDIT); } catch(pe) {}
+
+    var sSearch = campFolder.searchFolders("title = 'Selected Photos' and trashed = false");
+    selPhotosFolder = sSearch.hasNext() ? sSearch.next() : campFolder.createFolder('Selected Photos');
+    try { selPhotosFolder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.EDIT); } catch(pe) {}
+
+    var tSearch = selPhotosFolder.searchFolders("title = 'Thumbnail' and trashed = false");
+    thumbFolder = tSearch.hasNext() ? tSearch.next() : selPhotosFolder.createFolder('Thumbnail');
+    try { thumbFolder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.EDIT); } catch(pe) {}
+  }
+
+  // Researched Doc and Thumbnail Folder for Blogs / Articles
+  var researchedDocUrl = '';
+  var blogThumbFolder;
+  if (isBlogArt) {
+    try {
+      var rDoc = DocumentApp.create('Researched Doc');
+      var rDocFile = DriveApp.getFileById(rDoc.getId());
+      rDocFile.moveTo(campFolder);
+      try { rDocFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.EDIT); } catch(pe) {}
+      var rBody = rDoc.getBody();
+      rBody.appendParagraph(campaignName + ' - Researched Doc').setHeading(DocumentApp.ParagraphHeading.HEADING1);
+      rBody.appendParagraph('Idea: ' + campaignName);
+      rBody.appendParagraph('Festivals / Days: ' + festivals);
+      rBody.appendParagraph('Compile research, ideas, reference links, and article drafts here.');
+      rBody.appendParagraph('--------------------------------------------------\n');
+      rDoc.saveAndClose();
+      researchedDocUrl = rDocFile.getUrl();
+    } catch(rdErr) {
+      researchedDocUrl = '';
+    }
+
+    var btSearch = campFolder.searchFolders("title = 'Thumbnail' and trashed = false");
+    blogThumbFolder = btSearch.hasNext() ? btSearch.next() : campFolder.createFolder('Thumbnail');
+    try { blogThumbFolder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.EDIT); } catch(pe) {}
+  }
+
+  // Stages configuration based on Stream
+  var stages;
+  if (isSmDev) {
+    stages = [
+      { name: 'Writing', offset: 4, isDoc: true, initialStatus: 'Ready' },
+      { name: 'Editing', offset: 8, isDoc: true, initialStatus: 'Waiting' },
+      { name: 'Proofreading', offset: 12, isDoc: true, initialStatus: 'Waiting' },
+      { name: 'Text Crosscheck', offset: 16, isDoc: true, initialStatus: 'Waiting' },
+      { name: 'Thumbnail Selection', offset: 8, isDoc: false, initialStatus: 'Ready' },
+      { name: 'Thumbnail Processing', offset: 12, isDoc: false, initialStatus: 'Waiting' },
+      { name: 'Thumbnail Cross checking', offset: 16, isDoc: false, initialStatus: 'Waiting' },
+      { name: 'Photo Editing', offset: 8, isDoc: false, initialStatus: 'Ready' },
+      { name: 'Video Editing', offset: 8, isDoc: false, initialStatus: 'Ready' },
+      { name: 'Media Cross Check', offset: 12, isDoc: false, initialStatus: 'Waiting' },
+      { name: 'Media Final Cross check', offset: 16, isDoc: false, initialStatus: 'Waiting' },
+      { name: 'Ready to Post', offset: 20, isDoc: false, initialStatus: 'Waiting' },
+      { name: 'Photos Clean', offset: 24, isDoc: false, initialStatus: 'Waiting' }
+    ];
+  } else if (isWebRep) {
+    stages = [
+      { name: 'Writing', offset: 4, isDoc: true, initialStatus: 'Ready' },
+      { name: 'Editing', offset: 8, isDoc: true, initialStatus: 'Waiting' },
+      { name: 'Proofreading', offset: 12, isDoc: true, initialStatus: 'Waiting' },
+      { name: 'Text Crosscheck', offset: 16, isDoc: true, initialStatus: 'Waiting' },
+      { name: 'Raw Photos', offset: 8, isDoc: false, initialStatus: 'Ready' },
+      { name: 'Selected Photos', offset: 12, isDoc: false, initialStatus: 'Waiting' },
+      { name: 'Thumbnail Selection', offset: 16, isDoc: false, initialStatus: 'Waiting' }
+    ];
+  } else if (isBlogArt) {
+    stages = [
+      { name: 'Writing', offset: 4, isDoc: true, initialStatus: 'Ready' },
+      { name: 'Editing', offset: 8, isDoc: true, initialStatus: 'Waiting' },
+      { name: 'Proofreading', offset: 12, isDoc: true, initialStatus: 'Waiting' },
+      { name: 'Text Crosscheck', offset: 16, isDoc: true, initialStatus: 'Waiting' },
+      { name: 'Thumbnail Selection', offset: 20, isDoc: false, initialStatus: 'Waiting' }
+    ];
+  } else {
+    stages = [
+      { name: 'Ideation', offset: 4, isDoc: true, initialStatus: 'Ready' },
+      { name: 'Research', offset: 8, isDoc: true, initialStatus: 'Waiting' },
+      { name: 'Selection and sequencing', offset: 12, isDoc: true, initialStatus: 'Waiting' },
+      { name: 'Writing', offset: 16, isDoc: true, initialStatus: 'Waiting' },
+      { name: 'PPT Development', offset: 20, isDoc: false, initialStatus: 'Waiting' },
+      { name: 'Proofreading', offset: 24, isDoc: true, initialStatus: 'Waiting' },
+      { name: 'Editing', offset: 28, isDoc: true, initialStatus: 'Waiting' },
+      { name: 'Final Check', offset: 32, isDoc: true, initialStatus: 'Waiting' }
+    ];
+  }
+
   var stageDocUrls = {};
   var pptFolderUrl = '';
 
   for (var s = 0; s < stages.length; s++) {
     var stName = stages[s].name;
     var assignedObj = assignees[stName] || {};
+    if (!assignedObj.name) {
+      if (stName === 'Writing') assignedObj = assignees['Writer'] || {};
+      else if (stName === 'Editing') assignedObj = assignees['Editor'] || {};
+      else if (stName === 'Proofreading') assignedObj = assignees['Proofreader'] || {};
+      else if (stName === 'Text Crosscheck') assignedObj = assignees['CrossChecker'] || {};
+      else if (stName === 'Raw Photos') assignedObj = assignees['Photo Selector'] || assignees['Photographer'] || {};
+      else if (stName === 'Selected Photos') assignedObj = assignees['Photo Editor'] || {};
+      else if (stName === 'Thumbnail Selection') assignedObj = assignees['Thumbnail Designer'] || {};
+    }
     var sEmail = (typeof assignedObj === 'object' && assignedObj ? assignedObj.email : '') || '';
 
-    if (stName === 'PPT Development') {
-      // Step 5: Create a dedicated PPT upload folder instead of Doc
+    if (!isSmDev && !isWebRep && !isBlogArt && stName === 'PPT Development') {
+      // Step 5 of Campaign: PPT Upload folder
       var pptFolderName = '5 - PPT Development';
       var pptFolder;
       var fSearch = sessionFolder.searchFolders("title = '" + pptFolderName + "' and trashed = false");
@@ -2761,23 +2882,33 @@ function handleCreateDevProject(payload) {
       }
       pptFolderUrl = pptFolder.getUrl();
       stageDocUrls[stName] = pptFolderUrl;
-    } else {
+    } else if (stages[s].isDoc) {
+      // Create Google Doc for content writing stages
       var stepDocTitle = campaignName + (sessionName ? ' - ' + sessionName : '') + ' - Step ' + (s + 1) + ' (' + stName + ')';
       var stepDocUrl = '';
       try {
         var sDoc = DocumentApp.create(stepDocTitle);
         var sDocFile = DriveApp.getFileById(sDoc.getId());
-        sDocFile.moveTo(sessionFolder);
+        sDocFile.moveTo((isSmDev || isWebRep || isBlogArt) ? campFolder : sessionFolder);
         try { sDocFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.EDIT); } catch(pe) {}
         
         var sBody = sDoc.getBody();
         sBody.appendParagraph(stepDocTitle).setHeading(DocumentApp.ParagraphHeading.HEADING1);
-        sBody.appendParagraph('Campaign: ' + campaignName + (sessionName ? ' | Session: ' + sessionName : ''));
+        sBody.appendParagraph((isWebRep || isBlogArt ? 'Idea: ' : (isSmDev ? 'Post: ' : 'Campaign: ')) + campaignName + (sessionName ? ' | Topic: ' + sessionName : ''));
         sBody.appendParagraph('Stage: ' + stName + ' (Step ' + (s + 1) + ' of ' + stages.length + ')');
-        sBody.appendParagraph('Duration: ' + duration + ' | Festivals: ' + festivals);
+        sBody.appendParagraph('Festivals / Days: ' + festivals + (duration ? ' | Duration: ' + duration : ''));
+        if (isWebRep && researchedDataUrl) {
+          sBody.appendParagraph('Researched Data Sheet: ' + researchedDataUrl);
+        }
+        if (isBlogArt && researchedDocUrl) {
+          sBody.appendParagraph('Researched Doc: ' + researchedDocUrl);
+        }
+        if (isBlogArt && blogThumbFolder) {
+          sBody.appendParagraph('Thumbnail Folder: ' + blogThumbFolder.getUrl());
+        }
+        sBody.appendParagraph('Idea Drive Folder: ' + campFolder.getUrl());
         sBody.appendParagraph('--------------------------------------------------\n');
         
-        // Grant edit permissions to assigned user for this specific stage doc
         if (sEmail && sEmail.indexOf('@') !== -1) {
           try { sDocFile.addEditor(sEmail); } catch(mErr) {}
         }
@@ -2788,11 +2919,38 @@ function handleCreateDevProject(payload) {
         stepDocUrl = '';
       }
       stageDocUrls[stName] = stepDocUrl;
+    } else if (isWebRep) {
+      if (stName === 'Raw Photos') {
+        stageDocUrls[stName] = rawPhotosFolder ? rawPhotosFolder.getUrl() : campFolder.getUrl();
+      } else if (stName === 'Selected Photos') {
+        stageDocUrls[stName] = selPhotosFolder ? selPhotosFolder.getUrl() : campFolder.getUrl();
+      } else if (stName === 'Thumbnail Selection') {
+        stageDocUrls[stName] = thumbFolder ? thumbFolder.getUrl() : (selPhotosFolder ? selPhotosFolder.getUrl() : campFolder.getUrl());
+      } else {
+        stageDocUrls[stName] = campFolder.getUrl();
+      }
+    } else if (isBlogArt) {
+      if (stName === 'Thumbnail Selection') {
+        stageDocUrls[stName] = blogThumbFolder ? blogThumbFolder.getUrl() : campFolder.getUrl();
+      } else {
+        stageDocUrls[stName] = campFolder.getUrl();
+      }
+    } else {
+      // Non-doc stages in SM Development
+      if (stName.indexOf('Photo') !== -1 || stName.indexOf('Video') !== -1) {
+        stageDocUrls[stName] = rawFolder ? rawFolder.getUrl() : campFolder.getUrl();
+      } else if (stName.indexOf('Thumbnail') !== -1) {
+        stageDocUrls[stName] = selFolder ? selFolder.getUrl() : campFolder.getUrl();
+      } else if (stName.indexOf('Media') !== -1) {
+        stageDocUrls[stName] = editFolder ? editFolder.getUrl() : campFolder.getUrl();
+      } else {
+        stageDocUrls[stName] = campFolder.getUrl();
+      }
     }
   }
 
-  // Master docUrl for project row can be Step 1's doc or sessionFolder
-  var masterDocUrl = stageDocUrls['Ideation'] || '';
+  // Master docUrl for project row
+  var masterDocUrl = stageDocUrls['Writing'] || stageDocUrls['Ideation'] || campFolder.getUrl();
 
   // -------------------------------------------------------------
   // IEC Material (Common to Campaign, NOT per session)
@@ -2911,6 +3069,8 @@ function handleCreateDevProject(payload) {
     }
   }
 
+  var finalThumbUrl = isWebRep ? (thumbFolder ? thumbFolder.getUrl() : '') : (isBlogArt ? (blogThumbFolder ? blogThumbFolder.getUrl() : '') : '');
+
   // Append project row
   pSheet.appendRow([
     projectId,
@@ -2934,7 +3094,10 @@ function handleCreateDevProject(payload) {
     iecWritingDocUrl,
     iecDesigningFolderUrl,
     iecProofreadDocUrl,
-    iecFinalCheckDocUrl
+    iecFinalCheckDocUrl,
+    researchedDataUrl,
+    researchedDocUrl,
+    finalThumbUrl
   ]);
 
   var baseDate = new Date();
@@ -2950,8 +3113,8 @@ function handleCreateDevProject(payload) {
     d.setDate(d.getDate() + stageObj.offset);
     var dueDateStr = formatDate(d);
 
-    var initialStatus = (s === 0) ? 'Ready' : 'Waiting';
-    var allottedDate = (s === 0 && assigneeName) ? new Date().toLocaleString() : '';
+    var initialStatus = stageObj.initialStatus || ((s === 0) ? 'Ready' : 'Waiting');
+    var allottedDate = (initialStatus === 'Ready' && assigneeName) ? new Date().toLocaleString() : '';
     var specificDocUrl = stageDocUrls[stName] || '';
 
     taskRows.push([
@@ -2971,7 +3134,10 @@ function handleCreateDevProject(payload) {
       iecWritingDocUrl,
       iecDesigningFolderUrl,
       iecProofreadDocUrl,
-      iecFinalCheckDocUrl
+      iecFinalCheckDocUrl,
+      researchedDataUrl,
+      researchedDocUrl,
+      finalThumbUrl
     ]);
   }
 
@@ -3055,57 +3221,147 @@ function handleUpdateDevTask(payload) {
       }
     }
 
-    var stagesOrder = [
-      'Ideation', 'Research', 'Selection and sequencing', 'Writing',
-      'PPT Development', 'Proofreading', 'Editing', 'Final Check'
-    ];
+    var isSmDev = currentTask.projectId.indexOf('SMD') === 0;
+    var isWebRep = currentTask.projectId.indexOf('WEB') === 0;
+    var isBlogArt = currentTask.projectId.indexOf('BLOG') === 0;
 
-    var currentIdx = -1;
-    for (var s = 0; s < stagesOrder.length; s++) {
-      if (stagesOrder[s].toLowerCase() === currentTask.stage.toLowerCase()) {
-        currentIdx = s;
-        break;
+    if (isSmDev || isWebRep || isBlogArt) {
+      function findProjTask(stName) {
+        for (var pt = 0; pt < projectTasks.length; pt++) {
+          if (projectTasks[pt].stage.toLowerCase() === stName.toLowerCase()) return projectTasks[pt];
+        }
+        return null;
       }
-    }
+      function setReady(taskObj) {
+        if (!taskObj) return;
+        tSheet.getRange(taskObj.rowIdx, statusCol + 1).setValue('Ready');
+        if (allottedCol !== -1) {
+          tSheet.getRange(taskObj.rowIdx, allottedCol + 1).setValue(new Date().toLocaleString());
+        }
+      }
 
-    if (currentIdx !== -1 && currentIdx + 1 < stagesOrder.length) {
-      var nextStageName = stagesOrder[currentIdx + 1];
-      var nextTask = null;
-      for (var pt = 0; pt < projectTasks.length; pt++) {
-        if (projectTasks[pt].stage.toLowerCase() === nextStageName.toLowerCase()) {
-          nextTask = projectTasks[pt];
-          tSheet.getRange(projectTasks[pt].rowIdx, statusCol + 1).setValue('Ready');
-          if (allottedCol !== -1) {
-            tSheet.getRange(projectTasks[pt].rowIdx, allottedCol + 1).setValue(new Date().toLocaleString());
+      var cStageLower = currentTask.stage.toLowerCase();
+      // 1. Content Workflow (Same for SM, Website Reporting, and Blogs/Articles!)
+      if (cStageLower === 'writing') {
+        var nextT = findProjTask('Editing');
+        setReady(nextT);
+        if (currentTask.docLink && nextT && nextT.docLink) {
+          try { copyDevDocContentForward(currentTask.docLink, nextT.docLink, 'Writing', 'Editing'); } catch(e) {}
+        }
+      } else if (cStageLower === 'editing') {
+        var nextT = findProjTask('Proofreading');
+        setReady(nextT);
+        if (currentTask.docLink && nextT && nextT.docLink) {
+          try { copyDevDocContentForward(currentTask.docLink, nextT.docLink, 'Editing', 'Proofreading'); } catch(e) {}
+        }
+      } else if (cStageLower === 'proofreading') {
+        var nextT = findProjTask('Text Crosscheck');
+        setReady(nextT);
+        if (currentTask.docLink && nextT && nextT.docLink) {
+          try { copyDevDocContentForward(currentTask.docLink, nextT.docLink, 'Proofreading', 'Text Crosscheck'); } catch(e) {}
+        }
+        if (isSmDev) {
+          var mcc = findProjTask('Media Cross Check');
+          if (mcc && mcc.status === 'Done') {
+            setReady(findProjTask('Media Final Cross check'));
           }
+        }
+      } else if (cStageLower === 'text crosscheck' || cStageLower === 'cross check') {
+        if (isWebRep || isBlogArt) {
+          setReady(findProjTask('Thumbnail Selection'));
+        } else {
+          var mfc = findProjTask('Media Final Cross check');
+          if (mfc && mfc.status === 'Done') {
+            setReady(findProjTask('Ready to Post'));
+          }
+        }
+      }
+      // 2. Website Reporting Media Workflow
+      else if (isWebRep && cStageLower === 'raw photos') {
+        setReady(findProjTask('Selected Photos'));
+      } else if (isWebRep && cStageLower === 'selected photos') {
+        setReady(findProjTask('Thumbnail Selection'));
+      }
+      // 3. SM Development Thumbnail & Media Workflow
+      else if (isSmDev && cStageLower === 'thumbnail selection') {
+        setReady(findProjTask('Thumbnail Processing'));
+      } else if (isSmDev && cStageLower === 'thumbnail processing') {
+        setReady(findProjTask('Thumbnail Cross checking'));
+      } else if (isSmDev && (cStageLower === 'photo editing' || cStageLower === 'video editing')) {
+        var pe = findProjTask('Photo Editing');
+        var ve = findProjTask('Video Editing');
+        var peDone = !pe || pe.status === 'Done';
+        var veDone = !ve || ve.status === 'Done';
+        if (peDone && veDone) {
+          setReady(findProjTask('Media Cross Check'));
+        }
+      } else if (isSmDev && cStageLower === 'media cross check') {
+        var pr = findProjTask('Proofreading');
+        if (pr && pr.status === 'Done') {
+          setReady(findProjTask('Media Final Cross check'));
+        }
+      } else if (isSmDev && cStageLower === 'media final cross check') {
+        var tc = findProjTask('Text Crosscheck');
+        if (tc && tc.status === 'Done') {
+          setReady(findProjTask('Ready to Post'));
+        }
+      } else if (isSmDev && cStageLower === 'ready to post') {
+        setReady(findProjTask('Photos Clean'));
+      }
+    } else {
+      // Campaign Development 8-step sequential workflow
+      var stagesOrder = [
+        'Ideation', 'Research', 'Selection and sequencing', 'Writing',
+        'PPT Development', 'Proofreading', 'Editing', 'Final Check'
+      ];
+
+      var currentIdx = -1;
+      for (var s = 0; s < stagesOrder.length; s++) {
+        if (stagesOrder[s].toLowerCase() === currentTask.stage.toLowerCase()) {
+          currentIdx = s;
           break;
         }
       }
 
-      // Copy completed content into the next stage doc
-      var sourceDocUrl = currentTask.docLink;
-      if (currentTask.stage.toLowerCase() === 'ppt development') {
-        // When PPT Development completes, source text comes from Step 4 (Writing) doc
+      if (currentIdx !== -1 && currentIdx + 1 < stagesOrder.length) {
+        var nextStageName = stagesOrder[currentIdx + 1];
+        var nextTask = null;
         for (var pt = 0; pt < projectTasks.length; pt++) {
-          if (projectTasks[pt].stage.toLowerCase() === 'writing') {
-            sourceDocUrl = projectTasks[pt].docLink;
+          if (projectTasks[pt].stage.toLowerCase() === nextStageName.toLowerCase()) {
+            nextTask = projectTasks[pt];
+            tSheet.getRange(projectTasks[pt].rowIdx, statusCol + 1).setValue('Ready');
+            if (allottedCol !== -1) {
+              tSheet.getRange(projectTasks[pt].rowIdx, allottedCol + 1).setValue(new Date().toLocaleString());
+            }
             break;
           }
         }
-      }
 
-      // Only attempt to copy if both source and target are valid Google Docs
-      if (sourceDocUrl && nextTask && nextTask.docLink &&
-          sourceDocUrl.indexOf('docs.google.com/document') !== -1 &&
-          nextTask.docLink.indexOf('docs.google.com/document') !== -1) {
-        try {
-          copyDevDocContentForward(
-            sourceDocUrl,
-            nextTask.docLink,
-            currentTask.stage.toLowerCase() === 'ppt development' ? 'Writing' : currentTask.stage,
-            nextStageName
-          );
-        } catch(cErr) {}
+        // Copy completed content into the next stage doc
+        var sourceDocUrl = currentTask.docLink;
+        if (currentTask.stage.toLowerCase() === 'ppt development') {
+          // When PPT Development completes, source text comes from Step 4 (Writing) doc
+          for (var pt = 0; pt < projectTasks.length; pt++) {
+            if (projectTasks[pt].stage.toLowerCase() === 'writing') {
+              sourceDocUrl = projectTasks[pt].docLink;
+              break;
+            }
+          }
+        }
+
+        // Only attempt to copy if both source and target are valid Google Docs
+        if (sourceDocUrl && nextTask && nextTask.docLink &&
+            sourceDocUrl.indexOf('docs.google.com/document') !== -1 &&
+            nextTask.docLink.indexOf('docs.google.com/document') !== -1) {
+          try {
+            copyDevDocContentForward(
+              sourceDocUrl,
+              nextTask.docLink,
+              currentTask.stage.toLowerCase() === 'ppt development' ? 'Writing' : currentTask.stage,
+              nextStageName
+            );
+          } catch(cErr) {}
+        }
       }
     }
   }
@@ -3150,24 +3406,56 @@ function handleRedoDevTask(payload) {
     return { success: false, message: 'Task not found: ' + taskId };
   }
 
-  var stagesOrder = [
-    'Ideation', 'Research', 'Selection and sequencing', 'Writing',
-    'PPT Development', 'Proofreading', 'Editing', 'Final Check'
-  ];
+  var isSmDev = currentTask.projectId.indexOf('SMD') === 0;
+  var isWebRep = currentTask.projectId.indexOf('WEB') === 0;
+  var isBlogArt = currentTask.projectId.indexOf('BLOG') === 0;
+  var prevStageName = '';
+  if (isSmDev) {
+    var cStageLower = currentTask.stage.toLowerCase();
+    if (cStageLower === 'editing') prevStageName = 'Writing';
+    else if (cStageLower === 'proofreading') prevStageName = 'Editing';
+    else if (cStageLower === 'text crosscheck' || cStageLower === 'cross check') prevStageName = 'Proofreading';
+    else if (cStageLower === 'thumbnail processing') prevStageName = 'Thumbnail Selection';
+    else if (cStageLower === 'thumbnail cross checking') prevStageName = 'Thumbnail Processing';
+    else if (cStageLower === 'media cross check') prevStageName = 'Photo Editing';
+    else if (cStageLower === 'media final cross check') prevStageName = 'Media Cross Check';
+    else if (cStageLower === 'ready to post') prevStageName = 'Media Final Cross check';
+    else if (cStageLower === 'photos clean') prevStageName = 'Ready to Post';
+  } else if (isWebRep) {
+    var cStageLower = currentTask.stage.toLowerCase();
+    if (cStageLower === 'editing') prevStageName = 'Writing';
+    else if (cStageLower === 'proofreading') prevStageName = 'Editing';
+    else if (cStageLower === 'text crosscheck' || cStageLower === 'cross check') prevStageName = 'Proofreading';
+    else if (cStageLower === 'selected photos') prevStageName = 'Raw Photos';
+    else if (cStageLower === 'thumbnail selection') prevStageName = 'Selected Photos';
+  } else if (isBlogArt) {
+    var cStageLower = currentTask.stage.toLowerCase();
+    if (cStageLower === 'editing') prevStageName = 'Writing';
+    else if (cStageLower === 'proofreading') prevStageName = 'Editing';
+    else if (cStageLower === 'text crosscheck' || cStageLower === 'cross check') prevStageName = 'Proofreading';
+    else if (cStageLower === 'thumbnail selection') prevStageName = 'Text Crosscheck';
+  } else {
+    var stagesOrder = [
+      'Ideation', 'Research', 'Selection and sequencing', 'Writing',
+      'PPT Development', 'Proofreading', 'Editing', 'Final Check'
+    ];
 
-  var currentIdx = -1;
-  for (var s = 0; s < stagesOrder.length; s++) {
-    if (stagesOrder[s].toLowerCase() === currentTask.stage.toLowerCase()) {
-      currentIdx = s;
-      break;
+    var currentIdx = -1;
+    for (var s = 0; s < stagesOrder.length; s++) {
+      if (stagesOrder[s].toLowerCase() === currentTask.stage.toLowerCase()) {
+        currentIdx = s;
+        break;
+      }
+    }
+
+    if (currentIdx > 0) {
+      prevStageName = stagesOrder[currentIdx - 1];
     }
   }
 
-  if (currentIdx <= 0) {
-    return { success: false, message: 'Cannot redo from the initial step.' };
+  if (!prevStageName) {
+    return { success: false, message: 'Cannot redo or previous stage not found for: ' + currentTask.stage };
   }
-
-  var prevStageName = stagesOrder[currentIdx - 1];
   var prevTaskRowIdx = -1;
   for (var i = 1; i < data.length; i++) {
     if (data[i][projIdCol] == currentTask.projectId && data[i][stageCol].toLowerCase() === prevStageName.toLowerCase()) {

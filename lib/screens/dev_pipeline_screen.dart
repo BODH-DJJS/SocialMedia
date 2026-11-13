@@ -27,6 +27,10 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
 
   String _searchQuery = '';
   String _statusFilter = 'All'; // All, Ready, Waiting, Done
+  String _campaignFilter = 'All'; // Campaign dropdown filter
+  String _smPostFilter = 'All'; // SM Post dropdown filter
+  String _webIdeaFilter = 'All'; // Website Reporting dropdown filter
+  String _blogIdeaFilter = 'All'; // Blogs / Articles dropdown filter
 
   final List<Map<String, dynamic>> _stageConfigs = [
     {
@@ -79,12 +83,172 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
     },
   ];
 
+  final List<Map<String, dynamic>> _smStageConfigs = [
+    {
+      'name': 'Writing',
+      'icon': Icons.draw_outlined,
+      'color': Color(0xFF8E44AD),
+      'group': 'Content',
+    },
+    {
+      'name': 'Editing',
+      'icon': Icons.auto_fix_high_rounded,
+      'color': Color(0xFF3F51B5),
+      'group': 'Content',
+    },
+    {
+      'name': 'Proofreading',
+      'icon': Icons.spellcheck_rounded,
+      'color': Color(0xFF00897B),
+      'group': 'Content',
+    },
+    {
+      'name': 'Text Crosscheck',
+      'icon': Icons.verified_outlined,
+      'color': Color(0xFF27AE60),
+      'group': 'Content',
+    },
+    {
+      'name': 'Thumbnail Selection',
+      'icon': Icons.image_search_rounded,
+      'color': Color(0xFFF39C12),
+      'group': 'Thumbnail',
+    },
+    {
+      'name': 'Thumbnail Processing',
+      'icon': Icons.design_services_rounded,
+      'color': Color(0xFFD35400),
+      'group': 'Thumbnail',
+    },
+    {
+      'name': 'Thumbnail Cross checking',
+      'icon': Icons.check_circle_outline_rounded,
+      'color': Color(0xFFE67E22),
+      'group': 'Thumbnail',
+    },
+    {
+      'name': 'Photo Editing',
+      'icon': Icons.photo_filter_rounded,
+      'color': Color(0xFF16A085),
+      'group': 'Media',
+    },
+    {
+      'name': 'Video Editing',
+      'icon': Icons.video_camera_back_rounded,
+      'color': Color(0xFF2980B9),
+      'group': 'Media',
+    },
+    {
+      'name': 'Media Cross Check',
+      'icon': Icons.rule_rounded,
+      'color': Color(0xFF1ABC9C),
+      'group': 'Media',
+    },
+    {
+      'name': 'Media Final Cross check',
+      'icon': Icons.fact_check_rounded,
+      'color': Color(0xFF2ECC71),
+      'group': 'Media',
+    },
+    {
+      'name': 'Ready to Post',
+      'icon': Icons.send_rounded,
+      'color': Color(0xFFE91E63),
+      'group': 'Publish',
+    },
+    {
+      'name': 'Photos Clean',
+      'icon': Icons.cleaning_services_rounded,
+      'color': Color(0xFF607D8B),
+      'group': 'Publish',
+    },
+  ];
+
+  final List<Map<String, dynamic>> _webStageConfigs = [
+    {
+      'name': 'Writing',
+      'icon': Icons.draw_outlined,
+      'color': Color(0xFF8E44AD),
+      'group': 'Content',
+    },
+    {
+      'name': 'Editing',
+      'icon': Icons.auto_fix_high_rounded,
+      'color': Color(0xFF3F51B5),
+      'group': 'Content',
+    },
+    {
+      'name': 'Proofreading',
+      'icon': Icons.spellcheck_rounded,
+      'color': Color(0xFF00897B),
+      'group': 'Content',
+    },
+    {
+      'name': 'Text Crosscheck',
+      'icon': Icons.verified_outlined,
+      'color': Color(0xFF27AE60),
+      'group': 'Content',
+    },
+    {
+      'name': 'Raw Photos',
+      'icon': Icons.photo_camera_back_outlined,
+      'color': Color(0xFFE65100),
+      'group': 'Media',
+    },
+    {
+      'name': 'Selected Photos',
+      'icon': Icons.photo_library_rounded,
+      'color': Color(0xFF16A085),
+      'group': 'Media',
+    },
+    {
+      'name': 'Thumbnail Selection',
+      'icon': Icons.image_search_rounded,
+      'color': Color(0xFFD35400),
+      'group': 'Thumbnail',
+    },
+  ];
+
+  final List<Map<String, dynamic>> _blogStageConfigs = [
+    {
+      'name': 'Writing',
+      'icon': Icons.draw_outlined,
+      'color': Color(0xFF8E44AD),
+      'group': 'Content',
+    },
+    {
+      'name': 'Editing',
+      'icon': Icons.auto_fix_high_rounded,
+      'color': Color(0xFF3F51B5),
+      'group': 'Content',
+    },
+    {
+      'name': 'Proofreading',
+      'icon': Icons.spellcheck_rounded,
+      'color': Color(0xFF00897B),
+      'group': 'Content',
+    },
+    {
+      'name': 'Text Crosscheck',
+      'icon': Icons.verified_outlined,
+      'color': Color(0xFF27AE60),
+      'group': 'Content',
+    },
+    {
+      'name': 'Thumbnail Selection',
+      'icon': Icons.image_search_rounded,
+      'color': Color(0xFFD35400),
+      'group': 'Thumbnail',
+    },
+  ];
+
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: _streams.length, vsync: this);
     _tabController.addListener(() {
       if (_tabController.indexIsChanging) return;
+      setState(() {});
       final provider = context.read<DevPipelineProvider>();
       provider.setStream(_streams[_tabController.index]);
       provider.fetchDevData();
@@ -230,8 +394,27 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
                 ),
                 icon: const Icon(Icons.add_rounded, size: 19),
-                label: const Text('Create Event / Topic', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                onPressed: () => _showCreateProjectDialog(context),
+                label: Text(
+                  _tabController.index == 1
+                      ? 'Create SM Post'
+                      : (_tabController.index == 2
+                          ? 'Create Website Report'
+                          : (_tabController.index == 3
+                              ? 'Create Blog / Article'
+                              : 'Create Event / Topic')),
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                ),
+                onPressed: () {
+                  if (_tabController.index == 1) {
+                    _showCreateSmProjectDialog(context);
+                  } else if (_tabController.index == 2) {
+                    _showCreateWebProjectDialog(context);
+                  } else if (_tabController.index == 3) {
+                    _showCreateBlogProjectDialog(context);
+                  } else {
+                    _showCreateProjectDialog(context);
+                  }
+                },
               ),
             ),
         ],
@@ -270,7 +453,11 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
             )
           : _tabController.index == 0
               ? _buildCampaignPipelineView(devProvider)
-              : _buildComingSoonStreamView(_streams[_tabController.index]),
+              : _tabController.index == 1
+                  ? _buildSmPipelineView(devProvider)
+                  : _tabController.index == 2
+                      ? _buildWebPipelineView(devProvider)
+                      : _buildBlogPipelineView(devProvider),
     );
   }
 
@@ -283,64 +470,6 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
           const SizedBox(width: 8),
           Text(title),
         ],
-      ),
-    );
-  }
-
-  Widget _buildComingSoonStreamView(String streamName) {
-    return Center(
-      child: Card(
-        margin: const EdgeInsets.all(24),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        elevation: 3,
-        child: Container(
-          width: 520,
-          padding: const EdgeInsets.all(36),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(18),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF1A237E).withOpacity(0.08),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.architecture_rounded, size: 54, color: Color(0xFF1A237E)),
-              ),
-              const SizedBox(height: 20),
-              Text(
-                streamName,
-                style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF1A1A2E)),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                'The Shared Drive folder structure under Delhi (IN) > Head Office is mapped and ready.',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 14, color: Colors.grey.shade700),
-              ),
-              const SizedBox(height: 16),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Colors.amber.shade50,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: Colors.amber.shade200),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.info_outline, size: 16, color: Colors.amber.shade900),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Sequential workflow steps will be enabled for this stream soon.',
-                      style: TextStyle(fontSize: 12, color: Colors.amber.shade900, fontWeight: FontWeight.w500),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }
@@ -399,6 +528,18 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
       filteredTasks = filteredTasks.where((t) => t.status.toLowerCase() == _statusFilter.toLowerCase()).toList();
     }
 
+    final campaigns = <String>[
+      'All',
+      ...{
+        ...provider.projects.where((p) => p.campaignName.trim().isNotEmpty).map((p) => p.campaignName.trim()),
+        ...provider.tasks.where((t) => t.campaignName.trim().isNotEmpty).map((t) => t.campaignName.trim()),
+      }
+    ];
+
+    if (_campaignFilter != 'All') {
+      filteredTasks = filteredTasks.where((t) => t.campaignName.toLowerCase() == _campaignFilter.toLowerCase()).toList();
+    }
+
     // Counts for stats banner
     final totalProjects = provider.projects.length;
     final totalTasks = provider.tasks.length;
@@ -427,7 +568,7 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
               const Spacer(),
               // Search Field
               SizedBox(
-                width: 220,
+                width: 200,
                 height: 36,
                 child: TextField(
                   onChanged: (val) => setState(() => _searchQuery = val),
@@ -442,7 +583,34 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
                   ),
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 8),
+              // Campaign Name Filter Dropdown (Campaign Wise Search)
+              Container(
+                height: 36,
+                constraints: const BoxConstraints(maxWidth: 220),
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.grey.shade300),
+                  color: Colors.grey.shade50,
+                ),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<String>(
+                    isExpanded: true,
+                    value: campaigns.contains(_campaignFilter) ? _campaignFilter : 'All',
+                    style: const TextStyle(fontSize: 12, color: Colors.black87, fontWeight: FontWeight.w500),
+                    items: campaigns.map((c) => DropdownMenuItem(
+                      value: c,
+                      child: Text(
+                        c == 'All' ? 'Campaign: All' : c,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    )).toList(),
+                    onChanged: (v) => setState(() => _campaignFilter = v ?? 'All'),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
               // Status Filter Dropdown
               Container(
                 height: 36,
@@ -549,6 +717,626 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
     );
   }
 
+  Widget _buildSmPipelineView(DevPipelineProvider provider) {
+    if (provider.tasks.isEmpty && provider.projects.isEmpty) {
+      return Center(
+        child: Card(
+          elevation: 2,
+          margin: const EdgeInsets.all(32),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          child: Container(
+            width: 480,
+            padding: const EdgeInsets.all(36),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1A237E).withOpacity(0.08),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.share_rounded, size: 52, color: Color(0xFF1A237E)),
+                ),
+                const SizedBox(height: 20),
+                const Text(
+                  'No SM Development Posts Yet',
+                  style: TextStyle(fontSize: 19, fontWeight: FontWeight.bold, color: Color(0xFF1A1A2E)),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Click "Create SM Post" above to start a new social media post with Content, Thumbnail, Media, and Publishing sequential workflows.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    // Filter tasks
+    var filteredTasks = provider.tasks;
+    if (_searchQuery.trim().isNotEmpty) {
+      final q = _searchQuery.trim().toLowerCase();
+      filteredTasks = filteredTasks.where((t) =>
+        t.campaignName.toLowerCase().contains(q) ||
+        t.sessionName.toLowerCase().contains(q) ||
+        t.assignee.toLowerCase().contains(q) ||
+        t.projectId.toLowerCase().contains(q)
+      ).toList();
+    }
+    if (_statusFilter != 'All') {
+      filteredTasks = filteredTasks.where((t) => t.status.toLowerCase() == _statusFilter.toLowerCase()).toList();
+    }
+
+    final postNames = <String>[
+      'All',
+      ...{
+        ...provider.projects.where((p) => p.campaignName.trim().isNotEmpty).map((p) => p.campaignName.trim()),
+        ...provider.tasks.where((t) => t.campaignName.trim().isNotEmpty).map((t) => t.campaignName.trim()),
+      }
+    ];
+
+    if (_smPostFilter != 'All') {
+      filteredTasks = filteredTasks.where((t) => t.campaignName.toLowerCase() == _smPostFilter.toLowerCase()).toList();
+    }
+
+    // Counts for stats banner
+    final totalPosts = provider.projects.length;
+    final totalTasks = provider.tasks.length;
+    final readyTasks = provider.tasks.where((t) => t.status.toLowerCase() == 'ready').length;
+    final doneTasks = provider.tasks.where((t) => t.status.toLowerCase() == 'done').length;
+
+    return Column(
+      children: [
+        // Summary & Filter Bar
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
+          ),
+          child: Row(
+            children: [
+              // KPI Badges
+              _buildKpiChip('SM Posts', '$totalPosts', const Color(0xFF1A237E)),
+              const SizedBox(width: 8),
+              _buildKpiChip('Ready for Action', '$readyTasks', const Color(0xFF00897B)),
+              const SizedBox(width: 8),
+              _buildKpiChip('Completed Steps', '$doneTasks', Colors.green.shade700),
+              const SizedBox(width: 8),
+              _buildKpiChip('Total Tasks', '$totalTasks', Colors.grey.shade700),
+              const Spacer(),
+              // Search Field
+              SizedBox(
+                width: 200,
+                height: 36,
+                child: TextField(
+                  onChanged: (val) => setState(() => _searchQuery = val),
+                  decoration: InputDecoration(
+                    hintText: 'Search post / topic...',
+                    hintStyle: const TextStyle(fontSize: 12),
+                    prefixIcon: const Icon(Icons.search, size: 18),
+                    contentPadding: EdgeInsets.zero,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: Colors.grey.shade300)),
+                    filled: true,
+                    fillColor: Colors.grey.shade50,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              // Post Filter Dropdown
+              Container(
+                height: 36,
+                constraints: const BoxConstraints(maxWidth: 220),
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.grey.shade300),
+                  color: Colors.grey.shade50,
+                ),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<String>(
+                    isExpanded: true,
+                    value: postNames.contains(_smPostFilter) ? _smPostFilter : 'All',
+                    style: const TextStyle(fontSize: 12, color: Colors.black87, fontWeight: FontWeight.w500),
+                    items: postNames.map((c) => DropdownMenuItem(
+                      value: c,
+                      child: Text(
+                        c == 'All' ? 'Post: All' : c,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    )).toList(),
+                    onChanged: (v) => setState(() => _smPostFilter = v ?? 'All'),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              // Status Filter Dropdown
+              Container(
+                height: 36,
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.grey.shade300),
+                  color: Colors.grey.shade50,
+                ),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<String>(
+                    value: _statusFilter,
+                    style: const TextStyle(fontSize: 12, color: Colors.black87, fontWeight: FontWeight.w500),
+                    items: const [
+                      DropdownMenuItem(value: 'All', child: Text('Filter: All')),
+                      DropdownMenuItem(value: 'Ready', child: Text('Filter: Ready')),
+                      DropdownMenuItem(value: 'Waiting', child: Text('Filter: Waiting')),
+                      DropdownMenuItem(value: 'Done', child: Text('Filter: Done')),
+                    ],
+                    onChanged: (v) => setState(() => _statusFilter = v ?? 'All'),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        // Horizontal Kanban Board for SM Development (13 steps)
+        Expanded(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              return Scrollbar(
+                thumbVisibility: true,
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(minWidth: constraints.maxWidth),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: _smStageConfigs.asMap().entries.map((entry) {
+                          final idx = entry.key;
+                          final cfg = entry.value;
+                          final stageName = cfg['name'] as String;
+                          final stageColor = cfg['color'] as Color;
+                          final stageIcon = cfg['icon'] as IconData;
+                          final group = cfg['group'] as String;
+
+                          final stageTasks = filteredTasks
+                              .where((t) => t.stage.toLowerCase() == stageName.toLowerCase())
+                              .toList();
+
+                          return _buildKanbanColumn(
+                            stepNum: idx + 1,
+                            stageName: stageName,
+                            tasks: stageTasks,
+                            offsetDays: 0,
+                            stageColor: stageColor,
+                            stageIcon: stageIcon,
+                            groupLabel: group,
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildWebPipelineView(DevPipelineProvider provider) {
+    if (provider.tasks.isEmpty && provider.projects.isEmpty) {
+      return Center(
+        child: Card(
+          elevation: 2,
+          margin: const EdgeInsets.all(32),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          child: Container(
+            width: 480,
+            padding: const EdgeInsets.all(36),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1A237E).withValues(alpha: 0.08),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.language_rounded, size: 52, color: Color(0xFF1A237E)),
+                ),
+                const SizedBox(height: 20),
+                const Text(
+                  'No Website Reporting Projects Yet',
+                  style: TextStyle(fontSize: 19, fontWeight: FontWeight.bold, color: Color(0xFF1A1A2E)),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Click "Create Website Report" above to start a new reporting topic with Researched Data sheet, content docs, and photo/thumbnail workflows.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    // Filter tasks
+    var filteredTasks = provider.tasks;
+    if (_searchQuery.trim().isNotEmpty) {
+      final q = _searchQuery.trim().toLowerCase();
+      filteredTasks = filteredTasks.where((t) =>
+        t.campaignName.toLowerCase().contains(q) ||
+        t.sessionName.toLowerCase().contains(q) ||
+        t.assignee.toLowerCase().contains(q) ||
+        t.projectId.toLowerCase().contains(q)
+      ).toList();
+    }
+    if (_statusFilter != 'All') {
+      filteredTasks = filteredTasks.where((t) => t.status.toLowerCase() == _statusFilter.toLowerCase()).toList();
+    }
+
+    final ideaNames = <String>[
+      'All',
+      ...{
+        ...provider.projects.where((p) => p.campaignName.trim().isNotEmpty).map((p) => p.campaignName.trim()),
+        ...provider.tasks.where((t) => t.campaignName.trim().isNotEmpty).map((t) => t.campaignName.trim()),
+      }
+    ];
+
+    if (_webIdeaFilter != 'All') {
+      filteredTasks = filteredTasks.where((t) => t.campaignName.toLowerCase() == _webIdeaFilter.toLowerCase()).toList();
+    }
+
+    final totalIdeas = provider.projects.length;
+    final totalTasks = provider.tasks.length;
+    final readyTasks = provider.tasks.where((t) => t.status.toLowerCase() == 'ready').length;
+    final doneTasks = provider.tasks.where((t) => t.status.toLowerCase() == 'done').length;
+
+    return Column(
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
+          ),
+          child: Row(
+            children: [
+              _buildKpiChip('Ideas', '$totalIdeas', const Color(0xFF1A237E)),
+              const SizedBox(width: 8),
+              _buildKpiChip('Ready for Action', '$readyTasks', const Color(0xFF00897B)),
+              const SizedBox(width: 8),
+              _buildKpiChip('Completed Steps', '$doneTasks', Colors.green.shade700),
+              const SizedBox(width: 8),
+              _buildKpiChip('Total Tasks', '$totalTasks', Colors.grey.shade700),
+              const Spacer(),
+              SizedBox(
+                width: 200,
+                height: 36,
+                child: TextField(
+                  onChanged: (val) => setState(() => _searchQuery = val),
+                  decoration: InputDecoration(
+                    hintText: 'Search idea / assignee...',
+                    hintStyle: const TextStyle(fontSize: 12),
+                    prefixIcon: const Icon(Icons.search, size: 18),
+                    contentPadding: EdgeInsets.zero,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: Colors.grey.shade300)),
+                    filled: true,
+                    fillColor: Colors.grey.shade50,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                height: 36,
+                constraints: const BoxConstraints(maxWidth: 220),
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.grey.shade300),
+                  color: Colors.grey.shade50,
+                ),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<String>(
+                    isExpanded: true,
+                    value: ideaNames.contains(_webIdeaFilter) ? _webIdeaFilter : 'All',
+                    style: const TextStyle(fontSize: 12, color: Colors.black87, fontWeight: FontWeight.w500),
+                    items: ideaNames.map((c) => DropdownMenuItem(
+                      value: c,
+                      child: Text(
+                        c == 'All' ? 'Idea: All' : c,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    )).toList(),
+                    onChanged: (v) => setState(() => _webIdeaFilter = v ?? 'All'),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                height: 36,
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.grey.shade300),
+                  color: Colors.grey.shade50,
+                ),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<String>(
+                    value: _statusFilter,
+                    style: const TextStyle(fontSize: 12, color: Colors.black87, fontWeight: FontWeight.w500),
+                    items: const [
+                      DropdownMenuItem(value: 'All', child: Text('Filter: All')),
+                      DropdownMenuItem(value: 'Ready', child: Text('Filter: Ready')),
+                      DropdownMenuItem(value: 'Waiting', child: Text('Filter: Waiting')),
+                      DropdownMenuItem(value: 'Done', child: Text('Filter: Done')),
+                    ],
+                    onChanged: (v) => setState(() => _statusFilter = v ?? 'All'),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              return Scrollbar(
+                thumbVisibility: true,
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(minWidth: constraints.maxWidth),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: _webStageConfigs.asMap().entries.map((entry) {
+                          final idx = entry.key;
+                          final cfg = entry.value;
+                          final stageName = cfg['name'] as String;
+                          final stageColor = cfg['color'] as Color;
+                          final stageIcon = cfg['icon'] as IconData;
+                          final group = cfg['group'] as String;
+
+                          final stageTasks = filteredTasks
+                              .where((t) => t.stage.toLowerCase() == stageName.toLowerCase())
+                              .toList();
+
+                          return _buildKanbanColumn(
+                            stepNum: idx + 1,
+                            stageName: stageName,
+                            tasks: stageTasks,
+                            offsetDays: 0,
+                            stageColor: stageColor,
+                            stageIcon: stageIcon,
+                            groupLabel: group,
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildBlogPipelineView(DevPipelineProvider provider) {
+    if (provider.tasks.isEmpty && provider.projects.isEmpty) {
+      return Center(
+        child: Card(
+          elevation: 2,
+          margin: const EdgeInsets.all(32),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          child: Container(
+            width: 480,
+            padding: const EdgeInsets.all(36),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1A237E).withValues(alpha: 0.08),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.article_rounded, size: 52, color: Color(0xFF1A237E)),
+                ),
+                const SizedBox(height: 20),
+                const Text(
+                  'No Blog / Article Projects Yet',
+                  style: TextStyle(fontSize: 19, fontWeight: FontWeight.bold, color: Color(0xFF1A1A2E)),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Click "Create Blog / Article" above to start a new article topic with Researched Doc, content docs, and thumbnail selection workflow.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    // Filter tasks
+    var filteredTasks = provider.tasks;
+    if (_searchQuery.trim().isNotEmpty) {
+      final q = _searchQuery.trim().toLowerCase();
+      filteredTasks = filteredTasks.where((t) =>
+        t.campaignName.toLowerCase().contains(q) ||
+        t.sessionName.toLowerCase().contains(q) ||
+        t.assignee.toLowerCase().contains(q) ||
+        t.projectId.toLowerCase().contains(q)
+      ).toList();
+    }
+    if (_statusFilter != 'All') {
+      filteredTasks = filteredTasks.where((t) => t.status.toLowerCase() == _statusFilter.toLowerCase()).toList();
+    }
+
+    final ideaNames = <String>[
+      'All',
+      ...{
+        ...provider.projects.where((p) => p.campaignName.trim().isNotEmpty).map((p) => p.campaignName.trim()),
+        ...provider.tasks.where((t) => t.campaignName.trim().isNotEmpty).map((t) => t.campaignName.trim()),
+      }
+    ];
+
+    if (_blogIdeaFilter != 'All') {
+      filteredTasks = filteredTasks.where((t) => t.campaignName.toLowerCase() == _blogIdeaFilter.toLowerCase()).toList();
+    }
+
+    final totalArticles = provider.projects.length;
+    final totalTasks = provider.tasks.length;
+    final readyTasks = provider.tasks.where((t) => t.status.toLowerCase() == 'ready').length;
+    final doneTasks = provider.tasks.where((t) => t.status.toLowerCase() == 'done').length;
+
+    return Column(
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
+          ),
+          child: Row(
+            children: [
+              _buildKpiChip('Articles', '$totalArticles', const Color(0xFF1A237E)),
+              const SizedBox(width: 8),
+              _buildKpiChip('Ready for Action', '$readyTasks', const Color(0xFF00897B)),
+              const SizedBox(width: 8),
+              _buildKpiChip('Completed Steps', '$doneTasks', Colors.green.shade700),
+              const SizedBox(width: 8),
+              _buildKpiChip('Total Tasks', '$totalTasks', Colors.grey.shade700),
+              const Spacer(),
+              SizedBox(
+                width: 200,
+                height: 36,
+                child: TextField(
+                  onChanged: (val) => setState(() => _searchQuery = val),
+                  decoration: InputDecoration(
+                    hintText: 'Search article / assignee...',
+                    hintStyle: const TextStyle(fontSize: 12),
+                    prefixIcon: const Icon(Icons.search, size: 18),
+                    contentPadding: EdgeInsets.zero,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: Colors.grey.shade300)),
+                    filled: true,
+                    fillColor: Colors.grey.shade50,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                height: 36,
+                constraints: const BoxConstraints(maxWidth: 220),
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.grey.shade300),
+                  color: Colors.grey.shade50,
+                ),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<String>(
+                    isExpanded: true,
+                    value: ideaNames.contains(_blogIdeaFilter) ? _blogIdeaFilter : 'All',
+                    style: const TextStyle(fontSize: 12, color: Colors.black87, fontWeight: FontWeight.w500),
+                    items: ideaNames.map((c) => DropdownMenuItem(
+                      value: c,
+                      child: Text(
+                        c == 'All' ? 'Article: All' : c,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    )).toList(),
+                    onChanged: (v) => setState(() => _blogIdeaFilter = v ?? 'All'),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                height: 36,
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.grey.shade300),
+                  color: Colors.grey.shade50,
+                ),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<String>(
+                    value: _statusFilter,
+                    style: const TextStyle(fontSize: 12, color: Colors.black87, fontWeight: FontWeight.w500),
+                    items: const [
+                      DropdownMenuItem(value: 'All', child: Text('Filter: All')),
+                      DropdownMenuItem(value: 'Ready', child: Text('Filter: Ready')),
+                      DropdownMenuItem(value: 'Waiting', child: Text('Filter: Waiting')),
+                      DropdownMenuItem(value: 'Done', child: Text('Filter: Done')),
+                    ],
+                    onChanged: (v) => setState(() => _statusFilter = v ?? 'All'),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              return Scrollbar(
+                thumbVisibility: true,
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(minWidth: constraints.maxWidth),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: _blogStageConfigs.asMap().entries.map((entry) {
+                          final idx = entry.key;
+                          final cfg = entry.value;
+                          final stageName = cfg['name'] as String;
+                          final stageColor = cfg['color'] as Color;
+                          final stageIcon = cfg['icon'] as IconData;
+                          final group = cfg['group'] as String;
+
+                          final stageTasks = filteredTasks
+                              .where((t) => t.stage.toLowerCase() == stageName.toLowerCase())
+                              .toList();
+
+                          return _buildKanbanColumn(
+                            stepNum: idx + 1,
+                            stageName: stageName,
+                            tasks: stageTasks,
+                            offsetDays: 0,
+                            stageColor: stageColor,
+                            stageIcon: stageIcon,
+                            groupLabel: group,
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildKanbanColumn({
     required int stepNum,
     required String stageName,
@@ -556,6 +1344,7 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
     required int offsetDays,
     required Color stageColor,
     required IconData stageIcon,
+    String? groupLabel,
   }) {
     final readyCount = tasks.where((t) => t.status.toLowerCase() == 'ready').length;
 
@@ -604,7 +1393,9 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
                           Row(
                             children: [
                               Text(
-                                'Cadence: +$offsetDays days',
+                                (groupLabel != null && groupLabel.isNotEmpty)
+                                    ? 'Workflow: $groupLabel'
+                                    : 'Cadence: +$offsetDays days',
                                 style: TextStyle(fontSize: 10, color: Colors.grey.shade600, fontWeight: FontWeight.w500),
                               ),
                               if (readyCount > 0) ...[
@@ -676,12 +1467,15 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
   Widget _buildTaskCard(DevTask task, int stepNum, Color stageColor) {
     final isDone = task.status.toLowerCase() == 'done';
     final isReady = task.status.toLowerCase() == 'ready';
-    final isPptStage = task.stage.toLowerCase() == 'ppt development';
-    final isPostPptStage = stepNum >= 6;
+    final isSm = task.stream == 'SM Development' || task.projectId.startsWith('SMD');
+    final isWeb = task.stream == 'Website Reporting' || task.projectId.startsWith('WEB');
+    final isBlog = task.stream == 'Blogs / Articles' || task.projectId.startsWith('BLOG');
+    final isPptStage = !isSm && !isWeb && !isBlog && task.stage.toLowerCase() == 'ppt development';
+    final isPostPptStage = !isSm && !isWeb && !isBlog && stepNum >= 6;
 
     final devProvider = context.read<DevPipelineProvider>();
     String cardPptFolder = task.pptFolderLink.trim();
-    if (cardPptFolder.isEmpty) {
+    if (!isSm && cardPptFolder.isEmpty) {
       try {
         final pptTask = devProvider.tasks.firstWhere(
           (t) => t.projectId == task.projectId && t.stage.toLowerCase() == 'ppt development',
@@ -691,7 +1485,7 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
     }
 
     String cardWritingDoc = task.prevDocLink.trim().isNotEmpty ? task.prevDocLink.trim() : task.writingDocLink.trim();
-    if (cardWritingDoc.isEmpty) {
+    if (!isSm && cardWritingDoc.isEmpty) {
       try {
         final writingTask = devProvider.tasks.firstWhere(
           (t) => t.projectId == task.projectId && t.stage.toLowerCase() == 'writing',
@@ -806,9 +1600,11 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
               ),
               const SizedBox(height: 8),
 
-              // Campaign & Session Name
+              // Campaign & Session Name / Post & Topic / Idea Name
               Text(
-                task.campaignName.isNotEmpty ? task.campaignName : 'Campaign Topic',
+                task.campaignName.isNotEmpty
+                    ? task.campaignName
+                    : (isSm ? 'Post Name' : ((isWeb || isBlog) ? 'Idea' : 'Campaign Topic')),
                 style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, height: 1.25),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
@@ -818,12 +1614,16 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                   decoration: BoxDecoration(
-                    color: Colors.blue.shade50,
+                    color: isSm ? Colors.purple.shade50 : Colors.blue.shade50,
                     borderRadius: BorderRadius.circular(4),
                   ),
                   child: Text(
-                    'Session: ${task.sessionName}',
-                    style: TextStyle(fontSize: 11, color: Colors.blue.shade900, fontWeight: FontWeight.w500),
+                    isSm ? 'Topic: ${task.sessionName}' : 'Session: ${task.sessionName}',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: isSm ? Colors.purple.shade900 : Colors.blue.shade900,
+                      fontWeight: FontWeight.w500,
+                    ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -896,7 +1696,235 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
               // Quick Actions on Card
               Row(
                 children: [
-                  if (isPptStage) ...[
+                  if (isWeb) ...[
+                    // Website Reporting Card Actions
+                    if (task.docLink.isNotEmpty && (task.docLink.contains('document/d') || !task.docLink.contains('folders')))
+                      InkWell(
+                        onTap: () => _openUrl(task.docLink),
+                        borderRadius: BorderRadius.circular(6),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.blue.shade50,
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: Colors.blue.shade200),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: const [
+                              Icon(Icons.description_outlined, size: 13, color: Colors.blue),
+                              SizedBox(width: 4),
+                              Text('Doc', style: TextStyle(fontSize: 10, color: Colors.blue, fontWeight: FontWeight.bold)),
+                            ],
+                          ),
+                        ),
+                      )
+                    else if (task.docLink.isNotEmpty && task.docLink.contains('folders'))
+                      InkWell(
+                        onTap: () => _openUrl(task.docLink),
+                        borderRadius: BorderRadius.circular(6),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.orange.shade50,
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: Colors.orange.shade300),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: const [
+                              Icon(Icons.folder_open_rounded, size: 13, color: Colors.orange),
+                              SizedBox(width: 4),
+                              Text('Folder', style: TextStyle(fontSize: 10, color: Colors.deepOrange, fontWeight: FontWeight.bold)),
+                            ],
+                          ),
+                        ),
+                      ),
+                    if (task.researchedDataLink.isNotEmpty) ...[
+                      const SizedBox(width: 5),
+                      InkWell(
+                        onTap: () => _openUrl(task.researchedDataLink),
+                        borderRadius: BorderRadius.circular(6),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.green.shade50,
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: Colors.green.shade300),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: const [
+                              Icon(Icons.table_chart_outlined, size: 13, color: Colors.green),
+                              SizedBox(width: 4),
+                              Text('Sheet', style: TextStyle(fontSize: 10, color: Colors.green, fontWeight: FontWeight.bold)),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                    if (task.folderLink.isNotEmpty) ...[
+                      const SizedBox(width: 5),
+                      InkWell(
+                        onTap: () => _openUrl(task.folderLink),
+                        borderRadius: BorderRadius.circular(6),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.amber.shade50,
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: Colors.amber.shade300),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: const [
+                              Icon(Icons.folder_shared_outlined, size: 13, color: Colors.amber),
+                              SizedBox(width: 4),
+                              Text('Drive', style: TextStyle(fontSize: 10, color: Colors.deepOrange, fontWeight: FontWeight.bold)),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ] else if (isBlog) ...[
+                    // Blogs / Articles Card Actions
+                    if (task.docLink.isNotEmpty && (task.docLink.contains('document/d') || !task.docLink.contains('folders')))
+                      InkWell(
+                        onTap: () => _openUrl(task.docLink),
+                        borderRadius: BorderRadius.circular(6),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.blue.shade50,
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: Colors.blue.shade200),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: const [
+                              Icon(Icons.description_outlined, size: 13, color: Colors.blue),
+                              SizedBox(width: 4),
+                              Text('Doc', style: TextStyle(fontSize: 10, color: Colors.blue, fontWeight: FontWeight.bold)),
+                            ],
+                          ),
+                        ),
+                      ),
+                    if (task.thumbnailFolderLink.isNotEmpty || (task.docLink.isNotEmpty && task.docLink.contains('folders'))) ...[
+                      const SizedBox(width: 5),
+                      InkWell(
+                        onTap: () => _openUrl(task.thumbnailFolderLink.isNotEmpty ? task.thumbnailFolderLink : task.docLink),
+                        borderRadius: BorderRadius.circular(6),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.orange.shade50,
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: Colors.orange.shade300),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: const [
+                              Icon(Icons.image_outlined, size: 13, color: Colors.deepOrange),
+                              SizedBox(width: 4),
+                              Text('Thumb', style: TextStyle(fontSize: 10, color: Colors.deepOrange, fontWeight: FontWeight.bold)),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                    if (task.researchedDocLink.isNotEmpty) ...[
+                      const SizedBox(width: 5),
+                      InkWell(
+                        onTap: () => _openUrl(task.researchedDocLink),
+                        borderRadius: BorderRadius.circular(6),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.indigo.shade50,
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: Colors.indigo.shade200),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: const [
+                              Icon(Icons.menu_book_rounded, size: 13, color: Colors.indigo),
+                              SizedBox(width: 4),
+                              Text('Researched', style: TextStyle(fontSize: 10, color: Colors.indigo, fontWeight: FontWeight.bold)),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                    if (task.folderLink.isNotEmpty) ...[
+                      const SizedBox(width: 5),
+                      InkWell(
+                        onTap: () => _openUrl(task.folderLink),
+                        borderRadius: BorderRadius.circular(6),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.amber.shade50,
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: Colors.amber.shade300),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: const [
+                              Icon(Icons.folder_shared_outlined, size: 13, color: Colors.amber),
+                              SizedBox(width: 4),
+                              Text('Drive', style: TextStyle(fontSize: 10, color: Colors.deepOrange, fontWeight: FontWeight.bold)),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ] else if (isSm) ...[
+                    // SM Development Card Actions
+                    if (task.docLink.isNotEmpty)
+                      InkWell(
+                        onTap: () => _openUrl(task.docLink),
+                        borderRadius: BorderRadius.circular(6),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.blue.shade50,
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: Colors.blue.shade200),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: const [
+                              Icon(Icons.description_outlined, size: 13, color: Colors.blue),
+                              SizedBox(width: 4),
+                              Text('Doc', style: TextStyle(fontSize: 11, color: Colors.blue, fontWeight: FontWeight.bold)),
+                            ],
+                          ),
+                        ),
+                      ),
+                    if (task.folderLink.isNotEmpty) ...[
+                      if (task.docLink.isNotEmpty) const SizedBox(width: 6),
+                      InkWell(
+                        onTap: () => _openUrl(task.folderLink),
+                        borderRadius: BorderRadius.circular(6),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.amber.shade50,
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: Colors.amber.shade300),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: const [
+                              Icon(Icons.folder_open_rounded, size: 13, color: Colors.orange),
+                              SizedBox(width: 4),
+                              Text('Drive', style: TextStyle(fontSize: 11, color: Colors.deepOrange, fontWeight: FontWeight.bold)),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ] else if (isPptStage) ...[
                     // Step 5: PPT Folder & Writing Doc
                     if (task.docLink.isNotEmpty || cardPptFolder.isNotEmpty)
                       InkWell(
@@ -1028,10 +2056,13 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
       builder: (ctx) {
         return StatefulBuilder(
           builder: (ctx, setDialogState) {
+            final isSm = task.stream == 'SM Development' || task.projectId.startsWith('SMD');
+            final isWeb = task.stream == 'Website Reporting' || task.projectId.startsWith('WEB');
+            final isBlog = task.stream == 'Blogs / Articles' || task.projectId.startsWith('BLOG');
             final isDone = task.status.toLowerCase() == 'done';
             final hasPreviousStage = stepNum > 1;
-            final isPptStage = task.stage.toLowerCase() == 'ppt development';
-            final isPostPptStage = stepNum >= 6;
+            final isPptStage = !isSm && !isWeb && !isBlog && task.stage.toLowerCase() == 'ppt development';
+            final isPostPptStage = !isSm && !isWeb && !isBlog && stepNum >= 6;
 
             final devProvider = context.read<DevPipelineProvider>();
             String bestPptFolder = task.pptFolderLink.trim();
@@ -1066,6 +2097,10 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
             String bestIecProofreadDoc = task.iecProofreadDocLink.isNotEmpty ? task.iecProofreadDocLink : (proj?.iecProofreadDocLink ?? '');
             String bestIecFinalCheckDoc = task.iecFinalCheckDocLink.isNotEmpty ? task.iecFinalCheckDocLink : (proj?.iecFinalCheckDocLink ?? '');
             final hasIecMaterial = bestIecFolder.isNotEmpty || bestIecWritingDoc.isNotEmpty || bestIecDesigningFolder.isNotEmpty || bestIecProofreadDoc.isNotEmpty || bestIecFinalCheckDoc.isNotEmpty;
+
+            String bestResearchedData = task.researchedDataLink.isNotEmpty ? task.researchedDataLink : (proj?.researchedDataLink ?? '');
+            String bestResearchedDoc = task.researchedDocLink.isNotEmpty ? task.researchedDocLink : (proj?.researchedDocLink ?? '');
+            String bestThumbnailFolder = task.thumbnailFolderLink.isNotEmpty ? task.thumbnailFolderLink : (proj?.thumbnailFolderLink ?? '');
 
             return AlertDialog(
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -1133,8 +2168,9 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
                         ),
                         child: Column(
                           children: [
-                            _infoRow('Campaign', task.campaignName),
-                            if (task.sessionName.isNotEmpty) _infoRow('Session', task.sessionName),
+                            _infoRow(isSm ? 'Post Name' : ((isWeb || isBlog) ? 'Idea' : 'Campaign'), task.campaignName),
+                            if (task.sessionName.isNotEmpty) _infoRow(isSm ? 'Post Topic' : 'Session', task.sessionName),
+                            if (task.festivalsIncluded.isNotEmpty) _infoRow('Festivals / Days', task.festivalsIncluded),
                             _infoRow('Assignee', '${task.assignee} ${task.assigneeEmail.isNotEmpty ? "(${task.assigneeEmail})" : ""}'),
                             _infoRow('Due Date', task.dueDate.isNotEmpty ? task.dueDate : 'TBD'),
                             if (task.allottedDate.isNotEmpty) _infoRow('Allotted On', task.allottedDate),
@@ -1176,8 +2212,265 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
 
                       const SizedBox(height: 16),
 
-                      // ── Workspace Section (Tailored for PPT Folder / Docs) ──
-                      if (isPptStage) ...[
+                      // ── Workspace Section (Tailored for Web, Blog, SM, PPT Folder / Docs) ──
+                      if (isWeb) ...[
+                        // Website Reporting
+                        Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF0FDF4),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: const Color(0xFFBBF7D0)),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(Icons.web_rounded, color: stageColor, size: 20),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    'Stage: ${task.stage}',
+                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF14532D)),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                'Website Reporting workflow. Content is carried forward from stage to stage. Access the Researched Data sheet, stage Docs/Folders below.',
+                                style: TextStyle(fontSize: 11, color: Colors.grey.shade700),
+                              ),
+                              const SizedBox(height: 12),
+                              if (task.docLink.isNotEmpty)
+                                SizedBox(
+                                  width: double.infinity,
+                                  height: 44,
+                                  child: ElevatedButton.icon(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: task.docLink.contains('folders') ? Colors.orange.shade800 : const Color(0xFF1A237E),
+                                      foregroundColor: Colors.white,
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                    ),
+                                    icon: Icon(task.docLink.contains('folders') ? Icons.folder_open_rounded : Icons.open_in_new, size: 18),
+                                    label: Text(
+                                      task.docLink.contains('folders') ? 'Open ${task.stage} Folder' : 'Open ${task.stage} Doc',
+                                      style: const TextStyle(fontWeight: FontWeight.bold),
+                                    ),
+                                    onPressed: () => _openUrl(task.docLink),
+                                  ),
+                                ),
+                              if (bestResearchedData.isNotEmpty) ...[
+                                const SizedBox(height: 8),
+                                SizedBox(
+                                  width: double.infinity,
+                                  height: 40,
+                                  child: ElevatedButton.icon(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(0xFF107C41),
+                                      foregroundColor: Colors.white,
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                    ),
+                                    icon: const Icon(Icons.table_chart_rounded, size: 18),
+                                    label: const Text('Open "Researched Data" Google Sheet', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                                    onPressed: () => _openUrl(bestResearchedData),
+                                  ),
+                                ),
+                              ],
+                              if (bestThumbnailFolder.isNotEmpty && task.stage.toLowerCase() != 'thumbnail selection') ...[
+                                const SizedBox(height: 8),
+                                SizedBox(
+                                  width: double.infinity,
+                                  height: 38,
+                                  child: OutlinedButton.icon(
+                                    style: OutlinedButton.styleFrom(
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                      side: BorderSide(color: Colors.orange.shade800),
+                                    ),
+                                    icon: Icon(Icons.image_outlined, size: 17, color: Colors.orange.shade800),
+                                    label: Text('Open Thumbnail Folder', style: TextStyle(color: Colors.orange.shade800, fontSize: 13)),
+                                    onPressed: () => _openUrl(bestThumbnailFolder),
+                                  ),
+                                ),
+                              ],
+                              if (task.folderLink.isNotEmpty) ...[
+                                const SizedBox(height: 8),
+                                SizedBox(
+                                  width: double.infinity,
+                                  height: 38,
+                                  child: OutlinedButton.icon(
+                                    style: OutlinedButton.styleFrom(
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                      side: const BorderSide(color: Color(0xFF14532D)),
+                                    ),
+                                    icon: const Icon(Icons.folder_shared_outlined, size: 17, color: Color(0xFF14532D)),
+                                    label: const Text('Open Idea Drive Folder', style: TextStyle(color: Color(0xFF14532D), fontSize: 13)),
+                                    onPressed: () => _openUrl(task.folderLink),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ] else if (isBlog) ...[
+                        // Blogs / Articles
+                        Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF5F3FF),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: const Color(0xFFDDD6FE)),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(Icons.article_rounded, color: stageColor, size: 20),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    'Stage: ${task.stage}',
+                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF5B21B6)),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                'Blogs / Articles pipeline. Content forwards through Docs with dedicated Researched Doc and Thumbnail selection.',
+                                style: TextStyle(fontSize: 11, color: Colors.grey.shade700),
+                              ),
+                              const SizedBox(height: 12),
+                              if (task.docLink.isNotEmpty)
+                                SizedBox(
+                                  width: double.infinity,
+                                  height: 44,
+                                  child: ElevatedButton.icon(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: task.docLink.contains('folders') ? Colors.orange.shade800 : const Color(0xFF1A237E),
+                                      foregroundColor: Colors.white,
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                    ),
+                                    icon: Icon(task.docLink.contains('folders') ? Icons.folder_open_rounded : Icons.open_in_new, size: 18),
+                                    label: Text(
+                                      task.docLink.contains('folders') ? 'Open ${task.stage} Folder' : 'Open ${task.stage} Doc',
+                                      style: const TextStyle(fontWeight: FontWeight.bold),
+                                    ),
+                                    onPressed: () => _openUrl(task.docLink),
+                                  ),
+                                ),
+                              if (bestResearchedDoc.isNotEmpty) ...[
+                                const SizedBox(height: 8),
+                                SizedBox(
+                                  width: double.infinity,
+                                  height: 40,
+                                  child: ElevatedButton.icon(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(0xFF4338CA),
+                                      foregroundColor: Colors.white,
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                    ),
+                                    icon: const Icon(Icons.menu_book_rounded, size: 18),
+                                    label: const Text('Open "Researched Doc" Reference', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                                    onPressed: () => _openUrl(bestResearchedDoc),
+                                  ),
+                                ),
+                              ],
+                              if (bestThumbnailFolder.isNotEmpty && task.stage.toLowerCase() != 'thumbnail selection') ...[
+                                const SizedBox(height: 8),
+                                SizedBox(
+                                  width: double.infinity,
+                                  height: 38,
+                                  child: OutlinedButton.icon(
+                                    style: OutlinedButton.styleFrom(
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                      side: BorderSide(color: Colors.orange.shade800),
+                                    ),
+                                    icon: Icon(Icons.image_outlined, size: 17, color: Colors.orange.shade800),
+                                    label: Text('Open Thumbnail Folder', style: TextStyle(color: Colors.orange.shade800, fontSize: 13)),
+                                    onPressed: () => _openUrl(bestThumbnailFolder),
+                                  ),
+                                ),
+                              ],
+                              if (task.folderLink.isNotEmpty) ...[
+                                const SizedBox(height: 8),
+                                SizedBox(
+                                  width: double.infinity,
+                                  height: 38,
+                                  child: OutlinedButton.icon(
+                                    style: OutlinedButton.styleFrom(
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                      side: const BorderSide(color: Color(0xFF5B21B6)),
+                                    ),
+                                    icon: const Icon(Icons.folder_shared_outlined, size: 17, color: Color(0xFF5B21B6)),
+                                    label: const Text('Open Idea Drive Folder', style: TextStyle(color: Color(0xFF5B21B6), fontSize: 13)),
+                                    onPressed: () => _openUrl(task.folderLink),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ] else if (isSm) ...[
+                        Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF0F4FF),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: const Color(0xFFD0DCFF)),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(Icons.workspace_premium_rounded, color: stageColor, size: 20),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    'Stage: ${task.stage}',
+                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF1A237E)),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                'Stage assigned to ${task.assignee}. Content and assets are automatically carried forward upon marking Done & Handoff.',
+                                style: TextStyle(fontSize: 11, color: Colors.grey.shade700),
+                              ),
+                              const SizedBox(height: 12),
+                              if (task.docLink.isNotEmpty)
+                                SizedBox(
+                                  width: double.infinity,
+                                  height: 44,
+                                  child: ElevatedButton.icon(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(0xFF1A237E),
+                                      foregroundColor: Colors.white,
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                    ),
+                                    icon: const Icon(Icons.open_in_new, size: 18),
+                                    label: Text('Open ${task.stage} Doc', style: const TextStyle(fontWeight: FontWeight.bold)),
+                                    onPressed: () => _openUrl(task.docLink),
+                                  ),
+                                ),
+                              if (task.folderLink.isNotEmpty) ...[
+                                const SizedBox(height: 8),
+                                SizedBox(
+                                  width: double.infinity,
+                                  height: 38,
+                                  child: OutlinedButton.icon(
+                                    style: OutlinedButton.styleFrom(
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                      side: const BorderSide(color: Color(0xFF1A237E)),
+                                    ),
+                                    icon: const Icon(Icons.folder_open, size: 17, color: Color(0xFF1A237E)),
+                                    label: const Text('Open Post Drive Folder', style: TextStyle(color: Color(0xFF1A237E), fontSize: 13)),
+                                    onPressed: () => _openUrl(task.folderLink),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ] else if (isPptStage) ...[
                         // Step 5: PPT Development Upload Folder & Writing Script Reference
                         Container(
                           padding: const EdgeInsets.all(14),
@@ -1413,7 +2706,7 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
                       ],
 
                       // ── Campaign IEC Material Section (Common to Campaign) ──
-                      if (hasIecMaterial) ...[
+                      if (!isSm && !isWeb && !isBlog && hasIecMaterial) ...[
                         const SizedBox(height: 14),
                         Container(
                           padding: const EdgeInsets.all(14),
@@ -2116,8 +3409,10 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
                       );
                       return;
                     }
+                    final scaffold = ScaffoldMessenger.of(context);
+                    final devProv = context.read<DevPipelineProvider>();
                     Navigator.pop(ctx);
-                    final res = await context.read<DevPipelineProvider>().createProject(
+                    final res = await devProv.createProject(
                           stream: 'Campaign Development',
                           campaignName: campNameCtrl.text.trim(),
                           sessionName: sessNameCtrl.text.trim(),
@@ -2134,14 +3429,971 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
 
                     if (mounted) {
                       if (res['success'] == true) {
-                        ScaffoldMessenger.of(context).showSnackBar(
+                        scaffold.showSnackBar(
                           SnackBar(
                             content: Text('Created ${res["projectId"]} successfully!'),
                             backgroundColor: Colors.green,
                           ),
                         );
                       } else {
-                        ScaffoldMessenger.of(context).showSnackBar(
+                        scaffold.showSnackBar(
+                          SnackBar(
+                            content: Text('Failed: ${res["message"]}'),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                      }
+                    }
+                  },
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _showCreateSmProjectDialog(BuildContext context) {
+    final postNameCtrl = TextEditingController();
+    final postTopicCtrl = TextEditingController();
+    final festivalsCtrl = TextEditingController();
+    DateTime startDate = DateTime.now();
+    DateTime completionDate = DateTime.now().add(const Duration(days: 10));
+
+    // 10 Roles matching existing Social Media posts
+    final smRoles = [
+      {'role': 'Writer', 'stage': 'Writing', 'group': 'Content'},
+      {'role': 'Editor', 'stage': 'Editing', 'group': 'Content'},
+      {'role': 'Proofreader', 'stage': 'Proofreading', 'group': 'Content'},
+      {'role': 'CrossChecker', 'stage': 'Text Crosscheck', 'group': 'Content'},
+      {'role': 'Thumbnail Designer', 'stage': 'Thumbnail (Select/Process/Check)', 'group': 'Thumbnail'},
+      {'role': 'Photo Editor', 'stage': 'Photo Editing', 'group': 'Media'},
+      {'role': 'Video Editor', 'stage': 'Video Editing', 'group': 'Media'},
+      {'role': 'Media CrossChecker', 'stage': 'Media Cross Check (1 & 2)', 'group': 'Media'},
+      {'role': 'Uploader', 'stage': 'Ready to Post', 'group': 'Publishing'},
+      {'role': 'Photo Selector', 'stage': 'Photos Clean', 'group': 'Clean-up'},
+    ];
+
+    final eventProvider = context.read<EventProvider>();
+    final users = eventProvider.users;
+
+    final smAssignees = <String, Map<String, String>>{};
+    for (final r in smRoles) {
+      smAssignees[r['role']!] = {'name': '', 'email': ''};
+    }
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setDialogState) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: Row(
+                children: const [
+                  Icon(Icons.share_rounded, color: Color(0xFF1A237E)),
+                  SizedBox(width: 10),
+                  Text('Create SM Development Post', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                ],
+              ),
+              content: SizedBox(
+                width: 620,
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: Colors.blue.shade50,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.blue.shade100),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.folder_shared_rounded, color: Color(0xFF1A237E), size: 20),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Creates Post folder under Delhi (IN) > Head Office > SM Development with Raw, Selected, Edited folders, and individual stage Docs with automated forwarding.',
+                                style: TextStyle(fontSize: 12, color: Colors.blue.shade900),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      const Text('1. Post Details', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: postNameCtrl,
+                        decoration: InputDecoration(
+                          labelText: 'Post Name *',
+                          hintText: 'e.g. World Environment Day Post 2026',
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: postTopicCtrl,
+                        decoration: InputDecoration(
+                          labelText: 'Post Topic',
+                          hintText: 'e.g. Tree Plantation Drive Highlights',
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: festivalsCtrl,
+                        decoration: InputDecoration(
+                          labelText: 'Festivals & Days Included',
+                          hintText: 'e.g. Environment Day / World Earth Week',
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: InkWell(
+                              onTap: () async {
+                                final picked = await showDatePicker(
+                                  context: ctx,
+                                  initialDate: startDate,
+                                  firstDate: DateTime(2020),
+                                  lastDate: DateTime(2035),
+                                );
+                                if (picked != null) setDialogState(() => startDate = picked);
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                decoration: BoxDecoration(
+                                  border: Border.all(color: Colors.grey.shade400),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.calendar_today, size: 16, color: Colors.grey),
+                                    const SizedBox(width: 8),
+                                    Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        const Text('Start Date', style: TextStyle(fontSize: 10, color: Colors.grey)),
+                                        Text(DateFormat('d-MMM-yyyy').format(startDate), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: InkWell(
+                              onTap: () async {
+                                final picked = await showDatePicker(
+                                  context: ctx,
+                                  initialDate: completionDate,
+                                  firstDate: DateTime(2020),
+                                  lastDate: DateTime(2035),
+                                );
+                                if (picked != null) setDialogState(() => completionDate = picked);
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                decoration: BoxDecoration(
+                                  border: Border.all(color: Colors.grey.shade400),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.event_available, size: 16, color: Colors.grey),
+                                    const SizedBox(width: 8),
+                                    Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        const Text('End Date (Completion)', style: TextStyle(fontSize: 10, color: Colors.grey)),
+                                        Text(DateFormat('d-MMM-yyyy').format(completionDate), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      const Divider(height: 28),
+                      const Text('2. Role Assignments (Content, Thumbnail, Media, Publish)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                      const SizedBox(height: 10),
+                      ...smRoles.map((r) {
+                        final roleName = r['role']!;
+                        final stageName = r['stage']!;
+                        final groupName = r['group']!;
+
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: Row(
+                            children: [
+                              SizedBox(
+                                width: 220,
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      roleName,
+                                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                                    ),
+                                    Text(
+                                      '$groupName • $stageName',
+                                      style: TextStyle(fontSize: 10, color: Colors.grey.shade600),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Expanded(
+                                child: DropdownButtonFormField<String>(
+                                  isExpanded: true,
+                                  decoration: InputDecoration(
+                                    contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                                    isDense: true,
+                                  ),
+                                  hint: Text('Select $roleName', style: const TextStyle(fontSize: 12)),
+                                  value: smAssignees[roleName]?['email']?.isNotEmpty == true ? smAssignees[roleName]!['email'] : null,
+                                  items: users.map((u) {
+                                    final uEmail = u['Email']?.toString() ?? u['email']?.toString() ?? '';
+                                    final uName = u['Name']?.toString() ?? u['name']?.toString() ?? uEmail;
+                                    final uRole = u['Role']?.toString() ?? u['role']?.toString() ?? '';
+                                    return DropdownMenuItem<String>(
+                                      value: uEmail,
+                                      child: Text('$uName ($uRole)', style: const TextStyle(fontSize: 12)),
+                                    );
+                                  }).toList(),
+                                  onChanged: (val) {
+                                    if (val != null) {
+                                      final matched = users.firstWhere(
+                                        (u) => (u['Email']?.toString() ?? u['email']?.toString()) == val,
+                                        orElse: () => users.first,
+                                      );
+                                      final mName = matched['Name']?.toString() ?? matched['name']?.toString() ?? val;
+                                      final mEmail = matched['Email']?.toString() ?? matched['email']?.toString() ?? val;
+                                      setDialogState(() {
+                                        smAssignees[roleName] = {
+                                          'name': mName,
+                                          'email': mEmail,
+                                        };
+                                      });
+                                    }
+                                  },
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }),
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF1A237E),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                  ),
+                  icon: const Icon(Icons.check, size: 18),
+                  label: const Text('Create Post & Setup Flow', style: TextStyle(fontWeight: FontWeight.bold)),
+                  onPressed: () async {
+                    if (postNameCtrl.text.trim().isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Please enter Post Name'), backgroundColor: Colors.red),
+                      );
+                      return;
+                    }
+                    final scaffold = ScaffoldMessenger.of(context);
+                    final devProv = context.read<DevPipelineProvider>();
+                    Navigator.pop(ctx);
+
+                    // Build full stage assignment map
+                    final assigneesPayload = <String, Map<String, String>>{
+                      'Writing': smAssignees['Writer'] ?? {'name': '', 'email': ''},
+                      'Editing': smAssignees['Editor'] ?? {'name': '', 'email': ''},
+                      'Proofreading': smAssignees['Proofreader'] ?? {'name': '', 'email': ''},
+                      'Text Crosscheck': smAssignees['CrossChecker'] ?? {'name': '', 'email': ''},
+                      'Thumbnail Selection': smAssignees['Thumbnail Designer'] ?? {'name': '', 'email': ''},
+                      'Thumbnail Processing': smAssignees['Thumbnail Designer'] ?? {'name': '', 'email': ''},
+                      'Thumbnail Cross checking': smAssignees['Thumbnail Designer'] ?? {'name': '', 'email': ''},
+                      'Photo Editing': smAssignees['Photo Editor'] ?? {'name': '', 'email': ''},
+                      'Video Editing': smAssignees['Video Editor'] ?? {'name': '', 'email': ''},
+                      'Media Cross Check': smAssignees['Media CrossChecker'] ?? {'name': '', 'email': ''},
+                      'Media Final Cross check': smAssignees['Media CrossChecker'] ?? {'name': '', 'email': ''},
+                      'Ready to Post': smAssignees['Uploader'] ?? {'name': '', 'email': ''},
+                      'Photos Clean': smAssignees['Photo Selector'] ?? {'name': '', 'email': ''},
+                      ...smAssignees,
+                    };
+
+                    final res = await devProv.createProject(
+                          stream: 'SM Development',
+                          campaignName: postNameCtrl.text.trim(),
+                          sessionName: postTopicCtrl.text.trim(),
+                          duration: '',
+                          festivals: festivalsCtrl.text.trim(),
+                          startDate: DateFormat('d-MMM-yyyy').format(startDate),
+                          completionDate: DateFormat('d-MMM-yyyy').format(completionDate),
+                          iecContent: false,
+                          iecDesigning: false,
+                          iecProofread: false,
+                          iecFinalCheck: false,
+                          assignees: assigneesPayload,
+                        );
+
+                    if (mounted) {
+                      if (res['success'] == true) {
+                        scaffold.showSnackBar(
+                          SnackBar(
+                            content: Text('Created ${res["projectId"]} successfully!'),
+                            backgroundColor: Colors.green,
+                          ),
+                        );
+                      } else {
+                        scaffold.showSnackBar(
+                          SnackBar(
+                            content: Text('Failed: ${res["message"]}'),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                      }
+                    }
+                  },
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _showCreateWebProjectDialog(BuildContext context) {
+    final ideaCtrl = TextEditingController();
+    final festivalsCtrl = TextEditingController();
+    DateTime startDate = DateTime.now();
+    DateTime completionDate = DateTime.now().add(const Duration(days: 10));
+
+    final webRoles = [
+      {'role': 'Writer', 'stage': 'Writing', 'group': 'Content'},
+      {'role': 'Editor', 'stage': 'Editing', 'group': 'Content'},
+      {'role': 'Proofreader', 'stage': 'Proofreading', 'group': 'Content'},
+      {'role': 'CrossChecker', 'stage': 'Text Crosscheck', 'group': 'Content'},
+      {'role': 'Raw Photos Selector', 'stage': 'Raw Photos', 'group': 'Media'},
+      {'role': 'Photo Editor', 'stage': 'Selected Photos', 'group': 'Media'},
+      {'role': 'Thumbnail Designer', 'stage': 'Thumbnail Selection', 'group': 'Thumbnail'},
+    ];
+
+    final eventProvider = context.read<EventProvider>();
+    final users = eventProvider.users;
+
+    final webAssignees = <String, Map<String, String>>{};
+    for (final r in webRoles) {
+      webAssignees[r['role']!] = {'name': '', 'email': ''};
+    }
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setDialogState) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: Row(
+                children: const [
+                  Icon(Icons.language_rounded, color: Color(0xFF107C41)),
+                  SizedBox(width: 10),
+                  Text('Create Website Report', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                ],
+              ),
+              content: SizedBox(
+                width: 620,
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: Colors.green.shade50,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.green.shade200),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.table_chart_rounded, color: Color(0xFF107C41), size: 20),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Creates Idea folder with "Researched Data" Sheet, Raw Photos & Selected Photos folders (with Thumbnail folder inside), and Docs with content forwarding.',
+                                style: TextStyle(fontSize: 12, color: Colors.green.shade900),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      const Text('1. Website Report Details', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: ideaCtrl,
+                        decoration: InputDecoration(
+                          labelText: 'Idea *',
+                          hintText: 'e.g. Annual Youth Summit 2026 Key Takeaways',
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: festivalsCtrl,
+                        decoration: InputDecoration(
+                          labelText: 'Festivals & Days Included',
+                          hintText: 'e.g. National Youth Day / International Anti-Drug Day',
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: InkWell(
+                              onTap: () async {
+                                final picked = await showDatePicker(
+                                  context: ctx,
+                                  initialDate: startDate,
+                                  firstDate: DateTime(2020),
+                                  lastDate: DateTime(2035),
+                                );
+                                if (picked != null) setDialogState(() => startDate = picked);
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                decoration: BoxDecoration(
+                                  border: Border.all(color: Colors.grey.shade400),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.calendar_today, size: 16, color: Colors.grey),
+                                    const SizedBox(width: 8),
+                                    Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        const Text('Start Date', style: TextStyle(fontSize: 10, color: Colors.grey)),
+                                        Text(DateFormat('d-MMM-yyyy').format(startDate), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: InkWell(
+                              onTap: () async {
+                                final picked = await showDatePicker(
+                                  context: ctx,
+                                  initialDate: completionDate,
+                                  firstDate: DateTime(2020),
+                                  lastDate: DateTime(2035),
+                                );
+                                if (picked != null) setDialogState(() => completionDate = picked);
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                decoration: BoxDecoration(
+                                  border: Border.all(color: Colors.grey.shade400),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.event_available, size: 16, color: Colors.grey),
+                                    const SizedBox(width: 8),
+                                    Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        const Text('End Date (Completion)', style: TextStyle(fontSize: 10, color: Colors.grey)),
+                                        Text(DateFormat('d-MMM-yyyy').format(completionDate), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      const Divider(height: 28),
+                      const Text('2. Stage Assignees (Content, Media, Thumbnail)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                      const SizedBox(height: 10),
+                      ...webRoles.map((r) {
+                        final roleName = r['role']!;
+                        final stageName = r['stage']!;
+                        final groupName = r['group']!;
+
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: Row(
+                            children: [
+                              SizedBox(
+                                width: 220,
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      roleName,
+                                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                                    ),
+                                    Text(
+                                      '$groupName • $stageName',
+                                      style: TextStyle(fontSize: 10, color: Colors.grey.shade600),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Expanded(
+                                child: DropdownButtonFormField<String>(
+                                  isExpanded: true,
+                                  decoration: InputDecoration(
+                                    contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                                    isDense: true,
+                                  ),
+                                  hint: Text('Select $roleName', style: const TextStyle(fontSize: 12)),
+                                  value: webAssignees[roleName]?['email']?.isNotEmpty == true ? webAssignees[roleName]!['email'] : null,
+                                  items: users.map((u) {
+                                    final uEmail = u['Email']?.toString() ?? u['email']?.toString() ?? '';
+                                    final uName = u['Name']?.toString() ?? u['name']?.toString() ?? uEmail;
+                                    final uRole = u['Role']?.toString() ?? u['role']?.toString() ?? '';
+                                    return DropdownMenuItem<String>(
+                                      value: uEmail,
+                                      child: Text('$uName ($uRole)', style: const TextStyle(fontSize: 12)),
+                                    );
+                                  }).toList(),
+                                  onChanged: (val) {
+                                    if (val != null) {
+                                      final matched = users.firstWhere(
+                                        (u) => (u['Email']?.toString() ?? u['email']?.toString()) == val,
+                                        orElse: () => users.first,
+                                      );
+                                      final mName = matched['Name']?.toString() ?? matched['name']?.toString() ?? val;
+                                      final mEmail = matched['Email']?.toString() ?? matched['email']?.toString() ?? val;
+                                      setDialogState(() {
+                                        webAssignees[roleName] = {
+                                          'name': mName,
+                                          'email': mEmail,
+                                        };
+                                      });
+                                    }
+                                  },
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }),
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF107C41),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                  ),
+                  icon: const Icon(Icons.check, size: 18),
+                  label: const Text('Create Report & Setup Flow', style: TextStyle(fontWeight: FontWeight.bold)),
+                  onPressed: () async {
+                    if (ideaCtrl.text.trim().isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Please enter Idea'), backgroundColor: Colors.red),
+                      );
+                      return;
+                    }
+                    final scaffold = ScaffoldMessenger.of(context);
+                    final devProv = context.read<DevPipelineProvider>();
+                    Navigator.pop(ctx);
+
+                    final assigneesPayload = <String, Map<String, String>>{
+                      'Writing': webAssignees['Writer'] ?? {'name': '', 'email': ''},
+                      'Editing': webAssignees['Editor'] ?? {'name': '', 'email': ''},
+                      'Proofreading': webAssignees['Proofreader'] ?? {'name': '', 'email': ''},
+                      'Text Crosscheck': webAssignees['CrossChecker'] ?? {'name': '', 'email': ''},
+                      'Raw Photos': webAssignees['Raw Photos Selector'] ?? {'name': '', 'email': ''},
+                      'Selected Photos': webAssignees['Photo Editor'] ?? {'name': '', 'email': ''},
+                      'Thumbnail Selection': webAssignees['Thumbnail Designer'] ?? {'name': '', 'email': ''},
+                      ...webAssignees,
+                    };
+
+                    final res = await devProv.createProject(
+                      stream: 'Website Reporting',
+                      campaignName: ideaCtrl.text.trim(),
+                      sessionName: '',
+                      duration: '',
+                      festivals: festivalsCtrl.text.trim(),
+                      startDate: DateFormat('d-MMM-yyyy').format(startDate),
+                      completionDate: DateFormat('d-MMM-yyyy').format(completionDate),
+                      iecContent: false,
+                      iecDesigning: false,
+                      iecProofread: false,
+                      iecFinalCheck: false,
+                      assignees: assigneesPayload,
+                    );
+
+                    if (mounted) {
+                      if (res['success'] == true) {
+                        scaffold.showSnackBar(
+                          SnackBar(
+                            content: Text('Created ${res["projectId"]} successfully!'),
+                            backgroundColor: Colors.green,
+                          ),
+                        );
+                      } else {
+                        scaffold.showSnackBar(
+                          SnackBar(
+                            content: Text('Failed: ${res["message"]}'),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                      }
+                    }
+                  },
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _showCreateBlogProjectDialog(BuildContext context) {
+    final ideaCtrl = TextEditingController();
+    final festivalsCtrl = TextEditingController();
+    DateTime startDate = DateTime.now();
+    DateTime completionDate = DateTime.now().add(const Duration(days: 10));
+
+    final blogRoles = [
+      {'role': 'Writer', 'stage': 'Writing', 'group': 'Content'},
+      {'role': 'Editor', 'stage': 'Editing', 'group': 'Content'},
+      {'role': 'Proofreader', 'stage': 'Proofreading', 'group': 'Content'},
+      {'role': 'CrossChecker', 'stage': 'Text Crosscheck', 'group': 'Content'},
+      {'role': 'Thumbnail Designer', 'stage': 'Thumbnail Selection', 'group': 'Thumbnail'},
+    ];
+
+    final eventProvider = context.read<EventProvider>();
+    final users = eventProvider.users;
+
+    final blogAssignees = <String, Map<String, String>>{};
+    for (final r in blogRoles) {
+      blogAssignees[r['role']!] = {'name': '', 'email': ''};
+    }
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setDialogState) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: Row(
+                children: const [
+                  Icon(Icons.menu_book_rounded, color: Color(0xFF5B21B6)),
+                  SizedBox(width: 10),
+                  Text('Create Blog / Article', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                ],
+              ),
+              content: SizedBox(
+                width: 620,
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: Colors.purple.shade50,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.purple.shade200),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.description_rounded, color: Color(0xFF5B21B6), size: 20),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Creates Idea folder with "Researched Doc", Thumbnail folder, and Docs with content forwarding. (No media section)',
+                                style: TextStyle(fontSize: 12, color: Colors.purple.shade900),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      const Text('1. Blog / Article Details', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: ideaCtrl,
+                        decoration: InputDecoration(
+                          labelText: 'Idea *',
+                          hintText: 'e.g. Exploring Mindful Youth Habits in Digital Era',
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: festivalsCtrl,
+                        decoration: InputDecoration(
+                          labelText: 'Festivals & Days Included',
+                          hintText: 'e.g. World Mental Health Day / International Youth Week',
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: InkWell(
+                              onTap: () async {
+                                final picked = await showDatePicker(
+                                  context: ctx,
+                                  initialDate: startDate,
+                                  firstDate: DateTime(2020),
+                                  lastDate: DateTime(2035),
+                                );
+                                if (picked != null) setDialogState(() => startDate = picked);
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                decoration: BoxDecoration(
+                                  border: Border.all(color: Colors.grey.shade400),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.calendar_today, size: 16, color: Colors.grey),
+                                    const SizedBox(width: 8),
+                                    Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        const Text('Start Date', style: TextStyle(fontSize: 10, color: Colors.grey)),
+                                        Text(DateFormat('d-MMM-yyyy').format(startDate), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: InkWell(
+                              onTap: () async {
+                                final picked = await showDatePicker(
+                                  context: ctx,
+                                  initialDate: completionDate,
+                                  firstDate: DateTime(2020),
+                                  lastDate: DateTime(2035),
+                                );
+                                if (picked != null) setDialogState(() => completionDate = picked);
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                decoration: BoxDecoration(
+                                  border: Border.all(color: Colors.grey.shade400),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.event_available, size: 16, color: Colors.grey),
+                                    const SizedBox(width: 8),
+                                    Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        const Text('End Date (Completion)', style: TextStyle(fontSize: 10, color: Colors.grey)),
+                                        Text(DateFormat('d-MMM-yyyy').format(completionDate), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      const Divider(height: 28),
+                      const Text('2. Stage Assignees (Content, Thumbnail)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                      const SizedBox(height: 10),
+                      ...blogRoles.map((r) {
+                        final roleName = r['role']!;
+                        final stageName = r['stage']!;
+                        final groupName = r['group']!;
+
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: Row(
+                            children: [
+                              SizedBox(
+                                width: 220,
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      roleName,
+                                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                                    ),
+                                    Text(
+                                      '$groupName • $stageName',
+                                      style: TextStyle(fontSize: 10, color: Colors.grey.shade600),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Expanded(
+                                child: DropdownButtonFormField<String>(
+                                  isExpanded: true,
+                                  decoration: InputDecoration(
+                                    contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                                    isDense: true,
+                                  ),
+                                  hint: Text('Select $roleName', style: const TextStyle(fontSize: 12)),
+                                  value: blogAssignees[roleName]?['email']?.isNotEmpty == true ? blogAssignees[roleName]!['email'] : null,
+                                  items: users.map((u) {
+                                    final uEmail = u['Email']?.toString() ?? u['email']?.toString() ?? '';
+                                    final uName = u['Name']?.toString() ?? u['name']?.toString() ?? uEmail;
+                                    final uRole = u['Role']?.toString() ?? u['role']?.toString() ?? '';
+                                    return DropdownMenuItem<String>(
+                                      value: uEmail,
+                                      child: Text('$uName ($uRole)', style: const TextStyle(fontSize: 12)),
+                                    );
+                                  }).toList(),
+                                  onChanged: (val) {
+                                    if (val != null) {
+                                      final matched = users.firstWhere(
+                                        (u) => (u['Email']?.toString() ?? u['email']?.toString()) == val,
+                                        orElse: () => users.first,
+                                      );
+                                      final mName = matched['Name']?.toString() ?? matched['name']?.toString() ?? val;
+                                      final mEmail = matched['Email']?.toString() ?? matched['email']?.toString() ?? val;
+                                      setDialogState(() {
+                                        blogAssignees[roleName] = {
+                                          'name': mName,
+                                          'email': mEmail,
+                                        };
+                                      });
+                                    }
+                                  },
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }),
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF5B21B6),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                  ),
+                  icon: const Icon(Icons.check, size: 18),
+                  label: const Text('Create Blog & Setup Flow', style: TextStyle(fontWeight: FontWeight.bold)),
+                  onPressed: () async {
+                    if (ideaCtrl.text.trim().isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Please enter Idea'), backgroundColor: Colors.red),
+                      );
+                      return;
+                    }
+                    final scaffold = ScaffoldMessenger.of(context);
+                    final devProv = context.read<DevPipelineProvider>();
+                    Navigator.pop(ctx);
+
+                    final assigneesPayload = <String, Map<String, String>>{
+                      'Writing': blogAssignees['Writer'] ?? {'name': '', 'email': ''},
+                      'Editing': blogAssignees['Editor'] ?? {'name': '', 'email': ''},
+                      'Proofreading': blogAssignees['Proofreader'] ?? {'name': '', 'email': ''},
+                      'Text Crosscheck': blogAssignees['CrossChecker'] ?? {'name': '', 'email': ''},
+                      'Thumbnail Selection': blogAssignees['Thumbnail Designer'] ?? {'name': '', 'email': ''},
+                      ...blogAssignees,
+                    };
+
+                    final res = await devProv.createProject(
+                      stream: 'Blogs / Articles',
+                      campaignName: ideaCtrl.text.trim(),
+                      sessionName: '',
+                      duration: '',
+                      festivals: festivalsCtrl.text.trim(),
+                      startDate: DateFormat('d-MMM-yyyy').format(startDate),
+                      completionDate: DateFormat('d-MMM-yyyy').format(completionDate),
+                      iecContent: false,
+                      iecDesigning: false,
+                      iecProofread: false,
+                      iecFinalCheck: false,
+                      assignees: assigneesPayload,
+                    );
+
+                    if (mounted) {
+                      if (res['success'] == true) {
+                        scaffold.showSnackBar(
+                          SnackBar(
+                            content: Text('Created ${res["projectId"]} successfully!'),
+                            backgroundColor: Colors.green,
+                          ),
+                        );
+                      } else {
+                        scaffold.showSnackBar(
                           SnackBar(
                             content: Text('Failed: ${res["message"]}'),
                             backgroundColor: Colors.red,

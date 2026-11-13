@@ -21,6 +21,9 @@ class DevProject {
   final String iecDesigningFolderLink;
   final String iecProofreadDocLink;
   final String iecFinalCheckDocLink;
+  final String researchedDataLink;
+  final String researchedDocLink;
+  final String thumbnailFolderLink;
 
   DevProject({
     required this.projectId,
@@ -45,6 +48,9 @@ class DevProject {
     this.iecDesigningFolderLink = '',
     this.iecProofreadDocLink = '',
     this.iecFinalCheckDocLink = '',
+    this.researchedDataLink = '',
+    this.researchedDocLink = '',
+    this.thumbnailFolderLink = '',
   });
 
   factory DevProject.fromJson(Map<String, dynamic> json) {
@@ -71,6 +77,9 @@ class DevProject {
       iecDesigningFolderLink: json['IecDesigningFolderLink']?.toString() ?? '',
       iecProofreadDocLink: json['IecProofreadDocLink']?.toString() ?? '',
       iecFinalCheckDocLink: json['IecFinalCheckDocLink']?.toString() ?? '',
+      researchedDataLink: json['ResearchedDataLink']?.toString() ?? '',
+      researchedDocLink: json['ResearchedDocLink']?.toString() ?? '',
+      thumbnailFolderLink: json['ThumbnailFolderLink']?.toString() ?? '',
     );
   }
 }
@@ -102,6 +111,10 @@ class DevTask {
   final String iecDesigningFolderLink;
   final String iecProofreadDocLink;
   final String iecFinalCheckDocLink;
+  final String festivalsIncluded;
+  final String researchedDataLink;
+  final String researchedDocLink;
+  final String thumbnailFolderLink;
 
   DevTask({
     required this.taskId,
@@ -128,6 +141,10 @@ class DevTask {
     this.iecDesigningFolderLink = '',
     this.iecProofreadDocLink = '',
     this.iecFinalCheckDocLink = '',
+    this.festivalsIncluded = '',
+    this.researchedDataLink = '',
+    this.researchedDocLink = '',
+    this.thumbnailFolderLink = '',
   });
 
   factory DevTask.fromJson(Map<String, dynamic> json) {
@@ -156,6 +173,10 @@ class DevTask {
       iecDesigningFolderLink: json['IecDesigningFolderLink']?.toString() ?? '',
       iecProofreadDocLink: json['IecProofreadDocLink']?.toString() ?? '',
       iecFinalCheckDocLink: json['IecFinalCheckDocLink']?.toString() ?? '',
+      festivalsIncluded: json['FestivalsIncluded']?.toString() ?? '',
+      researchedDataLink: json['ResearchedDataLink']?.toString() ?? '',
+      researchedDocLink: json['ResearchedDocLink']?.toString() ?? '',
+      thumbnailFolderLink: json['ThumbnailFolderLink']?.toString() ?? '',
     );
   }
 }
