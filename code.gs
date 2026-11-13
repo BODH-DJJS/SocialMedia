@@ -2674,38 +2674,54 @@ function handleCreateDevProject(payload) {
     }
   }
 
-  // Create document: [Campaign Name] - [Session Name]
-  var docTitle = campaignName + (sessionName ? ' - ' + sessionName : '') + ' Content Document';
-  var docUrl = '';
-  var docFile = null;
-  try {
-    var doc = DocumentApp.create(docTitle);
-    docFile = DriveApp.getFileById(doc.getId());
-    docFile.moveTo(sessionFolder);
-    docFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.EDIT);
-    var body = doc.getBody();
-    body.appendParagraph(docTitle).setHeading(DocumentApp.ParagraphHeading.HEADING1);
-    body.appendParagraph('Campaign: ' + campaignName + (sessionName ? ' | Session: ' + sessionName : ''));
-    body.appendParagraph('Duration: ' + duration + ' | Festivals: ' + festivals);
-    body.appendParagraph('--------------------------------------------------');
-    doc.saveAndClose();
-    docUrl = docFile.getUrl();
-  } catch (e) {
-    docUrl = '';
+  // Sequential 8 Steps for Campaign Development
+  var stages = [
+    { name: 'Ideation', offset: 4 },
+    { name: 'Research', offset: 8 },
+    { name: 'Selection and sequencing', offset: 12 },
+    { name: 'Writing', offset: 16 },
+    { name: 'PPT Development', offset: 20 },
+    { name: 'Proofreading', offset: 24 },
+    { name: 'Editing', offset: 28 },
+    { name: 'Final Check', offset: 32 }
+  ];
+
+  // Create SEPARATE Google Docs for EACH stage
+  var stageDocUrls = {};
+  for (var s = 0; s < stages.length; s++) {
+    var stName = stages[s].name;
+    var stepDocTitle = campaignName + (sessionName ? ' - ' + sessionName : '') + ' - Step ' + (s + 1) + ' (' + stName + ')';
+    var stepDocUrl = '';
+    try {
+      var sDoc = DocumentApp.create(stepDocTitle);
+      var sDocFile = DriveApp.getFileById(sDoc.getId());
+      sDocFile.moveTo(sessionFolder);
+      sDocFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.EDIT);
+      
+      var sBody = sDoc.getBody();
+      sBody.appendParagraph(stepDocTitle).setHeading(DocumentApp.ParagraphHeading.HEADING1);
+      sBody.appendParagraph('Campaign: ' + campaignName + (sessionName ? ' | Session: ' + sessionName : ''));
+      sBody.appendParagraph('Stage: ' + stName + ' (Step ' + (s + 1) + ' of ' + stages.length + ')');
+      sBody.appendParagraph('Duration: ' + duration + ' | Festivals: ' + festivals);
+      sBody.appendParagraph('--------------------------------------------------\n');
+      
+      // Grant edit permissions to assigned user for this specific stage doc
+      var assignedObj = assignees[stName] || {};
+      var sEmail = (typeof assignedObj === 'object' && assignedObj ? assignedObj.email : '') || '';
+      if (sEmail && sEmail.indexOf('@') !== -1) {
+        try { sDocFile.addEditor(sEmail); } catch(mErr) {}
+      }
+      
+      sDoc.saveAndClose();
+      stepDocUrl = sDocFile.getUrl();
+    } catch(err) {
+      stepDocUrl = '';
+    }
+    stageDocUrls[stName] = stepDocUrl;
   }
 
-  // Grant doc permissions to assignees if emails provided
-  if (docFile) {
-    for (var st in assignees) {
-      var item = assignees[st];
-      var email = (typeof item === 'object' && item ? item.email : '') || '';
-      if (email && email.indexOf('@') !== -1) {
-        try {
-          docFile.addEditor(email);
-        } catch (mailErr) {}
-      }
-    }
-  }
+  // Master docUrl for project row can be Step 1's doc or sessionFolder
+  var masterDocUrl = stageDocUrls['Ideation'] || '';
 
   // Append project row
   pSheet.appendRow([
@@ -2722,22 +2738,10 @@ function handleCreateDevProject(payload) {
     iecProofread,
     iecFinalCheck,
     sessionFolder.getUrl(),
-    docUrl,
+    masterDocUrl,
     'Active',
     new Date().toLocaleString()
   ]);
-
-  // Sequential 8 Steps for Campaign Development
-  var stages = [
-    { name: 'Ideation', offset: 4 },
-    { name: 'Research', offset: 8 },
-    { name: 'Selection and sequencing', offset: 12 },
-    { name: 'Writing', offset: 16 },
-    { name: 'PPT Development', offset: 20 },
-    { name: 'Proofreading', offset: 24 },
-    { name: 'Editing', offset: 28 },
-    { name: 'Final Check', offset: 32 }
-  ];
 
   var baseDate = new Date();
   var taskRows = [];
@@ -2754,6 +2758,7 @@ function handleCreateDevProject(payload) {
 
     var initialStatus = (s === 0) ? 'Ready' : 'Waiting';
     var allottedDate = (s === 0 && assigneeName) ? new Date().toLocaleString() : '';
+    var specificDocUrl = stageDocUrls[stName] || '';
 
     taskRows.push([
       projectId + '-' + stName,
@@ -2765,7 +2770,7 @@ function handleCreateDevProject(payload) {
       dueDateStr,
       allottedDate,
       '',
-      docUrl,
+      specificDocUrl,
       ''
     ]);
   }
@@ -2799,6 +2804,7 @@ function handleUpdateDevTask(payload) {
   var statusCol = headers.indexOf('Status');
   var completedAtCol = headers.indexOf('CompletedAt');
   var allottedCol = headers.indexOf('AllottedDate');
+  var docLinkCol = headers.indexOf('DocLink');
 
   var taskId = payload.taskId;
   var targetRowIdx = -1;
@@ -2812,7 +2818,8 @@ function handleUpdateDevTask(payload) {
         taskId: data[i][taskIdCol],
         projectId: data[i][projIdCol],
         stage: data[i][stageCol],
-        status: data[i][statusCol]
+        status: data[i][statusCol],
+        docLink: docLinkCol !== -1 ? data[i][docLinkCol] : ''
       };
       break;
     }
@@ -2828,7 +2835,7 @@ function handleUpdateDevTask(payload) {
     tSheet.getRange(targetRowIdx, completedAtCol + 1).setValue(new Date().toLocaleString());
   }
 
-  // If marked Done, unlock the next sequential step for this project
+  // If marked Done, unlock the next sequential step for this project AND copy forward content
   if (newStatus === 'Done') {
     var projectTasks = [];
     for (var i = 1; i < data.length; i++) {
@@ -2836,7 +2843,8 @@ function handleUpdateDevTask(payload) {
         projectTasks.push({
           rowIdx: i + 1,
           stage: data[i][stageCol],
-          status: (i + 1 === targetRowIdx) ? 'Done' : data[i][statusCol]
+          status: (i + 1 === targetRowIdx) ? 'Done' : data[i][statusCol],
+          docLink: docLinkCol !== -1 ? data[i][docLinkCol] : ''
         });
       }
     }
@@ -2856,14 +2864,23 @@ function handleUpdateDevTask(payload) {
 
     if (currentIdx !== -1 && currentIdx + 1 < stagesOrder.length) {
       var nextStageName = stagesOrder[currentIdx + 1];
+      var nextTask = null;
       for (var pt = 0; pt < projectTasks.length; pt++) {
         if (projectTasks[pt].stage.toLowerCase() === nextStageName.toLowerCase()) {
+          nextTask = projectTasks[pt];
           tSheet.getRange(projectTasks[pt].rowIdx, statusCol + 1).setValue('Ready');
           if (allottedCol !== -1) {
             tSheet.getRange(projectTasks[pt].rowIdx, allottedCol + 1).setValue(new Date().toLocaleString());
           }
           break;
         }
+      }
+
+      // Copy completed content from current stage doc into the next stage doc under its heading
+      if (currentTask.docLink && nextTask && nextTask.docLink) {
+        try {
+          copyDevDocContentForward(currentTask.docLink, nextTask.docLink, currentTask.stage, nextStageName);
+        } catch(cErr) {}
       }
     }
   }
@@ -2956,5 +2973,40 @@ function handleRedoDevTask(payload) {
     success: true,
     message: 'Task successfully sent back to ' + prevStageName + ' for redo.'
   };
+}
+
+function copyDevDocContentForward(sourceDocUrl, targetDocUrl, sourceStageName, targetStageName) {
+  if (!sourceDocUrl || !targetDocUrl || sourceDocUrl === targetDocUrl) return;
+  var sMatch = sourceDocUrl.match(/[-\w]{25,}/);
+  var tMatch = targetDocUrl.match(/[-\w]{25,}/);
+  if (!sMatch || !tMatch) return;
+
+  try {
+    var sourceDoc = DocumentApp.openById(sMatch[0]);
+    var targetDoc = DocumentApp.openById(tMatch[0]);
+    var sBody = sourceDoc.getBody();
+    var tBody = targetDoc.getBody();
+
+    // Append a distinct sub-heading in the next document with predecessor's work
+    tBody.appendParagraph('\n==================================================');
+    tBody.appendParagraph('Handover from Previous Stage: ' + sourceStageName).setHeading(DocumentApp.ParagraphHeading.HEADING2);
+    tBody.appendParagraph('Submitted on: ' + new Date().toLocaleString());
+    tBody.appendParagraph('--------------------------------------------------\n');
+
+    var numChildren = sBody.getNumChildren();
+    for (var i = 0; i < numChildren; i++) {
+      var elem = sBody.getChild(i).copy();
+      var type = elem.getType();
+      if (type == DocumentApp.ElementType.PARAGRAPH) {
+        tBody.appendParagraph(elem.asParagraph());
+      } else if (type == DocumentApp.ElementType.TABLE) {
+        tBody.appendTable(elem.asTable());
+      } else if (type == DocumentApp.ElementType.LIST_ITEM) {
+        tBody.appendListItem(elem.asListItem());
+      }
+    }
+
+    targetDoc.saveAndClose();
+  } catch(e) {}
 }
 
