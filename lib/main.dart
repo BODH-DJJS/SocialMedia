@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import 'providers/auth_provider.dart';
 import 'providers/event_provider.dart';
+import 'providers/dev_pipeline_provider.dart';
 import 'screens/login_screen.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/event_detail_screen.dart';
@@ -20,6 +21,7 @@ void main() async {
       providers: [
         ChangeNotifierProvider.value(value: authProvider),
         ChangeNotifierProvider(create: (_) => EventProvider()),
+        ChangeNotifierProvider(create: (_) => DevPipelineProvider()),
       ],
       child: const BodhSocialMediaApp(),
     ),

@@ -4,6 +4,11 @@ var USERS_SHEET = 'Users';
 var PIPELINE_SHEET = 'Pipeline Config';
 var BRANCH_SPOC_SHEET = 'Branch SPOC';
 
+// ── Development Pipeline Sheets ──
+var DEV_PROJECTS_SHEET = 'Dev_Projects';
+var DEV_TASKS_SHEET = 'Dev_Tasks';
+var DEV_PIPELINE_SHEET = 'Dev_Pipeline_Config';
+
 function ensureSheets() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   
@@ -220,6 +225,37 @@ function doPost(e) {
       lock.waitLock(15000);
       try {
         var res = handleDeleteWorkflow(payload);
+        return respond(res);
+      } finally {
+        lock.releaseLock();
+      }
+    } else if (action === 'getDevProjects') {
+      return respond(handleGetDevProjects(payload));
+    } else if (action === 'getDevTasks') {
+      return respond(handleGetDevTasks(payload));
+    } else if (action === 'createDevProject') {
+      var lock = LockService.getScriptLock();
+      lock.waitLock(20000);
+      try {
+        var res = handleCreateDevProject(payload);
+        return respond(res);
+      } finally {
+        lock.releaseLock();
+      }
+    } else if (action === 'updateDevTask') {
+      var lock = LockService.getScriptLock();
+      lock.waitLock(10000);
+      try {
+        var res = handleUpdateDevTask(payload);
+        return respond(res);
+      } finally {
+        lock.releaseLock();
+      }
+    } else if (action === 'redoDevTask') {
+      var lock = LockService.getScriptLock();
+      lock.waitLock(10000);
+      try {
+        var res = handleRedoDevTask(payload);
         return respond(res);
       } finally {
         lock.releaseLock();
@@ -2339,5 +2375,499 @@ function handleCheckFolderNotEmpty(payload) {
   }
   
   return {success: true, notEmpty: false};
+}
+
+// =========================================================================
+// ── DEVELOPMENT PIPELINE HANDLERS & HELPERS (CAMPAIGN / SM / WEB / BLOGS) ──
+// =========================================================================
+
+function ensureDevSheets(ss) {
+  if (!ss.getSheetByName(DEV_PROJECTS_SHEET)) {
+    var pSheet = ss.insertSheet(DEV_PROJECTS_SHEET);
+    pSheet.appendRow([
+      'ProjectID', 'Stream', 'CampaignName', 'SessionName', 'Duration',
+      'FestivalsIncluded', 'StartDate', 'CompletionDate', 'IECContent',
+      'IECDesigning', 'IECProofread', 'IECFinalCheck', 'FolderLink',
+      'DocLink', 'Status', 'CreatedAt'
+    ]);
+  }
+
+  if (!ss.getSheetByName(DEV_TASKS_SHEET)) {
+    var tSheet = ss.insertSheet(DEV_TASKS_SHEET);
+    tSheet.appendRow([
+      'TaskID', 'ProjectID', 'Stage', 'Assignee', 'AssigneeEmail',
+      'Status', 'DueDate', 'AllottedDate', 'CompletedAt', 'DocLink', 'Notes'
+    ]);
+  }
+}
+
+function getOrCreateDevStreamFolder(streamName) {
+  // Folder tree: Root -> Delhi -> Head Office -> [streamName]
+  var root = DriveApp.getRootFolder();
+  var delhiFolder;
+  var dSearch = root.searchFolders("title = 'Delhi' and trashed = false");
+  if (dSearch.hasNext()) {
+    delhiFolder = dSearch.next();
+  } else {
+    delhiFolder = root.createFolder('Delhi');
+  }
+
+  var hoFolder;
+  var hoSearch = delhiFolder.searchFolders("title = 'Head Office' and trashed = false");
+  if (hoSearch.hasNext()) {
+    hoFolder = hoSearch.next();
+  } else {
+    hoFolder = delhiFolder.createFolder('Head Office');
+  }
+
+  // Ensure all 4 folders exist
+  var streams = ['Campaign Development', 'SM Development', 'Website Reporting', 'Blogs / Articles'];
+  var targetFolder = null;
+  for (var s = 0; s < streams.length; s++) {
+    var sName = streams[s];
+    var sSearch = hoFolder.searchFolders("title = '" + sName + "' and trashed = false");
+    var folder;
+    if (sSearch.hasNext()) {
+      folder = sSearch.next();
+    } else {
+      folder = hoFolder.createFolder(sName);
+    }
+    if (sName === streamName) {
+      targetFolder = folder;
+    }
+  }
+
+  return targetFolder || hoFolder;
+}
+
+function handleGetDevProjects(payload) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  ensureDevSheets(ss);
+  var sheet = ss.getSheetByName(DEV_PROJECTS_SHEET);
+  var data = sheet.getDataRange().getValues();
+  if (data.length < 2) return { success: true, projects: [] };
+
+  var headers = data[0];
+  var projects = [];
+  var filterStream = payload && payload.stream ? payload.stream.toString().trim() : '';
+
+  for (var i = 1; i < data.length; i++) {
+    var row = data[i];
+    if (!row[0]) continue;
+    var p = {};
+    for (var h = 0; h < headers.length; h++) {
+      var val = row[h];
+      if (val instanceof Date) {
+        p[headers[h]] = formatDate(val);
+      } else {
+        p[headers[h]] = val !== undefined && val !== null ? val.toString() : '';
+      }
+    }
+    if (!filterStream || p.Stream === filterStream) {
+      projects.push(p);
+    }
+  }
+
+  return { success: true, projects: projects.reverse() };
+}
+
+function handleGetDevTasks(payload) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  ensureDevSheets(ss);
+  var sheet = ss.getSheetByName(DEV_TASKS_SHEET);
+  var data = sheet.getDataRange().getValues();
+  if (data.length < 2) return { success: true, tasks: [] };
+
+  var headers = data[0];
+  var tasks = [];
+  var role = payload ? payload.role : '';
+  var username = payload && payload.username ? payload.username.toString().trim().toLowerCase() : '';
+  var projectId = payload && payload.projectId ? payload.projectId.toString().trim() : '';
+
+  // Get project map for enriching task details
+  var pSheet = ss.getSheetByName(DEV_PROJECTS_SHEET);
+  var pData = pSheet.getDataRange().getValues();
+  var pMap = {};
+  if (pData.length >= 2) {
+    var pHeaders = pData[0];
+    for (var p = 1; p < pData.length; p++) {
+      if (pData[p][0]) {
+        var pObj = {};
+        for (var ph = 0; ph < pHeaders.length; ph++) {
+          var pVal = pData[p][ph];
+          pObj[pHeaders[ph]] = pVal instanceof Date ? formatDate(pVal) : (pVal !== null ? pVal.toString() : '');
+        }
+        pMap[pData[p][0].toString()] = pObj;
+      }
+    }
+  }
+
+  for (var i = 1; i < data.length; i++) {
+    var row = data[i];
+    if (!row[0]) continue;
+    var t = {};
+    for (var h = 0; h < headers.length; h++) {
+      var val = row[h];
+      if (val instanceof Date) {
+        t[headers[h]] = formatDate(val);
+      } else {
+        t[headers[h]] = val !== undefined && val !== null ? val.toString() : '';
+      }
+    }
+    t.rowIndex = i + 1;
+
+    // Attach project info
+    var proj = pMap[t.ProjectID] || {};
+    t.CampaignName = proj.CampaignName || '';
+    t.SessionName = proj.SessionName || '';
+    t.Stream = proj.Stream || '';
+    t.StartDate = proj.StartDate || '';
+    t.CompletionDate = proj.CompletionDate || '';
+    t.FolderLink = proj.FolderLink || '';
+
+    if (projectId && t.ProjectID !== projectId) continue;
+
+    var assigneeLower = (t.Assignee || '').toLowerCase();
+    var emailLower = (t.AssigneeEmail || '').toLowerCase();
+
+    if (role === 'Admin' || assigneeLower === username || emailLower === username) {
+      tasks.push(t);
+    }
+  }
+
+  return { success: true, tasks: tasks.reverse() };
+}
+
+function handleCreateDevProject(payload) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  ensureDevSheets(ss);
+  var pSheet = ss.getSheetByName(DEV_PROJECTS_SHEET);
+  var tSheet = ss.getSheetByName(DEV_TASKS_SHEET);
+
+  var stream = payload.stream || 'Campaign Development';
+  var campaignName = (payload.campaignName || '').toString().trim();
+  var sessionName = (payload.sessionName || '').toString().trim();
+  var duration = payload.duration || '';
+  var festivals = payload.festivals || '';
+  var startDate = payload.startDate ? formatDate(payload.startDate) : formatDate(new Date());
+  var completionDate = payload.completionDate ? formatDate(payload.completionDate) : '';
+  var iecContent = payload.iecContent === true ? 'Yes' : 'No';
+  var iecDesigning = payload.iecDesigning === true ? 'Yes' : 'No';
+  var iecProofread = payload.iecProofread === true ? 'Yes' : 'No';
+  var iecFinalCheck = payload.iecFinalCheck === true ? 'Yes' : 'No';
+  var assignees = payload.assignees || {}; // { 'Ideation': { name: '', email: '' } }
+
+  if (!campaignName) {
+    return { success: false, message: 'Campaign name is required.' };
+  }
+
+  // Generate unique ProjectID e.g. DEV-CAMP-101
+  var lastRow = pSheet.getLastRow();
+  var prefix = stream.indexOf('Campaign') !== -1 ? 'CAMP' : (stream.indexOf('SM') !== -1 ? 'SMD' : (stream.indexOf('Web') !== -1 ? 'WEB' : 'BLOG'));
+  var projectNo = (lastRow >= 2 ? lastRow : 1);
+  var projectId = prefix + '-' + String(projectNo).padStart(3, '0');
+
+  // Create folder: Delhi -> Head Office -> [Stream] -> [Campaign Name] -> [Session Name]
+  var streamFolder = getOrCreateDevStreamFolder(stream);
+  var campFolder;
+  var cSearch = streamFolder.searchFolders("title = '" + campaignName + "' and trashed = false");
+  if (cSearch.hasNext()) {
+    campFolder = cSearch.next();
+  } else {
+    campFolder = streamFolder.createFolder(campaignName);
+  }
+
+  var sessionFolder = campFolder;
+  if (sessionName) {
+    var sessSearch = campFolder.searchFolders("title = '" + sessionName + "' and trashed = false");
+    if (sessSearch.hasNext()) {
+      sessionFolder = sessSearch.next();
+    } else {
+      sessionFolder = campFolder.createFolder(sessionName);
+    }
+  }
+
+  // Create document: [Campaign Name] - [Session Name]
+  var docTitle = campaignName + (sessionName ? ' - ' + sessionName : '') + ' Content Document';
+  var docUrl = '';
+  var docFile = null;
+  try {
+    var doc = DocumentApp.create(docTitle);
+    docFile = DriveApp.getFileById(doc.getId());
+    docFile.moveTo(sessionFolder);
+    docFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.EDIT);
+    var body = doc.getBody();
+    body.appendParagraph(docTitle).setHeading(DocumentApp.ParagraphHeading.HEADING1);
+    body.appendParagraph('Campaign: ' + campaignName + (sessionName ? ' | Session: ' + sessionName : ''));
+    body.appendParagraph('Duration: ' + duration + ' | Festivals: ' + festivals);
+    body.appendParagraph('--------------------------------------------------');
+    doc.saveAndClose();
+    docUrl = docFile.getUrl();
+  } catch (e) {
+    docUrl = '';
+  }
+
+  // Grant doc permissions to assignees if emails provided
+  if (docFile) {
+    for (var st in assignees) {
+      var item = assignees[st];
+      var email = (typeof item === 'object' && item ? item.email : '') || '';
+      if (email && email.indexOf('@') !== -1) {
+        try {
+          docFile.addEditor(email);
+        } catch (mailErr) {}
+      }
+    }
+  }
+
+  // Append project row
+  pSheet.appendRow([
+    projectId,
+    stream,
+    campaignName,
+    sessionName,
+    duration,
+    festivals,
+    startDate,
+    completionDate,
+    iecContent,
+    iecDesigning,
+    iecProofread,
+    iecFinalCheck,
+    sessionFolder.getUrl(),
+    docUrl,
+    'Active',
+    new Date().toLocaleString()
+  ]);
+
+  // Sequential 8 Steps for Campaign Development
+  var stages = [
+    { name: 'Ideation', offset: 4 },
+    { name: 'Research', offset: 8 },
+    { name: 'Selection and sequencing', offset: 12 },
+    { name: 'Writing', offset: 16 },
+    { name: 'PPT Development', offset: 20 },
+    { name: 'Proofreading', offset: 24 },
+    { name: 'Editing', offset: 28 },
+    { name: 'Final Check', offset: 32 }
+  ];
+
+  var baseDate = new Date();
+  var taskRows = [];
+  for (var s = 0; s < stages.length; s++) {
+    var stageObj = stages[s];
+    var stName = stageObj.name;
+    var assignedObj = assignees[stName] || {};
+    var assigneeName = typeof assignedObj === 'object' ? (assignedObj.name || '') : assignedObj.toString();
+    var assigneeEmail = typeof assignedObj === 'object' ? (assignedObj.email || '') : '';
+
+    var d = new Date(baseDate.getTime());
+    d.setDate(d.getDate() + stageObj.offset);
+    var dueDateStr = formatDate(d);
+
+    var initialStatus = (s === 0) ? 'Ready' : 'Waiting';
+    var allottedDate = (s === 0 && assigneeName) ? new Date().toLocaleString() : '';
+
+    taskRows.push([
+      projectId + '-' + stName,
+      projectId,
+      stName,
+      assigneeName,
+      assigneeEmail,
+      initialStatus,
+      dueDateStr,
+      allottedDate,
+      '',
+      docUrl,
+      ''
+    ]);
+  }
+
+  // Append task rows
+  if (taskRows.length > 0) {
+    var tLastRow = tSheet.getLastRow();
+    tSheet.getRange(tLastRow + 1, 1, taskRows.length, taskRows[0].length).setValues(taskRows);
+  }
+
+  return {
+    success: true,
+    message: 'Campaign Development project and 8 sequential tasks created successfully.',
+    projectId: projectId,
+    docUrl: docUrl,
+    folderUrl: sessionFolder.getUrl()
+  };
+}
+
+function handleUpdateDevTask(payload) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  ensureDevSheets(ss);
+  var tSheet = ss.getSheetByName(DEV_TASKS_SHEET);
+  var data = tSheet.getDataRange().getValues();
+  if (data.length < 2) return { success: false, message: 'No tasks found' };
+
+  var headers = data[0];
+  var taskIdCol = headers.indexOf('TaskID');
+  var projIdCol = headers.indexOf('ProjectID');
+  var stageCol = headers.indexOf('Stage');
+  var statusCol = headers.indexOf('Status');
+  var completedAtCol = headers.indexOf('CompletedAt');
+  var allottedCol = headers.indexOf('AllottedDate');
+
+  var taskId = payload.taskId;
+  var targetRowIdx = -1;
+  var currentTask = null;
+
+  for (var i = 1; i < data.length; i++) {
+    if (data[i][taskIdCol] == taskId) {
+      targetRowIdx = i + 1;
+      currentTask = {
+        rowIdx: i + 1,
+        taskId: data[i][taskIdCol],
+        projectId: data[i][projIdCol],
+        stage: data[i][stageCol],
+        status: data[i][statusCol]
+      };
+      break;
+    }
+  }
+
+  if (targetRowIdx === -1 || !currentTask) {
+    return { success: false, message: 'Task not found: ' + taskId };
+  }
+
+  var newStatus = payload.status || 'Done';
+  tSheet.getRange(targetRowIdx, statusCol + 1).setValue(newStatus);
+  if (newStatus === 'Done' && completedAtCol !== -1) {
+    tSheet.getRange(targetRowIdx, completedAtCol + 1).setValue(new Date().toLocaleString());
+  }
+
+  // If marked Done, unlock the next sequential step for this project
+  if (newStatus === 'Done') {
+    var projectTasks = [];
+    for (var i = 1; i < data.length; i++) {
+      if (data[i][projIdCol] == currentTask.projectId) {
+        projectTasks.push({
+          rowIdx: i + 1,
+          stage: data[i][stageCol],
+          status: (i + 1 === targetRowIdx) ? 'Done' : data[i][statusCol]
+        });
+      }
+    }
+
+    var stagesOrder = [
+      'Ideation', 'Research', 'Selection and sequencing', 'Writing',
+      'PPT Development', 'Proofreading', 'Editing', 'Final Check'
+    ];
+
+    var currentIdx = -1;
+    for (var s = 0; s < stagesOrder.length; s++) {
+      if (stagesOrder[s].toLowerCase() === currentTask.stage.toLowerCase()) {
+        currentIdx = s;
+        break;
+      }
+    }
+
+    if (currentIdx !== -1 && currentIdx + 1 < stagesOrder.length) {
+      var nextStageName = stagesOrder[currentIdx + 1];
+      for (var pt = 0; pt < projectTasks.length; pt++) {
+        if (projectTasks[pt].stage.toLowerCase() === nextStageName.toLowerCase()) {
+          tSheet.getRange(projectTasks[pt].rowIdx, statusCol + 1).setValue('Ready');
+          if (allottedCol !== -1) {
+            tSheet.getRange(projectTasks[pt].rowIdx, allottedCol + 1).setValue(new Date().toLocaleString());
+          }
+          break;
+        }
+      }
+    }
+  }
+
+  return { success: true, message: 'Development task updated successfully.' };
+}
+
+function handleRedoDevTask(payload) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  ensureDevSheets(ss);
+  var tSheet = ss.getSheetByName(DEV_TASKS_SHEET);
+  var data = tSheet.getDataRange().getValues();
+  if (data.length < 2) return { success: false, message: 'No tasks found' };
+
+  var headers = data[0];
+  var taskIdCol = headers.indexOf('TaskID');
+  var projIdCol = headers.indexOf('ProjectID');
+  var stageCol = headers.indexOf('Stage');
+  var statusCol = headers.indexOf('Status');
+  var notesCol = headers.indexOf('Notes');
+  var completedAtCol = headers.indexOf('CompletedAt');
+
+  var taskId = payload.taskId;
+  var reason = payload.reason || 'Needs revision';
+  var targetRowIdx = -1;
+  var currentTask = null;
+
+  for (var i = 1; i < data.length; i++) {
+    if (data[i][taskIdCol] == taskId) {
+      targetRowIdx = i + 1;
+      currentTask = {
+        rowIdx: i + 1,
+        taskId: data[i][taskIdCol],
+        projectId: data[i][projIdCol],
+        stage: data[i][stageCol]
+      };
+      break;
+    }
+  }
+
+  if (targetRowIdx === -1 || !currentTask) {
+    return { success: false, message: 'Task not found: ' + taskId };
+  }
+
+  var stagesOrder = [
+    'Ideation', 'Research', 'Selection and sequencing', 'Writing',
+    'PPT Development', 'Proofreading', 'Editing', 'Final Check'
+  ];
+
+  var currentIdx = -1;
+  for (var s = 0; s < stagesOrder.length; s++) {
+    if (stagesOrder[s].toLowerCase() === currentTask.stage.toLowerCase()) {
+      currentIdx = s;
+      break;
+    }
+  }
+
+  if (currentIdx <= 0) {
+    return { success: false, message: 'Cannot redo from the initial step.' };
+  }
+
+  var prevStageName = stagesOrder[currentIdx - 1];
+  var prevTaskRowIdx = -1;
+  for (var i = 1; i < data.length; i++) {
+    if (data[i][projIdCol] == currentTask.projectId && data[i][stageCol].toLowerCase() === prevStageName.toLowerCase()) {
+      prevTaskRowIdx = i + 1;
+      break;
+    }
+  }
+
+  if (prevTaskRowIdx === -1) {
+    return { success: false, message: 'Previous stage task not found: ' + prevStageName };
+  }
+
+  // Revert previous task to Ready and append redo note
+  tSheet.getRange(prevTaskRowIdx, statusCol + 1).setValue('Ready');
+  if (completedAtCol !== -1) {
+    tSheet.getRange(prevTaskRowIdx, completedAtCol + 1).setValue('');
+  }
+  if (notesCol !== -1) {
+    var existingNote = data[prevTaskRowIdx - 1][notesCol] || '';
+    var newNote = (existingNote ? existingNote + '\n' : '') + '[Redo: ' + new Date().toLocaleDateString() + ']: ' + reason;
+    tSheet.getRange(prevTaskRowIdx, notesCol + 1).setValue(newNote);
+  }
+
+  // Set current task back to Waiting
+  tSheet.getRange(targetRowIdx, statusCol + 1).setValue('Waiting');
+
+  return {
+    success: true,
+    message: 'Task successfully sent back to ' + prevStageName + ' for redo.'
+  };
 }
 

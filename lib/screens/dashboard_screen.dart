@@ -8,6 +8,7 @@ import '../providers/auth_provider.dart';
 import '../providers/event_provider.dart';
 import '../models/event.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'dev_pipeline_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -18,6 +19,7 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen>
     with SingleTickerProviderStateMixin {
+  int _activePipelineIndex = 0; // 0: Social Media, 1: Development
   int _currentIndex = 0;
   String _postFilter = 'All';
   String _postTab = 'Individual'; // 'Individual' or 'Combined'
@@ -106,6 +108,12 @@ class _DashboardScreenState extends State<DashboardScreen>
 
   @override
   Widget build(BuildContext context) {
+    if (_activePipelineIndex == 1) {
+      return DevPipelineScreen(
+        onSwitchToSocialMedia: () => setState(() => _activePipelineIndex = 0),
+      );
+    }
+
     final eventProvider = context.watch<EventProvider>();
     final auth = context.watch<AuthProvider>();
     final isAdmin = auth.role.toLowerCase() == 'admin';
@@ -125,6 +133,49 @@ class _DashboardScreenState extends State<DashboardScreen>
             ),
             const SizedBox(width: 10),
             Text(isAdmin ? 'BODH Admin' : 'My Queue'),
+            const SizedBox(width: 16),
+            // Pipeline Switcher Pill
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: const Text(
+                      'Social Media',
+                      style: TextStyle(
+                        color: Color(0xFF1E88E5),
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  InkWell(
+                    onTap: () => setState(() => _activePipelineIndex = 1),
+                    borderRadius: const BorderRadius.horizontal(right: Radius.circular(20)),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                      child: Text(
+                        'Development',
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.85),
+                          fontSize: 13,
+                          fontWeight: FontWeight.normal,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ],
         ),
         bottom:
