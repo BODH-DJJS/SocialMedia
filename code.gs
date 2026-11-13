@@ -2431,16 +2431,70 @@ function ensureDevSheets(ss) {
 }
 
 function getOrCreateDevStreamFolder(streamName) {
-  // Folder tree: Root -> Delhi -> Head Office -> [streamName]
-  var root = DriveApp.getRootFolder();
-  var delhiFolder;
-  var dSearch = root.searchFolders("title = 'Delhi' and trashed = false");
-  if (dSearch.hasNext()) {
-    delhiFolder = dSearch.next();
+  // ── Find Base Shared Drive or Root Folder ──
+  // 1. Try to find the existing Shared Drive / base folder where branches (e.g. Delhi) reside
+  var baseFolder = null;
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+
+  // Inspect existing Posts/Events sheet to find where branches are located
+  try {
+    var postsSheet = ss.getSheetByName(POSTS_SHEET);
+    if (postsSheet) {
+      var pData = postsSheet.getDataRange().getValues();
+      for (var p = 1; p < pData.length; p++) {
+        var link = pData[p][21] || pData[p][20] || '';
+        if (link && link.indexOf('drive.google.com') !== -1) {
+          var match = link.match(/[-\w]{25,}/);
+          if (match) {
+            var f = DriveApp.getFolderById(match[0]);
+            // Walk up parents to find either 'Delhi' or its parent (the Shared Drive root)
+            var curr = f;
+            var safety = 0;
+            while (curr && safety < 6) {
+              safety++;
+              if (curr.getName().toLowerCase() === 'delhi') {
+                baseFolder = curr;
+                break;
+              }
+              var parents = curr.getParents();
+              if (parents.hasNext()) {
+                curr = parents.next();
+              } else {
+                break;
+              }
+            }
+            if (baseFolder) break;
+          }
+        }
+      }
+    }
+  } catch(e) {}
+
+  // 2. If 'Delhi' wasn't found via existing posts, search across all accessible folders (including Shared Drives)
+  var delhiFolder = null;
+  if (baseFolder && baseFolder.getName().toLowerCase() === 'delhi') {
+    delhiFolder = baseFolder;
   } else {
-    delhiFolder = root.createFolder('Delhi');
+    try {
+      var dSearch = DriveApp.searchFolders("title = 'Delhi' and trashed = false");
+      if (dSearch.hasNext()) {
+        delhiFolder = dSearch.next();
+      }
+    } catch(err) {}
   }
 
+  // 3. If Delhi folder still not found, check Root
+  if (!delhiFolder) {
+    var root = DriveApp.getRootFolder();
+    var dSearch2 = root.searchFolders("title = 'Delhi' and trashed = false");
+    if (dSearch2.hasNext()) {
+      delhiFolder = dSearch2.next();
+    } else {
+      delhiFolder = root.createFolder('Delhi');
+    }
+  }
+
+  // 4. Inside 'Delhi', find or create 'Head Office'
   var hoFolder;
   var hoSearch = delhiFolder.searchFolders("title = 'Head Office' and trashed = false");
   if (hoSearch.hasNext()) {
@@ -2449,7 +2503,7 @@ function getOrCreateDevStreamFolder(streamName) {
     hoFolder = delhiFolder.createFolder('Head Office');
   }
 
-  // Ensure all 4 folders exist
+  // 5. Ensure all 4 folders exist inside 'Delhi / Head Office'
   var streams = ['Campaign Development', 'SM Development', 'Website Reporting', 'Blogs / Articles'];
   var targetFolder = null;
   for (var s = 0; s < streams.length; s++) {
