@@ -676,6 +676,29 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
   Widget _buildTaskCard(DevTask task, int stepNum, Color stageColor) {
     final isDone = task.status.toLowerCase() == 'done';
     final isReady = task.status.toLowerCase() == 'ready';
+    final isPptStage = task.stage.toLowerCase() == 'ppt development';
+    final isPostPptStage = stepNum >= 6;
+
+    final devProvider = context.read<DevPipelineProvider>();
+    String cardPptFolder = task.pptFolderLink.trim();
+    if (cardPptFolder.isEmpty) {
+      try {
+        final pptTask = devProvider.tasks.firstWhere(
+          (t) => t.projectId == task.projectId && t.stage.toLowerCase() == 'ppt development',
+        );
+        cardPptFolder = pptTask.docLink.isNotEmpty ? pptTask.docLink : pptTask.folderLink;
+      } catch (_) {}
+    }
+
+    String cardWritingDoc = task.prevDocLink.trim().isNotEmpty ? task.prevDocLink.trim() : task.writingDocLink.trim();
+    if (cardWritingDoc.isEmpty) {
+      try {
+        final writingTask = devProvider.tasks.firstWhere(
+          (t) => t.projectId == task.projectId && t.stage.toLowerCase() == 'writing',
+        );
+        cardWritingDoc = writingTask.docLink.trim();
+      } catch (_) {}
+    }
 
     Color statusBadgeBg;
     Color statusBadgeText;
@@ -873,27 +896,100 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
               // Quick Actions on Card
               Row(
                 children: [
-                  if (task.docLink.isNotEmpty)
-                    InkWell(
-                      onTap: () => _openUrl(task.docLink),
-                      borderRadius: BorderRadius.circular(6),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: Colors.blue.shade50,
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: Colors.blue.shade200),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: const [
-                            Icon(Icons.description_outlined, size: 13, color: Colors.blue),
-                            SizedBox(width: 4),
-                            Text('Doc', style: TextStyle(fontSize: 11, color: Colors.blue, fontWeight: FontWeight.bold)),
-                          ],
+                  if (isPptStage) ...[
+                    // Step 5: PPT Folder & Writing Doc
+                    if (task.docLink.isNotEmpty || cardPptFolder.isNotEmpty)
+                      InkWell(
+                        onTap: () => _openUrl(task.docLink.isNotEmpty ? task.docLink : cardPptFolder),
+                        borderRadius: BorderRadius.circular(6),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.orange.shade50,
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: Colors.orange.shade300),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: const [
+                              Icon(Icons.drive_folder_upload_rounded, size: 13, color: Colors.deepOrange),
+                              SizedBox(width: 4),
+                              Text('PPT Folder', style: TextStyle(fontSize: 10, color: Colors.deepOrange, fontWeight: FontWeight.bold)),
+                            ],
+                          ),
                         ),
                       ),
-                    ),
+                    if (cardWritingDoc.isNotEmpty) ...[
+                      const SizedBox(width: 6),
+                      InkWell(
+                        onTap: () => _openUrl(cardWritingDoc),
+                        borderRadius: BorderRadius.circular(6),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.blue.shade50,
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: Colors.blue.shade200),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: const [
+                              Icon(Icons.description_outlined, size: 13, color: Colors.blue),
+                              SizedBox(width: 4),
+                              Text('Writing Doc', style: TextStyle(fontSize: 10, color: Colors.blue, fontWeight: FontWeight.bold)),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ] else ...[
+                    // Standard Doc
+                    if (task.docLink.isNotEmpty)
+                      InkWell(
+                        onTap: () => _openUrl(task.docLink),
+                        borderRadius: BorderRadius.circular(6),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.blue.shade50,
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: Colors.blue.shade200),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: const [
+                              Icon(Icons.description_outlined, size: 13, color: Colors.blue),
+                              SizedBox(width: 4),
+                              Text('Doc', style: TextStyle(fontSize: 11, color: Colors.blue, fontWeight: FontWeight.bold)),
+                            ],
+                          ),
+                        ),
+                      ),
+                    // For Steps 6, 7, 8: Also show PPT Folder link on card
+                    if (isPostPptStage && cardPptFolder.isNotEmpty) ...[
+                      const SizedBox(width: 6),
+                      InkWell(
+                        onTap: () => _openUrl(cardPptFolder),
+                        borderRadius: BorderRadius.circular(6),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.orange.shade50,
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: Colors.orange.shade300),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: const [
+                              Icon(Icons.co_present_rounded, size: 13, color: Colors.deepOrange),
+                              SizedBox(width: 4),
+                              Text('PPT', style: TextStyle(fontSize: 10, color: Colors.deepOrange, fontWeight: FontWeight.bold)),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
                   const Spacer(),
                   // Prominent Details / Handoff trigger
                   Container(
@@ -934,6 +1030,42 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
           builder: (ctx, setDialogState) {
             final isDone = task.status.toLowerCase() == 'done';
             final hasPreviousStage = stepNum > 1;
+            final isPptStage = task.stage.toLowerCase() == 'ppt development';
+            final isPostPptStage = stepNum >= 6;
+
+            final devProvider = context.read<DevPipelineProvider>();
+            String bestPptFolder = task.pptFolderLink.trim();
+            if (bestPptFolder.isEmpty) {
+              try {
+                final pptTask = devProvider.tasks.firstWhere(
+                  (t) => t.projectId == task.projectId && t.stage.toLowerCase() == 'ppt development',
+                );
+                bestPptFolder = pptTask.docLink.isNotEmpty ? pptTask.docLink : pptTask.folderLink;
+              } catch (_) {}
+            }
+
+            String bestWritingDoc = task.prevDocLink.trim().isNotEmpty ? task.prevDocLink.trim() : task.writingDocLink.trim();
+            if (bestWritingDoc.isEmpty) {
+              try {
+                final writingTask = devProvider.tasks.firstWhere(
+                  (t) => t.projectId == task.projectId && t.stage.toLowerCase() == 'writing',
+                );
+                bestWritingDoc = writingTask.docLink.trim();
+              } catch (_) {}
+            }
+
+            // Campaign-level IEC Material links
+            DevProject? proj;
+            try {
+              proj = devProvider.projects.firstWhere((p) => p.projectId == task.projectId);
+            } catch (_) {}
+
+            String bestIecFolder = task.iecFolderLink.isNotEmpty ? task.iecFolderLink : (proj?.iecFolderLink ?? '');
+            String bestIecWritingDoc = task.iecWritingDocLink.isNotEmpty ? task.iecWritingDocLink : (proj?.iecWritingDocLink ?? '');
+            String bestIecDesigningFolder = task.iecDesigningFolderLink.isNotEmpty ? task.iecDesigningFolderLink : (proj?.iecDesigningFolderLink ?? '');
+            String bestIecProofreadDoc = task.iecProofreadDocLink.isNotEmpty ? task.iecProofreadDocLink : (proj?.iecProofreadDocLink ?? '');
+            String bestIecFinalCheckDoc = task.iecFinalCheckDocLink.isNotEmpty ? task.iecFinalCheckDocLink : (proj?.iecFinalCheckDocLink ?? '');
+            final hasIecMaterial = bestIecFolder.isNotEmpty || bestIecWritingDoc.isNotEmpty || bestIecDesigningFolder.isNotEmpty || bestIecProofreadDoc.isNotEmpty || bestIecFinalCheckDoc.isNotEmpty;
 
             return AlertDialog(
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -1044,70 +1176,347 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
 
                       const SizedBox(height: 16),
 
-                      // Document Access Section
-                      Container(
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF0F4FF),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: const Color(0xFFD0DCFF)),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                const Icon(Icons.description, color: Color(0xFF1A237E), size: 20),
-                                const SizedBox(width: 8),
-                                Text(
-                                  'Step $stepNum Document: ${task.stage}',
-                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF1A237E)),
+                      // ── Workspace Section (Tailored for PPT Folder / Docs) ──
+                      if (isPptStage) ...[
+                        // Step 5: PPT Development Upload Folder & Writing Script Reference
+                        Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: Colors.orange.shade50,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.orange.shade300),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(Icons.co_present_rounded, color: Colors.deepOrange.shade800, size: 22),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    'Step 5: PPT Development Folder & Script',
+                                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.deepOrange.shade900),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                'Upload your presentation files (PPT/PDF) to this dedicated folder. You can reference the finalized script & content from Step 4 (Writing) below.',
+                                style: TextStyle(fontSize: 11, color: Colors.grey.shade700),
+                              ),
+                              const SizedBox(height: 12),
+                              // Primary Button: Open PPT Upload Folder
+                              if (task.docLink.isNotEmpty || bestPptFolder.isNotEmpty)
+                                SizedBox(
+                                  width: double.infinity,
+                                  height: 44,
+                                  child: ElevatedButton.icon(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.deepOrange.shade800,
+                                      foregroundColor: Colors.white,
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                    ),
+                                    icon: const Icon(Icons.drive_folder_upload_rounded, size: 20),
+                                    label: const Text('Open PPT Upload Folder', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                                    onPressed: () => _openUrl(task.docLink.isNotEmpty ? task.docLink : bestPptFolder),
+                                  ),
+                                )
+                              else
+                                const Text('No PPT folder attached yet', style: TextStyle(color: Colors.grey, fontSize: 12)),
+
+                              // Reference Step 4 Writing Doc
+                              if (bestWritingDoc.isNotEmpty) ...[
+                                const SizedBox(height: 8),
+                                SizedBox(
+                                  width: double.infinity,
+                                  height: 40,
+                                  child: ElevatedButton.icon(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(0xFF1A237E),
+                                      foregroundColor: Colors.white,
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                    ),
+                                    icon: const Icon(Icons.description, size: 17),
+                                    label: const Text('Open Step 4 (Writing) Doc for Reference', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                                    onPressed: () => _openUrl(bestWritingDoc),
+                                  ),
                                 ),
                               ],
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              'Each stage has its own document with edit access for the assigned owner. When marked Done, content is automatically carried over to the next stage.',
-                              style: TextStyle(fontSize: 11, color: Colors.grey.shade700),
-                            ),
-                            const SizedBox(height: 12),
-                            if (task.docLink.isNotEmpty)
-                              SizedBox(
-                                width: double.infinity,
-                                height: 44,
-                                child: ElevatedButton.icon(
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: const Color(0xFF1A237E),
-                                    foregroundColor: Colors.white,
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                  ),
-                                  icon: const Icon(Icons.open_in_new, size: 18),
-                                  label: Text('Open ${task.stage} Doc', style: const TextStyle(fontWeight: FontWeight.bold)),
-                                  onPressed: () => _openUrl(task.docLink),
-                                ),
-                              )
-                            else
-                              const Text('No document URL attached yet', style: TextStyle(color: Colors.grey, fontSize: 12)),
 
-                            if (task.folderLink.isNotEmpty) ...[
-                              const SizedBox(height: 8),
-                              SizedBox(
-                                width: double.infinity,
-                                height: 38,
-                                child: OutlinedButton.icon(
-                                  style: OutlinedButton.styleFrom(
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                    side: const BorderSide(color: Color(0xFF1A237E)),
+                              if (task.folderLink.isNotEmpty) ...[
+                                const SizedBox(height: 8),
+                                SizedBox(
+                                  width: double.infinity,
+                                  height: 38,
+                                  child: OutlinedButton.icon(
+                                    style: OutlinedButton.styleFrom(
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                      side: BorderSide(color: Colors.deepOrange.shade800),
+                                    ),
+                                    icon: Icon(Icons.folder_open, size: 17, color: Colors.deepOrange.shade800),
+                                    label: Text('Open Session Drive Folder', style: TextStyle(color: Colors.deepOrange.shade800, fontSize: 13)),
+                                    onPressed: () => _openUrl(task.folderLink),
                                   ),
-                                  icon: const Icon(Icons.folder_open, size: 17, color: Color(0xFF1A237E)),
-                                  label: const Text('Open Session Drive Folder', style: TextStyle(color: Color(0xFF1A237E), fontSize: 13)),
-                                  onPressed: () => _openUrl(task.folderLink),
                                 ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ] else if (isPostPptStage) ...[
+                        // Steps 6, 7, 8: Show Stage Doc AND PPT Folder Link
+                        Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF0F4FF),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: const Color(0xFFD0DCFF)),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  const Icon(Icons.description, color: Color(0xFF1A237E), size: 20),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    'Step $stepNum: ${task.stage} Doc & PPT Folder',
+                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF1A237E)),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                'Review both the stage document (copied forward) and the uploaded presentation slides from Step 5 (PPT Development).',
+                                style: TextStyle(fontSize: 11, color: Colors.grey.shade700),
+                              ),
+                              const SizedBox(height: 12),
+                              // Primary Stage Doc Button
+                              if (task.docLink.isNotEmpty)
+                                SizedBox(
+                                  width: double.infinity,
+                                  height: 44,
+                                  child: ElevatedButton.icon(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(0xFF1A237E),
+                                      foregroundColor: Colors.white,
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                    ),
+                                    icon: const Icon(Icons.open_in_new, size: 18),
+                                    label: Text('Open ${task.stage} Doc', style: const TextStyle(fontWeight: FontWeight.bold)),
+                                    onPressed: () => _openUrl(task.docLink),
+                                  ),
+                                ),
+
+                              // Secondary Button: Open PPT Upload Folder from Step 5
+                              if (bestPptFolder.isNotEmpty) ...[
+                                const SizedBox(height: 8),
+                                SizedBox(
+                                  width: double.infinity,
+                                  height: 42,
+                                  child: ElevatedButton.icon(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.deepOrange.shade800,
+                                      foregroundColor: Colors.white,
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                    ),
+                                    icon: const Icon(Icons.co_present_rounded, size: 18),
+                                    label: const Text('Open PPT Presentation Folder (Step 5)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                                    onPressed: () => _openUrl(bestPptFolder),
+                                  ),
+                                ),
+                              ],
+
+                              if (task.folderLink.isNotEmpty) ...[
+                                const SizedBox(height: 8),
+                                SizedBox(
+                                  width: double.infinity,
+                                  height: 38,
+                                  child: OutlinedButton.icon(
+                                    style: OutlinedButton.styleFrom(
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                      side: const BorderSide(color: Color(0xFF1A237E)),
+                                    ),
+                                    icon: const Icon(Icons.folder_open, size: 17, color: Color(0xFF1A237E)),
+                                    label: const Text('Open Session Drive Folder', style: TextStyle(color: Color(0xFF1A237E), fontSize: 13)),
+                                    onPressed: () => _openUrl(task.folderLink),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ] else ...[
+                        // Steps 1 to 4: Standard Stage Doc
+                        Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF0F4FF),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: const Color(0xFFD0DCFF)),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  const Icon(Icons.description, color: Color(0xFF1A237E), size: 20),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    'Step $stepNum Document: ${task.stage}',
+                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF1A237E)),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                'Each stage has its own document with edit access for the assigned owner. When marked Done, content is automatically carried over to the next stage.',
+                                style: TextStyle(fontSize: 11, color: Colors.grey.shade700),
+                              ),
+                              const SizedBox(height: 12),
+                              if (task.docLink.isNotEmpty)
+                                SizedBox(
+                                  width: double.infinity,
+                                  height: 44,
+                                  child: ElevatedButton.icon(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(0xFF1A237E),
+                                      foregroundColor: Colors.white,
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                    ),
+                                    icon: const Icon(Icons.open_in_new, size: 18),
+                                    label: Text('Open ${task.stage} Doc', style: const TextStyle(fontWeight: FontWeight.bold)),
+                                    onPressed: () => _openUrl(task.docLink),
+                                  ),
+                                )
+                              else
+                                const Text('No document URL attached yet', style: TextStyle(color: Colors.grey, fontSize: 12)),
+
+                              if (task.folderLink.isNotEmpty) ...[
+                                const SizedBox(height: 8),
+                                SizedBox(
+                                  width: double.infinity,
+                                  height: 38,
+                                  child: OutlinedButton.icon(
+                                    style: OutlinedButton.styleFrom(
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                      side: const BorderSide(color: Color(0xFF1A237E)),
+                                    ),
+                                    icon: const Icon(Icons.folder_open, size: 17, color: Color(0xFF1A237E)),
+                                    label: const Text('Open Session Drive Folder', style: TextStyle(color: Color(0xFF1A237E), fontSize: 13)),
+                                    onPressed: () => _openUrl(task.folderLink),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ],
+
+                      // ── Campaign IEC Material Section (Common to Campaign) ──
+                      if (hasIecMaterial) ...[
+                        const SizedBox(height: 14),
+                        Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF3E5F5),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: const Color(0xFFCE93D8)),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  const Icon(Icons.auto_stories_rounded, color: Color(0xFF6A1B9A), size: 20),
+                                  const SizedBox(width: 8),
+                                  const Text(
+                                    'Campaign IEC Material (Common)',
+                                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF4A148C)),
+                                  ),
+                                  const Spacer(),
+                                  if (bestIecFolder.isNotEmpty)
+                                    InkWell(
+                                      onTap: () => _openUrl(bestIecFolder),
+                                      borderRadius: BorderRadius.circular(6),
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                        decoration: BoxDecoration(
+                                          color: Colors.white,
+                                          borderRadius: BorderRadius.circular(6),
+                                          border: Border.all(color: const Color(0xFFBA68C8)),
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: const [
+                                            Icon(Icons.folder_open, size: 14, color: Color(0xFF6A1B9A)),
+                                            SizedBox(width: 4),
+                                            Text('Open IEC Folder', style: TextStyle(fontSize: 11, color: Color(0xFF6A1B9A), fontWeight: FontWeight.bold)),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                'IEC Material is created once per campaign under the Campaign folder. Sub-divisions share content forwarding and designing assets.',
+                                style: TextStyle(fontSize: 11, color: Colors.grey.shade700),
+                              ),
+                              const SizedBox(height: 10),
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: [
+                                  if (bestIecWritingDoc.isNotEmpty)
+                                    OutlinedButton.icon(
+                                      style: OutlinedButton.styleFrom(
+                                        side: const BorderSide(color: Color(0xFF7B1FA2)),
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                        backgroundColor: Colors.white,
+                                      ),
+                                      icon: const Icon(Icons.description, size: 15, color: Color(0xFF7B1FA2)),
+                                      label: const Text('1. IEC Writing Doc', style: TextStyle(color: Color(0xFF7B1FA2), fontSize: 12, fontWeight: FontWeight.bold)),
+                                      onPressed: () => _openUrl(bestIecWritingDoc),
+                                    ),
+                                  if (bestIecDesigningFolder.isNotEmpty)
+                                    OutlinedButton.icon(
+                                      style: OutlinedButton.styleFrom(
+                                        side: const BorderSide(color: Color(0xFFE65100)),
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                        backgroundColor: Colors.white,
+                                      ),
+                                      icon: const Icon(Icons.drive_folder_upload, size: 15, color: Color(0xFFE65100)),
+                                      label: const Text('2. IEC Designing Folder', style: TextStyle(color: Color(0xFFE65100), fontSize: 12, fontWeight: FontWeight.bold)),
+                                      onPressed: () => _openUrl(bestIecDesigningFolder),
+                                    ),
+                                  if (bestIecProofreadDoc.isNotEmpty)
+                                    OutlinedButton.icon(
+                                      style: OutlinedButton.styleFrom(
+                                        side: const BorderSide(color: Color(0xFF00695C)),
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                        backgroundColor: Colors.white,
+                                      ),
+                                      icon: const Icon(Icons.spellcheck, size: 15, color: Color(0xFF00695C)),
+                                      label: const Text('3. IEC Proofread Doc', style: TextStyle(color: Color(0xFF00695C), fontSize: 12, fontWeight: FontWeight.bold)),
+                                      onPressed: () => _openUrl(bestIecProofreadDoc),
+                                    ),
+                                  if (bestIecFinalCheckDoc.isNotEmpty)
+                                    OutlinedButton.icon(
+                                      style: OutlinedButton.styleFrom(
+                                        side: const BorderSide(color: Color(0xFF2E7D32)),
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                        backgroundColor: Colors.white,
+                                      ),
+                                      icon: const Icon(Icons.verified, size: 15, color: Color(0xFF2E7D32)),
+                                      label: const Text('4. IEC Final Cross check', style: TextStyle(color: Color(0xFF2E7D32), fontSize: 12, fontWeight: FontWeight.bold)),
+                                      onPressed: () => _openUrl(bestIecFinalCheckDoc),
+                                    ),
+                                ],
                               ),
                             ],
-                          ],
+                          ),
                         ),
-                      ),
+                      ],
 
                       const SizedBox(height: 20),
 
@@ -1453,7 +1862,7 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
-                                'Will create Delhi (IN) > Head Office > Campaign Development folder, 8 separate stage docs, and assign permissions.',
+                                'Creates Session folder with 7 Docs + Step 5 PPT Upload Folder, and common IEC Material folder under Campaign with Writing Doc, Designing Folder, and Proofreading/Final Check docs.',
                                 style: TextStyle(fontSize: 12, color: Colors.blue.shade900),
                               ),
                             ),

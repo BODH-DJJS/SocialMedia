@@ -15,6 +15,12 @@ class DevProject {
   final String docLink;
   final String status;
   final String createdAt;
+  final String pptFolderLink;
+  final String iecFolderLink;
+  final String iecWritingDocLink;
+  final String iecDesigningFolderLink;
+  final String iecProofreadDocLink;
+  final String iecFinalCheckDocLink;
 
   DevProject({
     required this.projectId,
@@ -33,6 +39,12 @@ class DevProject {
     required this.docLink,
     required this.status,
     required this.createdAt,
+    this.pptFolderLink = '',
+    this.iecFolderLink = '',
+    this.iecWritingDocLink = '',
+    this.iecDesigningFolderLink = '',
+    this.iecProofreadDocLink = '',
+    this.iecFinalCheckDocLink = '',
   });
 
   factory DevProject.fromJson(Map<String, dynamic> json) {
@@ -53,6 +65,12 @@ class DevProject {
       docLink: json['DocLink']?.toString() ?? '',
       status: json['Status']?.toString() ?? 'Active',
       createdAt: json['CreatedAt']?.toString() ?? '',
+      pptFolderLink: json['PptFolderLink']?.toString() ?? '',
+      iecFolderLink: json['IecFolderLink']?.toString() ?? '',
+      iecWritingDocLink: json['IecWritingDocLink']?.toString() ?? '',
+      iecDesigningFolderLink: json['IecDesigningFolderLink']?.toString() ?? '',
+      iecProofreadDocLink: json['IecProofreadDocLink']?.toString() ?? '',
+      iecFinalCheckDocLink: json['IecFinalCheckDocLink']?.toString() ?? '',
     );
   }
 }
@@ -76,6 +94,14 @@ class DevTask {
   final String sessionName;
   final String stream;
   final String folderLink;
+  final String pptFolderLink;
+  final String prevDocLink;
+  final String writingDocLink;
+  final String iecFolderLink;
+  final String iecWritingDocLink;
+  final String iecDesigningFolderLink;
+  final String iecProofreadDocLink;
+  final String iecFinalCheckDocLink;
 
   DevTask({
     required this.taskId,
@@ -94,6 +120,14 @@ class DevTask {
     this.sessionName = '',
     this.stream = '',
     this.folderLink = '',
+    this.pptFolderLink = '',
+    this.prevDocLink = '',
+    this.writingDocLink = '',
+    this.iecFolderLink = '',
+    this.iecWritingDocLink = '',
+    this.iecDesigningFolderLink = '',
+    this.iecProofreadDocLink = '',
+    this.iecFinalCheckDocLink = '',
   });
 
   factory DevTask.fromJson(Map<String, dynamic> json) {
@@ -114,6 +148,14 @@ class DevTask {
       sessionName: json['SessionName']?.toString() ?? '',
       stream: json['Stream']?.toString() ?? '',
       folderLink: json['FolderLink']?.toString() ?? '',
+      pptFolderLink: json['PptFolderLink']?.toString() ?? '',
+      prevDocLink: json['PrevDocLink']?.toString() ?? '',
+      writingDocLink: json['WritingDocLink']?.toString() ?? '',
+      iecFolderLink: json['IecFolderLink']?.toString() ?? '',
+      iecWritingDocLink: json['IecWritingDocLink']?.toString() ?? '',
+      iecDesigningFolderLink: json['IecDesigningFolderLink']?.toString() ?? '',
+      iecProofreadDocLink: json['IecProofreadDocLink']?.toString() ?? '',
+      iecFinalCheckDocLink: json['IecFinalCheckDocLink']?.toString() ?? '',
     );
   }
 }

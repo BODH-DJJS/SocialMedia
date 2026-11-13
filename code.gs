@@ -2393,22 +2393,45 @@ function handleCheckFolderNotEmpty(payload) {
 // =========================================================================
 
 function ensureDevSheets(ss) {
-  if (!ss.getSheetByName(DEV_PROJECTS_SHEET)) {
-    var pSheet = ss.insertSheet(DEV_PROJECTS_SHEET);
+  var iecAndPptCols = [
+    'PptFolderLink', 'IecFolderLink', 'IecWritingDocLink',
+    'IecDesigningFolderLink', 'IecProofreadDocLink', 'IecFinalCheckDocLink'
+  ];
+
+  var pSheet = ss.getSheetByName(DEV_PROJECTS_SHEET);
+  if (!pSheet) {
+    pSheet = ss.insertSheet(DEV_PROJECTS_SHEET);
     pSheet.appendRow([
       'ProjectID', 'Stream', 'CampaignName', 'SessionName', 'Duration',
       'FestivalsIncluded', 'StartDate', 'CompletionDate', 'IECContent',
       'IECDesigning', 'IECProofread', 'IECFinalCheck', 'FolderLink',
       'DocLink', 'Status', 'CreatedAt'
-    ]);
+    ].concat(iecAndPptCols));
+  } else {
+    var pHeaders = pSheet.getRange(1, 1, 1, Math.max(pSheet.getLastColumn(), 1)).getValues()[0];
+    for (var c = 0; c < iecAndPptCols.length; c++) {
+      if (pHeaders.indexOf(iecAndPptCols[c]) === -1) {
+        pSheet.getRange(1, pHeaders.length + 1).setValue(iecAndPptCols[c]);
+        pHeaders.push(iecAndPptCols[c]);
+      }
+    }
   }
 
-  if (!ss.getSheetByName(DEV_TASKS_SHEET)) {
-    var tSheet = ss.insertSheet(DEV_TASKS_SHEET);
+  var tSheet = ss.getSheetByName(DEV_TASKS_SHEET);
+  if (!tSheet) {
+    tSheet = ss.insertSheet(DEV_TASKS_SHEET);
     tSheet.appendRow([
       'TaskID', 'ProjectID', 'Stage', 'Assignee', 'AssigneeEmail',
       'Status', 'DueDate', 'AllottedDate', 'CompletedAt', 'DocLink', 'Notes'
-    ]);
+    ].concat(iecAndPptCols));
+  } else {
+    var tHeaders = tSheet.getRange(1, 1, 1, Math.max(tSheet.getLastColumn(), 1)).getValues()[0];
+    for (var c = 0; c < iecAndPptCols.length; c++) {
+      if (tHeaders.indexOf(iecAndPptCols[c]) === -1) {
+        tSheet.getRange(1, tHeaders.length + 1).setValue(iecAndPptCols[c]);
+        tHeaders.push(iecAndPptCols[c]);
+      }
+    }
   }
 
   if (!ss.getSheetByName(DEV_PIPELINE_SHEET)) {
@@ -2589,6 +2612,28 @@ function handleGetDevTasks(payload) {
     }
   }
 
+  // Pre-scan data to build project maps for Writing doc and PPT folder
+  var projectWritingDocMap = {};
+  var projectPptFolderMap = {};
+  var stageColIdx = headers.indexOf('Stage');
+  var projIdColIdx = headers.indexOf('ProjectID');
+  var docLinkColIdx = headers.indexOf('DocLink');
+  var pptLinkColIdx = headers.indexOf('PptFolderLink');
+
+  for (var i = 1; i < data.length; i++) {
+    var pId = data[i][projIdColIdx] ? data[i][projIdColIdx].toString() : '';
+    var st = data[i][stageColIdx] ? data[i][stageColIdx].toString().toLowerCase() : '';
+    var dLink = docLinkColIdx !== -1 && data[i][docLinkColIdx] ? data[i][docLinkColIdx].toString() : '';
+    var pLink = pptLinkColIdx !== -1 && data[i][pptLinkColIdx] ? data[i][pptLinkColIdx].toString() : '';
+
+    if (st === 'writing' && dLink) {
+      projectWritingDocMap[pId] = dLink;
+    }
+    if (st === 'ppt development') {
+      projectPptFolderMap[pId] = pLink || dLink;
+    }
+  }
+
   for (var i = 1; i < data.length; i++) {
     var row = data[i];
     if (!row[0]) continue;
@@ -2611,6 +2656,11 @@ function handleGetDevTasks(payload) {
     t.StartDate = proj.StartDate || '';
     t.CompletionDate = proj.CompletionDate || '';
     t.FolderLink = proj.FolderLink || '';
+    t.PptFolderLink = proj.PptFolderLink || projectPptFolderMap[t.ProjectID] || t.PptFolderLink || '';
+    t.WritingDocLink = projectWritingDocMap[t.ProjectID] || '';
+    if (t.Stage && t.Stage.toLowerCase() === 'ppt development') {
+      t.PrevDocLink = projectWritingDocMap[t.ProjectID] || '';
+    }
 
     if (projectId && t.ProjectID !== projectId) continue;
 
@@ -2648,7 +2698,7 @@ function handleCreateDevProject(payload) {
     return { success: false, message: 'Campaign name is required.' };
   }
 
-  // Generate unique ProjectID e.g. DEV-CAMP-101
+  // Generate unique ProjectID e.g. CAMP-001
   var lastRow = pSheet.getLastRow();
   var prefix = stream.indexOf('Campaign') !== -1 ? 'CAMP' : (stream.indexOf('SM') !== -1 ? 'SMD' : (stream.indexOf('Web') !== -1 ? 'WEB' : 'BLOG'));
   var projectNo = (lastRow >= 2 ? lastRow : 1);
@@ -2686,42 +2736,180 @@ function handleCreateDevProject(payload) {
     { name: 'Final Check', offset: 32 }
   ];
 
-  // Create SEPARATE Google Docs for EACH stage
+  // Create SEPARATE Google Docs for stages (except Step 5 PPT Development which gets its dedicated upload folder)
   var stageDocUrls = {};
+  var pptFolderUrl = '';
+
   for (var s = 0; s < stages.length; s++) {
     var stName = stages[s].name;
-    var stepDocTitle = campaignName + (sessionName ? ' - ' + sessionName : '') + ' - Step ' + (s + 1) + ' (' + stName + ')';
-    var stepDocUrl = '';
-    try {
-      var sDoc = DocumentApp.create(stepDocTitle);
-      var sDocFile = DriveApp.getFileById(sDoc.getId());
-      sDocFile.moveTo(sessionFolder);
-      sDocFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.EDIT);
-      
-      var sBody = sDoc.getBody();
-      sBody.appendParagraph(stepDocTitle).setHeading(DocumentApp.ParagraphHeading.HEADING1);
-      sBody.appendParagraph('Campaign: ' + campaignName + (sessionName ? ' | Session: ' + sessionName : ''));
-      sBody.appendParagraph('Stage: ' + stName + ' (Step ' + (s + 1) + ' of ' + stages.length + ')');
-      sBody.appendParagraph('Duration: ' + duration + ' | Festivals: ' + festivals);
-      sBody.appendParagraph('--------------------------------------------------\n');
-      
-      // Grant edit permissions to assigned user for this specific stage doc
-      var assignedObj = assignees[stName] || {};
-      var sEmail = (typeof assignedObj === 'object' && assignedObj ? assignedObj.email : '') || '';
-      if (sEmail && sEmail.indexOf('@') !== -1) {
-        try { sDocFile.addEditor(sEmail); } catch(mErr) {}
+    var assignedObj = assignees[stName] || {};
+    var sEmail = (typeof assignedObj === 'object' && assignedObj ? assignedObj.email : '') || '';
+
+    if (stName === 'PPT Development') {
+      // Step 5: Create a dedicated PPT upload folder instead of Doc
+      var pptFolderName = '5 - PPT Development';
+      var pptFolder;
+      var fSearch = sessionFolder.searchFolders("title = '" + pptFolderName + "' and trashed = false");
+      if (fSearch.hasNext()) {
+        pptFolder = fSearch.next();
+      } else {
+        pptFolder = sessionFolder.createFolder(pptFolderName);
       }
-      
-      sDoc.saveAndClose();
-      stepDocUrl = sDocFile.getUrl();
-    } catch(err) {
-      stepDocUrl = '';
+      try { pptFolder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.EDIT); } catch(pe) {}
+      if (sEmail && sEmail.indexOf('@') !== -1) {
+        try { pptFolder.addEditor(sEmail); } catch(pErr) {}
+      }
+      pptFolderUrl = pptFolder.getUrl();
+      stageDocUrls[stName] = pptFolderUrl;
+    } else {
+      var stepDocTitle = campaignName + (sessionName ? ' - ' + sessionName : '') + ' - Step ' + (s + 1) + ' (' + stName + ')';
+      var stepDocUrl = '';
+      try {
+        var sDoc = DocumentApp.create(stepDocTitle);
+        var sDocFile = DriveApp.getFileById(sDoc.getId());
+        sDocFile.moveTo(sessionFolder);
+        try { sDocFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.EDIT); } catch(pe) {}
+        
+        var sBody = sDoc.getBody();
+        sBody.appendParagraph(stepDocTitle).setHeading(DocumentApp.ParagraphHeading.HEADING1);
+        sBody.appendParagraph('Campaign: ' + campaignName + (sessionName ? ' | Session: ' + sessionName : ''));
+        sBody.appendParagraph('Stage: ' + stName + ' (Step ' + (s + 1) + ' of ' + stages.length + ')');
+        sBody.appendParagraph('Duration: ' + duration + ' | Festivals: ' + festivals);
+        sBody.appendParagraph('--------------------------------------------------\n');
+        
+        // Grant edit permissions to assigned user for this specific stage doc
+        if (sEmail && sEmail.indexOf('@') !== -1) {
+          try { sDocFile.addEditor(sEmail); } catch(mErr) {}
+        }
+        
+        sDoc.saveAndClose();
+        stepDocUrl = sDocFile.getUrl();
+      } catch(err) {
+        stepDocUrl = '';
+      }
+      stageDocUrls[stName] = stepDocUrl;
     }
-    stageDocUrls[stName] = stepDocUrl;
   }
 
   // Master docUrl for project row can be Step 1's doc or sessionFolder
   var masterDocUrl = stageDocUrls['Ideation'] || '';
+
+  // -------------------------------------------------------------
+  // IEC Material (Common to Campaign, NOT per session)
+  // Under campFolder: create 'IEC Material' folder if not present
+  // -------------------------------------------------------------
+  var iecFolderUrl = '';
+  var iecWritingDocUrl = '';
+  var iecDesigningFolderUrl = '';
+  var iecProofreadDocUrl = '';
+  var iecFinalCheckDocUrl = '';
+
+  var hasIec = (iecContent === 'Yes' || iecDesigning === 'Yes' || iecProofread === 'Yes' || iecFinalCheck === 'Yes');
+  if (hasIec) {
+    var iecFolder;
+    var iecSearch = campFolder.searchFolders("title = 'IEC Material' and trashed = false");
+    if (iecSearch.hasNext()) {
+      iecFolder = iecSearch.next();
+    } else {
+      iecFolder = campFolder.createFolder('IEC Material');
+    }
+    try { iecFolder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.EDIT); } catch(pe) {}
+    iecFolderUrl = iecFolder.getUrl();
+
+    // 1. IEC Content Writing Doc
+    if (iecContent === 'Yes') {
+      var wDocTitle = campaignName + ' - IEC Content Writing';
+      var wDocSearch = iecFolder.searchFiles("title = '" + wDocTitle + "' and trashed = false");
+      if (wDocSearch.hasNext()) {
+        iecWritingDocUrl = wDocSearch.next().getUrl();
+      } else {
+        try {
+          var wDoc = DocumentApp.create(wDocTitle);
+          var wDocFile = DriveApp.getFileById(wDoc.getId());
+          wDocFile.moveTo(iecFolder);
+          try { wDocFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.EDIT); } catch(pe) {}
+          var wBody = wDoc.getBody();
+          wBody.appendParagraph(wDocTitle).setHeading(DocumentApp.ParagraphHeading.HEADING1);
+          wBody.appendParagraph('Campaign: ' + campaignName);
+          wBody.appendParagraph('Type: IEC Material - Content Writing');
+          wBody.appendParagraph('--------------------------------------------------\n');
+          wDoc.saveAndClose();
+          iecWritingDocUrl = wDocFile.getUrl();
+        } catch(err) {}
+      }
+    }
+
+    // 2. IEC Designing Folder
+    if (iecDesigning === 'Yes') {
+      var dFolderName = 'IEC Designing';
+      var dSearch = iecFolder.searchFolders("title = '" + dFolderName + "' and trashed = false");
+      var dFolder;
+      if (dSearch.hasNext()) {
+        dFolder = dSearch.next();
+      } else {
+        dFolder = iecFolder.createFolder(dFolderName);
+      }
+      try { dFolder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.EDIT); } catch(pe) {}
+      iecDesigningFolderUrl = dFolder.getUrl();
+    }
+
+    // 3. IEC Proofread Doc (with forwarded content from Writing Doc)
+    if (iecProofread === 'Yes') {
+      var pDocTitle = campaignName + ' - IEC Proofreading';
+      var pDocSearch = iecFolder.searchFiles("title = '" + pDocTitle + "' and trashed = false");
+      if (pDocSearch.hasNext()) {
+        iecProofreadDocUrl = pDocSearch.next().getUrl();
+      } else {
+        try {
+          var pDoc = DocumentApp.create(pDocTitle);
+          var pDocFile = DriveApp.getFileById(pDoc.getId());
+          pDocFile.moveTo(iecFolder);
+          try { pDocFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.EDIT); } catch(pe) {}
+          var pBody = pDoc.getBody();
+          pBody.appendParagraph(pDocTitle).setHeading(DocumentApp.ParagraphHeading.HEADING1);
+          pBody.appendParagraph('Campaign: ' + campaignName);
+          pBody.appendParagraph('Type: IEC Material - Proofreading');
+          pBody.appendParagraph('--------------------------------------------------\n');
+          pDoc.saveAndClose();
+          iecProofreadDocUrl = pDocFile.getUrl();
+
+          // Auto copy content from IEC Writing Doc into IEC Proofreading Doc if writing doc exists
+          if (iecWritingDocUrl) {
+            try { copyDevDocContentForward(iecWritingDocUrl, iecProofreadDocUrl, 'IEC Content Writing', 'IEC Proofreading'); } catch(ce) {}
+          }
+        } catch(err) {}
+      }
+    }
+
+    // 4. IEC Final Cross check Doc (with forwarded content from Proofread Doc)
+    if (iecFinalCheck === 'Yes') {
+      var fDocTitle = campaignName + ' - IEC Final Cross check';
+      var fDocSearch = iecFolder.searchFiles("title = '" + fDocTitle + "' and trashed = false");
+      if (fDocSearch.hasNext()) {
+        iecFinalCheckDocUrl = fDocSearch.next().getUrl();
+      } else {
+        try {
+          var fDoc = DocumentApp.create(fDocTitle);
+          var fDocFile = DriveApp.getFileById(fDoc.getId());
+          fDocFile.moveTo(iecFolder);
+          try { fDocFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.EDIT); } catch(pe) {}
+          var fBody = fDoc.getBody();
+          fBody.appendParagraph(fDocTitle).setHeading(DocumentApp.ParagraphHeading.HEADING1);
+          fBody.appendParagraph('Campaign: ' + campaignName);
+          fBody.appendParagraph('Type: IEC Material - Final Cross check');
+          fBody.appendParagraph('--------------------------------------------------\n');
+          fDoc.saveAndClose();
+          iecFinalCheckDocUrl = fDocFile.getUrl();
+
+          // Auto copy content from IEC Proofread Doc into IEC Final Cross check Doc
+          var srcUrl = iecProofreadDocUrl || iecWritingDocUrl;
+          if (srcUrl) {
+            try { copyDevDocContentForward(srcUrl, iecFinalCheckDocUrl, 'IEC Proofreading', 'IEC Final Cross check'); } catch(ce) {}
+          }
+        } catch(err) {}
+      }
+    }
+  }
 
   // Append project row
   pSheet.appendRow([
@@ -2740,7 +2928,13 @@ function handleCreateDevProject(payload) {
     sessionFolder.getUrl(),
     masterDocUrl,
     'Active',
-    new Date().toLocaleString()
+    new Date().toLocaleString(),
+    pptFolderUrl,
+    iecFolderUrl,
+    iecWritingDocUrl,
+    iecDesigningFolderUrl,
+    iecProofreadDocUrl,
+    iecFinalCheckDocUrl
   ]);
 
   var baseDate = new Date();
@@ -2771,7 +2965,13 @@ function handleCreateDevProject(payload) {
       allottedDate,
       '',
       specificDocUrl,
-      ''
+      '',
+      pptFolderUrl,
+      iecFolderUrl,
+      iecWritingDocUrl,
+      iecDesigningFolderUrl,
+      iecProofreadDocUrl,
+      iecFinalCheckDocUrl
     ]);
   }
 
@@ -2785,8 +2985,14 @@ function handleCreateDevProject(payload) {
     success: true,
     message: 'Campaign Development project and 8 sequential tasks created successfully.',
     projectId: projectId,
-    docUrl: docUrl,
-    folderUrl: sessionFolder.getUrl()
+    docUrl: masterDocUrl,
+    pptFolderUrl: pptFolderUrl,
+    folderUrl: sessionFolder.getUrl(),
+    iecFolderUrl: iecFolderUrl,
+    iecWritingDocUrl: iecWritingDocUrl,
+    iecDesigningFolderUrl: iecDesigningFolderUrl,
+    iecProofreadDocUrl: iecProofreadDocUrl,
+    iecFinalCheckDocUrl: iecFinalCheckDocUrl
   };
 }
 
@@ -2876,10 +3082,29 @@ function handleUpdateDevTask(payload) {
         }
       }
 
-      // Copy completed content from current stage doc into the next stage doc under its heading
-      if (currentTask.docLink && nextTask && nextTask.docLink) {
+      // Copy completed content into the next stage doc
+      var sourceDocUrl = currentTask.docLink;
+      if (currentTask.stage.toLowerCase() === 'ppt development') {
+        // When PPT Development completes, source text comes from Step 4 (Writing) doc
+        for (var pt = 0; pt < projectTasks.length; pt++) {
+          if (projectTasks[pt].stage.toLowerCase() === 'writing') {
+            sourceDocUrl = projectTasks[pt].docLink;
+            break;
+          }
+        }
+      }
+
+      // Only attempt to copy if both source and target are valid Google Docs
+      if (sourceDocUrl && nextTask && nextTask.docLink &&
+          sourceDocUrl.indexOf('docs.google.com/document') !== -1 &&
+          nextTask.docLink.indexOf('docs.google.com/document') !== -1) {
         try {
-          copyDevDocContentForward(currentTask.docLink, nextTask.docLink, currentTask.stage, nextStageName);
+          copyDevDocContentForward(
+            sourceDocUrl,
+            nextTask.docLink,
+            currentTask.stage.toLowerCase() === 'ppt development' ? 'Writing' : currentTask.stage,
+            nextStageName
+          );
         } catch(cErr) {}
       }
     }
