@@ -2431,71 +2431,75 @@ function ensureDevSheets(ss) {
 }
 
 function getOrCreateDevStreamFolder(streamName) {
-  // ── Find Base Shared Drive or Root Folder ──
-  // 1. Try to find the existing Shared Drive / base folder where branches (e.g. Delhi) reside
-  var baseFolder = null;
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  // Exact Shared Drive Hierarchy:
+  // BODH Drive -> 2 - Bodh Data - All Years (ID: 1Z6PKvQbNXo2RJ7DGZsCaWgoO1nzZiPgw)
+  //   -> 2 - Events Reports - Year Wise
+  //     -> Delhi (IN)
+  //       -> Head Office
+  //         -> [streamName] (Campaign Development, SM Development, Website Reporting, Blogs / Articles)
 
-  // Inspect existing Posts/Events sheet to find where branches are located
+  var BODH_DATA_ALL_YEARS_ID = '1Z6PKvQbNXo2RJ7DGZsCaWgoO1nzZiPgw';
+  var baseAllYearsFolder = null;
   try {
-    var postsSheet = ss.getSheetByName(POSTS_SHEET);
-    if (postsSheet) {
-      var pData = postsSheet.getDataRange().getValues();
-      for (var p = 1; p < pData.length; p++) {
-        var link = pData[p][21] || pData[p][20] || '';
-        if (link && link.indexOf('drive.google.com') !== -1) {
-          var match = link.match(/[-\w]{25,}/);
-          if (match) {
-            var f = DriveApp.getFolderById(match[0]);
-            // Walk up parents to find either 'Delhi' or its parent (the Shared Drive root)
-            var curr = f;
-            var safety = 0;
-            while (curr && safety < 6) {
-              safety++;
-              if (curr.getName().toLowerCase() === 'delhi') {
-                baseFolder = curr;
-                break;
-              }
-              var parents = curr.getParents();
-              if (parents.hasNext()) {
-                curr = parents.next();
-              } else {
-                break;
-              }
-            }
-            if (baseFolder) break;
-          }
+    baseAllYearsFolder = DriveApp.getFolderById(BODH_DATA_ALL_YEARS_ID);
+  } catch(e) {}
+
+  // 1. Locate "2 - Events Reports - Year Wise"
+  var eventReportsFolder = null;
+  if (baseAllYearsFolder) {
+    var erSearch = baseAllYearsFolder.searchFolders("title = '2 - Events Reports - Year Wise' and trashed = false");
+    if (erSearch.hasNext()) {
+      eventReportsFolder = erSearch.next();
+    } else {
+      // Fallback check by partial name
+      var allSub = baseAllYearsFolder.getFolders();
+      while (allSub.hasNext()) {
+        var sub = allSub.next();
+        if (sub.getName().indexOf('Events Reports') !== -1) {
+          eventReportsFolder = sub;
+          break;
         }
       }
     }
-  } catch(e) {}
-
-  // 2. If 'Delhi' wasn't found via existing posts, search across all accessible folders (including Shared Drives)
-  var delhiFolder = null;
-  if (baseFolder && baseFolder.getName().toLowerCase() === 'delhi') {
-    delhiFolder = baseFolder;
-  } else {
-    try {
-      var dSearch = DriveApp.searchFolders("title = 'Delhi' and trashed = false");
-      if (dSearch.hasNext()) {
-        delhiFolder = dSearch.next();
-      }
-    } catch(err) {}
   }
 
-  // 3. If Delhi folder still not found, check Root
-  if (!delhiFolder) {
-    var root = DriveApp.getRootFolder();
-    var dSearch2 = root.searchFolders("title = 'Delhi' and trashed = false");
-    if (dSearch2.hasNext()) {
-      delhiFolder = dSearch2.next();
+  // 2. Locate "Delhi (IN)"
+  var delhiFolder = null;
+  var parentForDelhi = eventReportsFolder || baseAllYearsFolder;
+
+  if (parentForDelhi) {
+    var dSearch = parentForDelhi.searchFolders("title = 'Delhi (IN)' and trashed = false");
+    if (dSearch.hasNext()) {
+      delhiFolder = dSearch.next();
     } else {
-      delhiFolder = root.createFolder('Delhi');
+      // Check for 'Delhi' without (IN) or partial match
+      var subs = parentForDelhi.getFolders();
+      while (subs.hasNext()) {
+        var sFolder = subs.next();
+        var sName = sFolder.getName().toLowerCase();
+        if (sName === 'delhi (in)' || sName === 'delhi' || sName.indexOf('delhi') !== -1) {
+          delhiFolder = sFolder;
+          break;
+        }
+      }
+      if (!delhiFolder) {
+        delhiFolder = parentForDelhi.createFolder('Delhi (IN)');
+      }
     }
   }
 
-  // 4. Inside 'Delhi', find or create 'Head Office'
-  var hoFolder;
+  // Fallback if base ID was unreachable
+  if (!delhiFolder) {
+    var globalDSearch = DriveApp.searchFolders("title = 'Delhi (IN)' and trashed = false");
+    if (globalDSearch.hasNext()) {
+      delhiFolder = globalDSearch.next();
+    } else {
+      delhiFolder = DriveApp.getRootFolder().createFolder('Delhi (IN)');
+    }
+  }
+
+  // 3. Inside 'Delhi (IN)', find or create 'Head Office'
+  var hoFolder = null;
   var hoSearch = delhiFolder.searchFolders("title = 'Head Office' and trashed = false");
   if (hoSearch.hasNext()) {
     hoFolder = hoSearch.next();
@@ -2503,7 +2507,7 @@ function getOrCreateDevStreamFolder(streamName) {
     hoFolder = delhiFolder.createFolder('Head Office');
   }
 
-  // 5. Ensure all 4 folders exist inside 'Delhi / Head Office'
+  // 4. Inside 'Head Office', ensure all 4 stream folders exist
   var streams = ['Campaign Development', 'SM Development', 'Website Reporting', 'Blogs / Articles'];
   var targetFolder = null;
   for (var s = 0; s < streams.length; s++) {
