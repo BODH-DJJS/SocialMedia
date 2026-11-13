@@ -36,15 +36,25 @@ function ensureSheets() {
     {role: 'Photo Editor', prefix: 'photoedit'},
     {role: 'Video Editor', prefix: 'videoedit'},
     {role: 'Media CrossChecker', prefix: 'mediacheck'},
-    {role: 'Uploader', prefix: 'uploader'}
+    {role: 'Uploader', prefix: 'uploader'},
+    // Development Pipeline Roles
+    {role: 'Campaign Ideator', prefix: 'ideator'},
+    {role: 'Campaign Researcher', prefix: 'researcher'},
+    {role: 'Sequencer', prefix: 'sequencer'},
+    {role: 'Campaign Writer', prefix: 'camp_writer'},
+    {role: 'PPT Designer', prefix: 'ppt_dev'},
+    {role: 'Campaign Proofreader', prefix: 'camp_proof'},
+    {role: 'Campaign Editor', prefix: 'camp_editor'},
+    {role: 'Final Reviewer', prefix: 'final_rev'}
   ];
 
   for (var r = 0; r < roles.length; r++) {
     var count = roleCounts[roles[r].role] || 0;
-    // Add users until we have at least 5 for this role
+    // Add users until we have at least 1 sample user for each role
     var suffix = count + 1;
-    while (count < 5) {
-      usersSheet.appendRow([roles[r].prefix + suffix, 'Sample ' + roles[r].role + ' ' + suffix, roles[r].role]);
+    var targetCount = roles[r].role.indexOf('Campaign') !== -1 || roles[r].role === 'Sequencer' || roles[r].role === 'PPT Designer' || roles[r].role === 'Final Reviewer' ? 2 : 5;
+    while (count < targetCount) {
+      usersSheet.appendRow([roles[r].prefix + suffix + '@example.com', 'Sample ' + roles[r].role + ' ' + suffix, roles[r].role]);
       count++;
       suffix++;
     }
@@ -538,6 +548,7 @@ function cleanupAndSyncTasks(ss) {
 function handleGetTasks(payload) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   try {
+    ensureSheets();
     cleanupAndSyncTasks(ss);
   } catch(e) {}
   
@@ -2398,6 +2409,24 @@ function ensureDevSheets(ss) {
       'TaskID', 'ProjectID', 'Stage', 'Assignee', 'AssigneeEmail',
       'Status', 'DueDate', 'AllottedDate', 'CompletedAt', 'DocLink', 'Notes'
     ]);
+  }
+
+  if (!ss.getSheetByName(DEV_PIPELINE_SHEET)) {
+    var devPipeSheet = ss.insertSheet(DEV_PIPELINE_SHEET);
+    devPipeSheet.appendRow(['Stream', 'Stage Name', 'Required Role', 'Cadence Days', 'Depends On']);
+    var devStages = [
+      ['Campaign Development', 'Ideation', 'Campaign Ideator', 4, ''],
+      ['Campaign Development', 'Research', 'Campaign Researcher', 8, 'Ideation'],
+      ['Campaign Development', 'Selection and sequencing', 'Sequencer', 12, 'Research'],
+      ['Campaign Development', 'Writing', 'Campaign Writer', 16, 'Selection and sequencing'],
+      ['Campaign Development', 'PPT Development', 'PPT Designer', 20, 'Writing'],
+      ['Campaign Development', 'Proofreading', 'Campaign Proofreader', 24, 'PPT Development'],
+      ['Campaign Development', 'Editing', 'Campaign Editor', 28, 'Proofreading'],
+      ['Campaign Development', 'Final Check', 'Final Reviewer', 32, 'Editing']
+    ];
+    for (var i = 0; i < devStages.length; i++) {
+      devPipeSheet.appendRow(devStages[i]);
+    }
   }
 }
 
