@@ -1028,46 +1028,28 @@ class _DashboardScreenState extends State<DashboardScreen>
                             ),
                           ),
                           const SizedBox(width: 5),
-                          GestureDetector(
-                            behavior: HitTestBehavior.opaque,
-                            onTap: () {
-                              _lastNewTabClick = DateTime.now();
-                              _openInNewTab(taskUrl);
-                              if (mounted) {
-                                ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text('✓ Post #${task.postNo} opened in new tab'),
-                                    duration: const Duration(milliseconds: 1500),
-                                    behavior: SnackBarBehavior.floating,
-                                    width: 280,
-                                  ),
-                                );
-                              }
-                            },
-                            child: Tooltip(
-                              message: 'Open in new tab (Ctrl+Click)',
-                              child: InkWell(
-                                borderRadius: BorderRadius.circular(4),
-                                onTap: () {
-                                  _lastNewTabClick = DateTime.now();
-                                  _openInNewTab(taskUrl);
-                                  if (mounted) {
-                                    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: Text('✓ Post #${task.postNo} opened in new tab'),
-                                        duration: const Duration(milliseconds: 1500),
-                                        behavior: SnackBarBehavior.floating,
-                                        width: 280,
-                                      ),
-                                    );
-                                  }
-                                },
-                                child: Padding(
-                                  padding: const EdgeInsets.all(4),
-                                  child: Icon(Icons.open_in_new, size: 14, color: Colors.blue.shade700),
-                                ),
+                          Tooltip(
+                            message: 'Open in background tab (Ctrl+Click)',
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(4),
+                              onTap: () {
+                                _lastNewTabClick = DateTime.now();
+                                _openInNewTab(taskUrl);
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('✓ Post #${task.postNo} opened in background tab'),
+                                      duration: const Duration(milliseconds: 1500),
+                                      behavior: SnackBarBehavior.floating,
+                                      width: 280,
+                                    ),
+                                  );
+                                }
+                              },
+                              child: Padding(
+                                padding: const EdgeInsets.all(4),
+                                child: Icon(Icons.open_in_new, size: 14, color: Colors.blue.shade700),
                               ),
                             ),
                           ),
@@ -2226,7 +2208,33 @@ class _DashboardScreenState extends State<DashboardScreen>
         fragment: path,
         queryParameters: {},
       ).toString();
-      html.window.open(newUrl, '_blank');
+
+      final isMac = html.window.navigator.platform?.toUpperCase().contains('MAC') ?? false;
+
+      // 1. Create a native anchor element attached to DOM
+      final anchor = html.AnchorElement(href: newUrl)
+        ..target = '_blank'
+        ..rel = 'noopener noreferrer'
+        ..style.display = 'none';
+      html.document.body?.append(anchor);
+
+      // 2. Dispatch simulated Ctrl+Click (or Cmd+Click on Mac) so the browser opens it in a background tab
+      final mouseEvent = html.MouseEvent(
+        'click',
+        canBubble: true,
+        cancelable: true,
+        view: html.window,
+        ctrlKey: !isMac,
+        metaKey: isMac,
+      );
+
+      final dispatched = anchor.dispatchEvent(mouseEvent);
+      anchor.remove();
+
+      // Fallback if browser blocked the synthetic event
+      if (!dispatched) {
+        html.window.open(newUrl, '_blank');
+      }
     } catch (_) {
       html.window.open('#$path', '_blank');
     }
