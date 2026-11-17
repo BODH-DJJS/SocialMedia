@@ -2715,31 +2715,127 @@ function ensureDevSheets(ss) {
     }
   }
 
-  if (!ss.getSheetByName(DEV_PIPELINE_SHEET)) {
-    var devPipeSheet = ss.insertSheet(DEV_PIPELINE_SHEET);
+  var devPipeSheet = ss.getSheetByName(DEV_PIPELINE_SHEET);
+  if (!devPipeSheet) {
+    devPipeSheet = ss.insertSheet(DEV_PIPELINE_SHEET);
     devPipeSheet.appendRow(['Stream', 'Stage Name', 'Required Role', 'Cadence Days', 'Depends On']);
-    var devStages = [
-      ['Campaign Development', 'Ideation', 'Campaign Ideator', 4, ''],
-      ['Campaign Development', 'Research', 'Campaign Researcher', 8, 'Ideation'],
-      ['Campaign Development', 'Selection and sequencing', 'Sequencer', 12, 'Research'],
-      ['Campaign Development', 'Writing', 'Campaign Writer', 16, 'Selection and sequencing'],
-      ['Campaign Development', 'PPT Development', 'PPT Designer', 20, 'Writing'],
-      ['Campaign Development', 'Proofreading', 'Campaign Proofreader', 24, 'PPT Development'],
-      ['Campaign Development', 'Editing', 'Campaign Editor', 28, 'Proofreading'],
-      ['Campaign Development', 'Final Check', 'Final Reviewer', 32, 'Editing']
-    ];
-    for (var i = 0; i < devStages.length; i++) {
-      devPipeSheet.appendRow(devStages[i]);
+  }
+
+  var devStages = [
+    // ── Campaign Development ──
+    ['Campaign Development', 'Ideation', 'Campaign Ideator', 4, ''],
+    ['Campaign Development', 'Research', 'Campaign Researcher', 8, 'Ideation'],
+    ['Campaign Development', 'Selection and sequencing', 'Sequencer', 12, 'Research'],
+    ['Campaign Development', 'Writing', 'Campaign Writer', 16, 'Selection and sequencing'],
+    ['Campaign Development', 'PPT Development', 'PPT Designer', 20, 'Writing'],
+    ['Campaign Development', 'Proofreading', 'Campaign Proofreader', 24, 'PPT Development'],
+    ['Campaign Development', 'Editing', 'Campaign Editor', 28, 'Proofreading'],
+    ['Campaign Development', 'Final Check', 'Final Reviewer', 32, 'Editing'],
+
+    // ── SM Development ──
+    ['SM Development', 'Writing', 'Writer', 2, ''],
+    ['SM Development', 'Editing', 'Editor', 4, 'Writing'],
+    ['SM Development', 'Proofreading', 'Proofreader', 6, 'Editing'],
+    ['SM Development', 'Text Crosscheck', 'CrossChecker', 8, 'Proofreading'],
+    ['SM Development', 'Thumbnail Selection', 'Thumbnail Designer', 2, ''],
+    ['SM Development', 'Thumbnail Processing', 'Thumbnail Designer', 4, 'Thumbnail Selection'],
+    ['SM Development', 'Thumbnail Cross checking', 'Thumbnail Designer', 6, 'Thumbnail Processing'],
+    ['SM Development', 'Photo Editing', 'Photo Editor', 4, ''],
+    ['SM Development', 'Video Editing', 'Video Editor', 4, ''],
+    ['SM Development', 'Media Cross Check', 'Media CrossChecker', 6, 'Photo Editing, Video Editing'],
+    ['SM Development', 'Ready to Post', 'Uploader', 10, 'Text Crosscheck, Thumbnail Cross checking, Media Cross Check'],
+    ['SM Development', 'Photos Clean', 'Photo Selector', 12, 'Ready to Post'],
+
+    // ── Website Reporting ──
+    ['Website Reporting', 'Writing', 'Writer', 3, ''],
+    ['Website Reporting', 'Editing', 'Editor', 6, 'Writing'],
+    ['Website Reporting', 'Proofreading', 'Proofreader', 9, 'Editing'],
+    ['Website Reporting', 'Text Crosscheck', 'CrossChecker', 12, 'Proofreading'],
+    ['Website Reporting', 'Raw Photos', 'Raw Photos Selector', 3, ''],
+    ['Website Reporting', 'Selected Photos', 'Photo Editor', 6, 'Raw Photos'],
+    ['Website Reporting', 'Thumbnail Selection', 'Thumbnail Designer', 6, ''],
+
+    // ── Blogs / Articles ──
+    ['Blogs / Articles', 'Writing', 'Writer', 4, ''],
+    ['Blogs / Articles', 'Editing', 'Editor', 7, 'Writing'],
+    ['Blogs / Articles', 'Proofreading', 'Proofreader', 10, 'Editing'],
+    ['Blogs / Articles', 'Text Crosscheck', 'CrossChecker', 12, 'Proofreading'],
+    ['Blogs / Articles', 'Thumbnail Selection', 'Thumbnail Designer', 7, '']
+  ];
+
+  var existingPipeData = devPipeSheet.getDataRange().getValues();
+  var existingPipeKeys = {};
+  for (var p = 1; p < existingPipeData.length; p++) {
+    var pStream = (existingPipeData[p][0] || '').toString().trim().toLowerCase();
+    var pStage = (existingPipeData[p][1] || '').toString().trim().toLowerCase();
+    existingPipeKeys[pStream + '||' + pStage] = true;
+  }
+
+  for (var s = 0; s < devStages.length; s++) {
+    var key = devStages[s][0].toLowerCase() + '||' + devStages[s][1].toLowerCase();
+    if (!existingPipeKeys[key]) {
+      devPipeSheet.appendRow(devStages[s]);
+      existingPipeKeys[key] = true;
     }
   }
 
-  if (!ss.getSheetByName(DEV_USERS_SHEET)) {
-    var devUsersSheet = ss.insertSheet(DEV_USERS_SHEET);
+  var devUsersSheet = ss.getSheetByName(DEV_USERS_SHEET);
+  if (!devUsersSheet) {
+    devUsersSheet = ss.insertSheet(DEV_USERS_SHEET);
     devUsersSheet.appendRow(['Email', 'Name', 'Role', 'Category']);
-  } else {
-    var devUsersSheet = ss.getSheetByName(DEV_USERS_SHEET);
-    if (devUsersSheet.getLastColumn() < 4) {
-      devUsersSheet.getRange(1, 4).setValue('Category');
+  } else if (devUsersSheet.getLastColumn() < 4) {
+    devUsersSheet.getRange(1, 4).setValue('Category');
+  }
+
+  var sampleDevUsers = [
+    // ── Campaign Development ──
+    ['camp.writer@djjs.org', 'Sample Campaign Writer (Replace Me)', 'Campaign Writer', 'Campaign Development'],
+    ['camp.editor@djjs.org', 'Sample Campaign Editor (Replace Me)', 'Campaign Editor', 'Campaign Development'],
+    ['camp.proof@djjs.org', 'Sample Campaign Proofreader (Replace Me)', 'Campaign Proofreader', 'Campaign Development'],
+    ['camp.ppt@djjs.org', 'Sample PPT Designer (Replace Me)', 'PPT Designer', 'Campaign Development'],
+    ['camp.review@djjs.org', 'Sample Final Reviewer (Replace Me)', 'Final Reviewer', 'Campaign Development'],
+    
+    // ── SM Development ──
+    ['sm.writer@djjs.org', 'Sample SM Writer (Replace Me)', 'Writer', 'SM Development'],
+    ['sm.editor@djjs.org', 'Sample SM Editor (Replace Me)', 'Editor', 'SM Development'],
+    ['sm.proof@djjs.org', 'Sample SM Proofreader (Replace Me)', 'Proofreader', 'SM Development'],
+    ['sm.crosscheck@djjs.org', 'Sample SM CrossChecker (Replace Me)', 'CrossChecker', 'SM Development'],
+    ['sm.thumbnail@djjs.org', 'Sample SM Thumbnail Designer (Replace Me)', 'Thumbnail Designer', 'SM Development'],
+    ['sm.photoedit@djjs.org', 'Sample SM Photo Editor (Replace Me)', 'Photo Editor', 'SM Development'],
+    ['sm.videoedit@djjs.org', 'Sample SM Video Editor (Replace Me)', 'Video Editor', 'SM Development'],
+    ['sm.uploader@djjs.org', 'Sample SM Uploader (Replace Me)', 'Uploader', 'SM Development'],
+
+    // ── Website Reporting ──
+    ['web.writer@djjs.org', 'Sample Web Writer (Replace Me)', 'Writer', 'Website Reporting'],
+    ['web.editor@djjs.org', 'Sample Web Editor (Replace Me)', 'Editor', 'Website Reporting'],
+    ['web.proof@djjs.org', 'Sample Web Proofreader (Replace Me)', 'Proofreader', 'Website Reporting'],
+    ['web.photos@djjs.org', 'Sample Web Photo Selector (Replace Me)', 'Raw Photos Selector', 'Website Reporting'],
+    ['web.photoedit@djjs.org', 'Sample Web Photo Editor (Replace Me)', 'Photo Editor', 'Website Reporting'],
+    ['web.thumbnail@djjs.org', 'Sample Web Thumbnail Designer (Replace Me)', 'Thumbnail Designer', 'Website Reporting'],
+
+    // ── Blogs / Articles ──
+    ['blog.writer@djjs.org', 'Sample Blog Writer (Replace Me)', 'Writer', 'Blogs / Articles'],
+    ['blog.editor@djjs.org', 'Sample Blog Editor (Replace Me)', 'Editor', 'Blogs / Articles'],
+    ['blog.proof@djjs.org', 'Sample Blog Proofreader (Replace Me)', 'Proofreader', 'Blogs / Articles'],
+    ['blog.crosscheck@djjs.org', 'Sample Blog CrossChecker (Replace Me)', 'CrossChecker', 'Blogs / Articles'],
+    ['blog.thumbnail@djjs.org', 'Sample Blog Thumbnail Designer (Replace Me)', 'Thumbnail Designer', 'Blogs / Articles'],
+
+    // ── Cross-Stream / All ──
+    ['lead.admin@djjs.org', 'Sample Lead Coordinator (Replace Me)', 'Coordinator', 'All']
+  ];
+
+  var existingUserData = devUsersSheet.getDataRange().getValues();
+  var existingEmails = {};
+  for (var u = 1; u < existingUserData.length; u++) {
+    var emailKey = (existingUserData[u][0] || '').toString().trim().toLowerCase();
+    if (emailKey) existingEmails[emailKey] = true;
+  }
+
+  for (var u = 0; u < sampleDevUsers.length; u++) {
+    var sEmail = sampleDevUsers[u][0].toLowerCase();
+    if (!existingEmails[sEmail]) {
+      devUsersSheet.appendRow(sampleDevUsers[u]);
+      existingEmails[sEmail] = true;
     }
   }
 }
