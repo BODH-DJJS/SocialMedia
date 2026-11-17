@@ -1240,14 +1240,12 @@ function copyForwardDocument(rowIndex, headers, taskSheet) {
         var nextDoc = DocumentApp.openById(nextDocIdMatch[0]);
         var nextBody = nextDoc.getBody();
         
-        // Clear out the next doc except for the very first paragraph
+        // Cleanly wipe the next doc to avoid any duplicate blocks if triggered multiple times
         try {
-          var numNextChildren = nextBody.getNumChildren();
-          while (numNextChildren > 1) {
-            nextBody.removeChild(nextBody.getChild(numNextChildren - 1));
-            numNextChildren--;
-          }
-        } catch(e) {}
+          nextBody.clear();
+          nextBody.appendParagraph('Post: ' + postNo + ' | ' + nextStage + ' Document')
+            .setHeading(DocumentApp.ParagraphHeading.HEADING1);
+        } catch(clearErr) {}
         
         // Helper function to append a doc's content
         function appendDocContent(docIdToCopy, stageNameToLog) {
@@ -1292,7 +1290,11 @@ function copyForwardDocument(rowIndex, headers, taskSheet) {
           if (prevDocUrl && prevDocUrl.indexOf('document/d/') !== -1) {
             var prevDocIdMatch = prevDocUrl.match(/[-\w]{25,}/);
             if (prevDocIdMatch) {
-              appendDocContent(prevDocIdMatch[0], prevStageName);
+              // Avoid duplicating if the previous stage's content was already embedded by the user
+              var currentText = nextBody.getText();
+              if (currentText.indexOf('--- Content inherited from ' + prevStageName) === -1) {
+                appendDocContent(prevDocIdMatch[0], prevStageName);
+              }
             }
           }
         }
