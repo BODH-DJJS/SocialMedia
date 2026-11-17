@@ -409,6 +409,68 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     );
   }
 
+  void _confirmDeletePostWorkflow(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: const [
+            Icon(Icons.warning_amber_rounded, color: Colors.red, size: 28),
+            SizedBox(width: 8),
+            Text('Delete Workflow?'),
+          ],
+        ),
+        content: Text(
+          'Are you sure you want to delete all workflow tasks for Post #${event.postNo}?\n\n'
+          'This will remove all assigned tasks and convert the post back to Inactive.',
+          style: const TextStyle(fontSize: 14, height: 1.4),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red.shade700,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            icon: const Icon(Icons.delete_forever, size: 18),
+            label: const Text('Delete & Make Inactive', style: TextStyle(fontWeight: FontWeight.bold)),
+            onPressed: () async {
+              Navigator.pop(ctx);
+              final provider = context.read<EventProvider>();
+              final messenger = ScaffoldMessenger.of(context);
+              final ok = await provider.deleteWorkflow(
+                postNo: event.postNo,
+                isCombined: event.isCombined,
+              );
+              if (mounted) {
+                messenger.showSnackBar(
+                  SnackBar(
+                    content: Text(ok
+                        ? 'Post #${event.postNo} workflow deleted and marked Inactive.'
+                        : 'Failed to delete workflow.'),
+                    backgroundColor: ok ? Colors.green : Colors.red,
+                  ),
+                );
+                if (ok) {
+                  if (context.canPop()) {
+                    context.pop();
+                  } else {
+                    context.go('/dashboard');
+                  }
+                }
+              }
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
 
   bool get _hasPreviousStage {
     final s = event.stage.toLowerCase().replaceAll(' ', '');
@@ -666,6 +728,18 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
         ),
         title: Text('Post ${e.postNo} • ${e.stage}'),
         actions: [
+          Consumer<AuthProvider>(
+            builder: (context, auth, _) {
+              if (auth.role.toLowerCase() == 'admin') {
+                return IconButton(
+                  icon: const Icon(Icons.delete_outline, color: Colors.red),
+                  tooltip: 'Delete Workflow (Make Inactive)',
+                  onPressed: () => _confirmDeletePostWorkflow(context),
+                );
+              }
+              return const SizedBox.shrink();
+            },
+          ),
           Container(
             margin: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),

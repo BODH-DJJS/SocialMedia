@@ -8,6 +8,7 @@ var BRANCH_SPOC_SHEET = 'Branch SPOC';
 var DEV_PROJECTS_SHEET = 'Dev_Projects';
 var DEV_TASKS_SHEET = 'Dev_Tasks';
 var DEV_PIPELINE_SHEET = 'Dev_Pipeline_Config';
+var DEV_USERS_SHEET = 'Dev_Users';
 
 function ensureSheets() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -266,6 +267,17 @@ function doPost(e) {
       lock.waitLock(10000);
       try {
         var res = handleRedoDevTask(payload);
+        return respond(res);
+      } finally {
+        lock.releaseLock();
+      }
+    } else if (action === 'getDevUsers') {
+      return respond(handleGetDevUsers());
+    } else if (action === 'deleteDevProject') {
+      var lock = LockService.getScriptLock();
+      lock.waitLock(15000);
+      try {
+        var res = handleDeleteDevProject(payload);
         return respond(res);
       } finally {
         lock.releaseLock();
@@ -2454,6 +2466,11 @@ function ensureDevSheets(ss) {
       devPipeSheet.appendRow(devStages[i]);
     }
   }
+
+  if (!ss.getSheetByName(DEV_USERS_SHEET)) {
+    var devUsersSheet = ss.insertSheet(DEV_USERS_SHEET);
+    devUsersSheet.appendRow(['Email', 'Name', 'Role']);
+  }
 }
 
 function getOrCreateDevStreamFolder(streamName) {
@@ -3502,6 +3519,11 @@ function copyDevDocContentForward(sourceDocUrl, targetDocUrl, sourceStageName, t
     var sBody = sourceDoc.getBody();
     var tBody = targetDoc.getBody();
 
+    // Prevent duplicate handover if already copied
+    if (tBody.getText().indexOf('Handover from Previous Stage: ' + sourceStageName) !== -1) {
+      return;
+    }
+
     // Append a distinct sub-heading in the next document with predecessor's work
     tBody.appendParagraph('\n==================================================');
     tBody.appendParagraph('Handover from Previous Stage: ' + sourceStageName).setHeading(DocumentApp.ParagraphHeading.HEADING2);
@@ -3523,5 +3545,101 @@ function copyDevDocContentForward(sourceDocUrl, targetDocUrl, sourceStageName, t
 
     targetDoc.saveAndClose();
   } catch(e) {}
+}
+
+function handleGetDevUsers() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  ensureDevSheets(ss);
+  var devUsersSheet = ss.getSheetByName(DEV_USERS_SHEET);
+  
+  if (!devUsersSheet || devUsersSheet.getLastRow() < 2) {
+    // If Dev_Users sheet is empty, fall back to social media users so UI remains functional
+    return handleGetUsers();
+  }
+
+  var usersData = devUsersSheet.getDataRange().getValues();
+  var tasksData = [];
+  var tSheet = ss.getSheetByName(DEV_TASKS_SHEET);
+  if (tSheet && tSheet.getLastRow() >= 2) {
+    tasksData = tSheet.getDataRange().getValues();
+  }
+
+  // Count active tasks per user in Development
+  var activeCounts = {};
+  for (var t = 1; t < tasksData.length; t++) {
+    var assigneeEmail = tasksData[t][4]; // AssigneeEmail
+    var status = tasksData[t][5]; // Status
+    if (assigneeEmail && status !== 'Done') {
+      var eKey = assigneeEmail.toString().trim().toLowerCase();
+      activeCounts[eKey] = (activeCounts[eKey] || 0) + 1;
+    }
+  }
+
+  var users = [];
+  for (var i = 1; i < usersData.length; i++) {
+    var email = (usersData[i][0] || '').toString().trim();
+    var name = (usersData[i][1] || '').toString().trim();
+    var role = usersData[i][2] ? usersData[i][2].toString().trim() : '';
+    var activeTasks = activeCounts[email.toLowerCase()] || 0;
+
+    if (email) {
+      users.push({
+        email: email,
+        username: email,
+        name: name || email,
+        role: role,
+        status: activeTasks > 0 ? 'Engaged' : 'Available',
+        activeTasks: activeTasks
+      });
+    }
+  }
+
+  return { success: true, users: users };
+}
+
+function handleDeleteDevProject(payload) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  ensureDevSheets(ss);
+  var pSheet = ss.getSheetByName(DEV_PROJECTS_SHEET);
+  var tSheet = ss.getSheetByName(DEV_TASKS_SHEET);
+  
+  var projectId = (payload.projectId || '').toString().trim();
+  if (!projectId) return { success: false, message: 'projectId required' };
+  
+  // 1. Delete all tasks for this projectId from DEV_TASKS_SHEET
+  var deletedTasks = 0;
+  if (tSheet && tSheet.getLastRow() >= 2) {
+    var tData = tSheet.getDataRange().getValues();
+    var pIdCol = tData[0].indexOf('ProjectID');
+    if (pIdCol !== -1) {
+      for (var t = tData.length - 1; t >= 1; t--) {
+        if ((tData[t][pIdCol] || '').toString().trim() === projectId) {
+          tSheet.deleteRow(t + 1);
+          deletedTasks++;
+        }
+      }
+    }
+  }
+  
+  // 2. Delete the project row from DEV_PROJECTS_SHEET
+  var deletedProject = false;
+  if (pSheet && pSheet.getLastRow() >= 2) {
+    var pData = pSheet.getDataRange().getValues();
+    var projIdCol = pData[0].indexOf('ProjectID');
+    if (projIdCol !== -1) {
+      for (var p = pData.length - 1; p >= 1; p--) {
+        if ((pData[p][projIdCol] || '').toString().trim() === projectId) {
+          pSheet.deleteRow(p + 1);
+          deletedProject = true;
+          break;
+        }
+      }
+    }
+  }
+  
+  return {
+    success: true,
+    message: 'Project ' + projectId + ' and ' + deletedTasks + ' tasks deleted successfully.'
+  };
 }
 

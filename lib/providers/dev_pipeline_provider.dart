@@ -148,4 +148,31 @@ class DevPipelineProvider with ChangeNotifier {
       return false;
     }
   }
+
+  Future<bool> deleteProject(String projectId) async {
+    _isLoading = true;
+    notifyListeners();
+
+    try {
+      final resp = await _apiService.postData({
+        'action': 'deleteDevProject',
+        'projectId': projectId,
+      });
+
+      if (resp['success'] == true) {
+        _projects.removeWhere((p) => p.projectId == projectId);
+        _tasks.removeWhere((t) => t.projectId == projectId);
+        notifyListeners();
+        await fetchDevData();
+        return true;
+      }
+      return false;
+    } catch (e) {
+      debugPrint('Error deleting dev project: $e');
+      return false;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
 }

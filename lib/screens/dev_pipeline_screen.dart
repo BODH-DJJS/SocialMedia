@@ -257,6 +257,7 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final auth = context.read<AuthProvider>();
       context.read<DevPipelineProvider>().fetchDevData(role: auth.role, username: auth.username);
+      context.read<EventProvider>().fetchDevUsers();
     });
   }
 
@@ -610,6 +611,42 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
                   ),
                 ),
               ),
+              if (_campaignFilter != 'All') ...[
+                const SizedBox(width: 8),
+                Tooltip(
+                  message: 'Delete Selected Campaign',
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.red,
+                      side: BorderSide(color: Colors.red.shade300),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                    icon: const Icon(Icons.delete_outline, size: 16),
+                    label: const Text('Delete Campaign', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                    onPressed: () {
+                      String targetProjId = '';
+                      for (final p in provider.projects) {
+                        if (p.campaignName.toLowerCase() == _campaignFilter.toLowerCase()) {
+                          targetProjId = p.projectId;
+                          break;
+                        }
+                      }
+                      if (targetProjId.isEmpty) {
+                        for (final t in provider.tasks) {
+                          if (t.campaignName.toLowerCase() == _campaignFilter.toLowerCase()) {
+                            targetProjId = t.projectId;
+                            break;
+                          }
+                        }
+                      }
+                      if (targetProjId.isNotEmpty) {
+                        _confirmDeleteDevProject(targetProjId, _campaignFilter);
+                      }
+                    },
+                  ),
+                ),
+              ],
               const SizedBox(width: 8),
               // Status Filter Dropdown
               Container(
@@ -853,6 +890,42 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
                   ),
                 ),
               ),
+              if (_smPostFilter != 'All') ...[
+                const SizedBox(width: 8),
+                Tooltip(
+                  message: 'Delete Selected Post',
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.red,
+                      side: BorderSide(color: Colors.red.shade300),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                    icon: const Icon(Icons.delete_outline, size: 16),
+                    label: const Text('Delete Post', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                    onPressed: () {
+                      String targetProjId = '';
+                      for (final p in provider.projects) {
+                        if (p.campaignName.toLowerCase() == _smPostFilter.toLowerCase()) {
+                          targetProjId = p.projectId;
+                          break;
+                        }
+                      }
+                      if (targetProjId.isEmpty) {
+                        for (final t in provider.tasks) {
+                          if (t.campaignName.toLowerCase() == _smPostFilter.toLowerCase()) {
+                            targetProjId = t.projectId;
+                            break;
+                          }
+                        }
+                      }
+                      if (targetProjId.isNotEmpty) {
+                        _confirmDeleteDevProject(targetProjId, _smPostFilter);
+                      }
+                    },
+                  ),
+                ),
+              ],
               const SizedBox(width: 8),
               // Status Filter Dropdown
               Container(
@@ -1060,6 +1133,42 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
                   ),
                 ),
               ),
+              if (_webIdeaFilter != 'All') ...[
+                const SizedBox(width: 8),
+                Tooltip(
+                  message: 'Delete Selected Idea',
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.red,
+                      side: BorderSide(color: Colors.red.shade300),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                    icon: const Icon(Icons.delete_outline, size: 16),
+                    label: const Text('Delete Idea', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                    onPressed: () {
+                      String targetProjId = '';
+                      for (final p in provider.projects) {
+                        if (p.campaignName.toLowerCase() == _webIdeaFilter.toLowerCase()) {
+                          targetProjId = p.projectId;
+                          break;
+                        }
+                      }
+                      if (targetProjId.isEmpty) {
+                        for (final t in provider.tasks) {
+                          if (t.campaignName.toLowerCase() == _webIdeaFilter.toLowerCase()) {
+                            targetProjId = t.projectId;
+                            break;
+                          }
+                        }
+                      }
+                      if (targetProjId.isNotEmpty) {
+                        _confirmDeleteDevProject(targetProjId, _webIdeaFilter);
+                      }
+                    },
+                  ),
+                ),
+              ],
               const SizedBox(width: 8),
               Container(
                 height: 36,
@@ -1264,6 +1373,42 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
                   ),
                 ),
               ),
+              if (_blogIdeaFilter != 'All') ...[
+                const SizedBox(width: 8),
+                Tooltip(
+                  message: 'Delete Selected Article Idea',
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.red,
+                      side: BorderSide(color: Colors.red.shade300),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                    icon: const Icon(Icons.delete_outline, size: 16),
+                    label: const Text('Delete Article', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                    onPressed: () {
+                      String targetProjId = '';
+                      for (final p in provider.projects) {
+                        if (p.campaignName.toLowerCase() == _blogIdeaFilter.toLowerCase()) {
+                          targetProjId = p.projectId;
+                          break;
+                        }
+                      }
+                      if (targetProjId.isEmpty) {
+                        for (final t in provider.tasks) {
+                          if (t.campaignName.toLowerCase() == _blogIdeaFilter.toLowerCase()) {
+                            targetProjId = t.projectId;
+                            break;
+                          }
+                        }
+                      }
+                      if (targetProjId.isNotEmpty) {
+                        _confirmDeleteDevProject(targetProjId, _blogIdeaFilter);
+                      }
+                    },
+                  ),
+                ),
+              ],
               const SizedBox(width: 8),
               Container(
                 height: 36,
@@ -1556,6 +1701,18 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
                         fontSize: 11,
                         fontWeight: FontWeight.bold,
                         color: Color(0xFF1A237E),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Tooltip(
+                    message: 'Delete Project / Post',
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(4),
+                      onTap: () => _confirmDeleteDevProject(task.projectId, task.campaignName),
+                      child: Padding(
+                        padding: const EdgeInsets.all(2),
+                        child: Icon(Icons.delete_outline, size: 14, color: Colors.red.shade400),
                       ),
                     ),
                   ),
@@ -2147,6 +2304,19 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
                         fontWeight: FontWeight.bold,
                         color: isDone ? Colors.green.shade800 : (task.status == 'Ready' ? const Color(0xFF00897B) : Colors.grey.shade800),
                       ),
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Tooltip(
+                    message: 'Delete Project / Post',
+                    child: IconButton(
+                      icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        _confirmDeleteDevProject(task.projectId, task.campaignName);
+                      },
                     ),
                   ),
                 ],
@@ -2937,6 +3107,14 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
                 ),
               ),
               actions: [
+                TextButton.icon(
+                  icon: const Icon(Icons.delete_outline, color: Colors.red, size: 16),
+                  label: const Text('Delete Project', style: TextStyle(color: Colors.red)),
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    _confirmDeleteDevProject(task.projectId, task.campaignName);
+                  },
+                ),
                 TextButton(
                   onPressed: () => Navigator.pop(ctx),
                   child: const Text('Close', style: TextStyle(color: Colors.grey)),
@@ -2946,6 +3124,57 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
           },
         );
       },
+    );
+  }
+
+  void _confirmDeleteDevProject(String projectId, String projectName) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: const [
+            Icon(Icons.warning_amber_rounded, color: Colors.red, size: 28),
+            SizedBox(width: 8),
+            Text('Delete Project / Post?'),
+          ],
+        ),
+        content: Text(
+          'Are you sure you want to delete "$projectName" (#$projectId)?\n\n'
+          'This will permanently delete this post/project and all its assigned workflow tasks from the Development pipeline.',
+          style: const TextStyle(fontSize: 14, height: 1.4),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red.shade700,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            icon: const Icon(Icons.delete_forever, size: 18),
+            label: const Text('Delete', style: TextStyle(fontWeight: FontWeight.bold)),
+            onPressed: () async {
+              Navigator.pop(ctx);
+              final devProvider = context.read<DevPipelineProvider>();
+              final success = await devProvider.deleteProject(projectId);
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(success
+                        ? '✓ Project #$projectId ("$projectName") deleted successfully.'
+                        : 'Failed to delete project #$projectId.'),
+                    backgroundColor: success ? Colors.green : Colors.red,
+                  ),
+                );
+              }
+            },
+          ),
+        ],
+      ),
     );
   }
 
@@ -3113,7 +3342,7 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
 
     // Read all users from eventProvider
     final eventProvider = context.read<EventProvider>();
-    final users = eventProvider.users;
+    final users = eventProvider.devUsers;
 
     final assignees = <String, Map<String, String>>{};
     for (final st in stages) {
@@ -3476,7 +3705,7 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
     ];
 
     final eventProvider = context.read<EventProvider>();
-    final users = eventProvider.users;
+    final users = eventProvider.devUsers;
 
     final smAssignees = <String, Map<String, String>>{};
     for (final r in smRoles) {
@@ -3806,7 +4035,7 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
     ];
 
     final eventProvider = context.read<EventProvider>();
-    final users = eventProvider.users;
+    final users = eventProvider.devUsers;
 
     final webAssignees = <String, Map<String, String>>{};
     for (final r in webRoles) {
@@ -4117,7 +4346,7 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
     ];
 
     final eventProvider = context.read<EventProvider>();
-    final users = eventProvider.users;
+    final users = eventProvider.devUsers;
 
     final blogAssignees = <String, Map<String, String>>{};
     for (final r in blogRoles) {

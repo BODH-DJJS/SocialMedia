@@ -8,6 +8,7 @@ class EventProvider with ChangeNotifier {
   List<Event> _events = [];
   List<Map<String, dynamic>> _rawPosts = [];
   List<Map<String, dynamic>> _users = [];
+  List<Map<String, dynamic>> _devUsers = [];
   List<Map<String, dynamic>> _spocs = [];
   bool _isLoading = false;
   bool _isSyncing = false;
@@ -26,6 +27,7 @@ class EventProvider with ChangeNotifier {
   List<Event> get events => _events;
   List<Map<String, dynamic>> get rawPosts => _rawPosts;
   List<Map<String, dynamic>> get users => _users;
+  List<Map<String, dynamic>> get devUsers => _devUsers.isNotEmpty ? _devUsers : _users;
   List<Map<String, dynamic>> get spocs => _spocs;
   bool get isLoading => _isLoading;
   bool get isSyncing => _isSyncing;
@@ -330,8 +332,22 @@ class EventProvider with ChangeNotifier {
         _users = usersData.map((e) => e as Map<String, dynamic>).toList();
         notifyListeners();
       }
+      await fetchDevUsers();
     } catch (e) {
       debugPrint('Error fetching users: $e');
+    }
+  }
+
+  Future<void> fetchDevUsers() async {
+    try {
+      final response = await _apiService.postData({'action': 'getDevUsers'});
+      if (response['success'] == true && response['users'] is List) {
+        final List<dynamic> devUsersData = response['users'];
+        _devUsers = devUsersData.map((e) => e as Map<String, dynamic>).toList();
+        notifyListeners();
+      }
+    } catch (e) {
+      debugPrint('Error fetching dev users: $e');
     }
   }
 
