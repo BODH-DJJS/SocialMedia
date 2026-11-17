@@ -1569,12 +1569,12 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
                                   decoration: BoxDecoration(
-                                    color: const Color(0xFF00897B).withOpacity(0.15),
+                                    color: Colors.amber.shade100,
                                     borderRadius: BorderRadius.circular(4),
                                   ),
                                   child: Text(
-                                    '$readyCount Ready',
-                                    style: const TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Color(0xFF00897B)),
+                                    '$readyCount Allotted',
+                                    style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.amber.shade900),
                                   ),
                                 ),
                               ],
@@ -1684,9 +1684,9 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
       statusBadgeText = Colors.green.shade700;
       statusDisplay = 'Done';
     } else if (isReady) {
-      statusBadgeBg = const Color(0xFFE0F2F1);
-      statusBadgeText = const Color(0xFF00897B);
-      statusDisplay = 'Ready / Active';
+      statusBadgeBg = const Color(0xFFFFF9C4);
+      statusBadgeText = const Color(0xFFF57F17);
+      statusDisplay = 'Allotted';
     } else {
       statusBadgeBg = Colors.grey.shade100;
       statusBadgeText = Colors.grey.shade700;
@@ -1698,14 +1698,14 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
       margin: const EdgeInsets.only(bottom: 10),
       color: isDone
           ? Colors.grey.shade50
-          : (isExpired ? const Color(0xFFFFF5F5) : Colors.white),
+          : (isExpired ? const Color(0xFFFFEBEE) : Colors.white),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
         side: BorderSide(
           color: isExpired
               ? Colors.red.shade400
               : (isReady
-                  ? const Color(0xFF00897B).withOpacity(0.6)
+                  ? Colors.amber.shade600
                   : (isDone ? Colors.green.shade200 : Colors.grey.shade300)),
           width: isExpired ? 1.8 : (isReady ? 1.8 : 1),
         ),
@@ -1715,14 +1715,20 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
         onTap: () => _showTaskDetailsDialog(task, stepNum, stageColor),
         child: Container(
           decoration: BoxDecoration(
+            color: isDone
+                ? Colors.transparent
+                : (isExpired ? const Color(0xFFFFEBEE) : Colors.white),
             borderRadius: BorderRadius.circular(12),
             border: Border(
               left: BorderSide(
                 color: isExpired
                     ? Colors.red.shade700
-                    : (isDone ? Colors.green : (isReady ? const Color(0xFF00897B) : stageColor)),
-                width: isExpired ? 5 : 4,
+                    : (isDone ? Colors.green : (isReady ? Colors.amber.shade700 : stageColor)),
+                width: isExpired ? 6 : 4,
               ),
+              top: isExpired ? BorderSide(color: Colors.red.shade300, width: 1.5) : BorderSide.none,
+              right: isExpired ? BorderSide(color: Colors.red.shade300, width: 1.5) : BorderSide.none,
+              bottom: isExpired ? BorderSide(color: Colors.red.shade300, width: 1.5) : BorderSide.none,
             ),
           ),
           padding: const EdgeInsets.all(12),

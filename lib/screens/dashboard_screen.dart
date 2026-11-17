@@ -1020,7 +1020,7 @@ class _DashboardScreenState extends State<DashboardScreen>
       elevation: isDone ? 0 : (isExpired ? 3 : 2),
       color: isDone
           ? Colors.grey.shade100
-          : (isExpired ? const Color(0xFFFFF5F5) : Colors.white),
+          : (isExpired ? const Color(0xFFFFEBEE) : Colors.white),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
         side: BorderSide(
@@ -1056,12 +1056,18 @@ class _DashboardScreenState extends State<DashboardScreen>
           onSecondaryTapDown: (details) => _showPipelineTaskContextMenu(context, details, task),
           child: Container(
             decoration: BoxDecoration(
+              color: isDone
+                  ? Colors.grey.shade100
+                  : (isExpired ? const Color(0xFFFFEBEE) : Colors.white),
               borderRadius: BorderRadius.circular(16),
               border: Border(
                 left: BorderSide(
                   color: isExpired ? Colors.red.shade700 : accentColor,
                   width: isExpired ? 6 : 4,
                 ),
+                top: isExpired ? BorderSide(color: Colors.red.shade300, width: 1.5) : BorderSide.none,
+                right: isExpired ? BorderSide(color: Colors.red.shade300, width: 1.5) : BorderSide.none,
+                bottom: isExpired ? BorderSide(color: Colors.red.shade300, width: 1.5) : BorderSide.none,
               ),
             ),
             padding: const EdgeInsets.all(12),
@@ -1155,14 +1161,15 @@ class _DashboardScreenState extends State<DashboardScreen>
                               : (task.status == 'In Progress'
                                   ? Colors.blue
                                   : (task.status == 'Ready'
-                                      ? Colors.deepOrange
+                                      ? const Color(0xFFFBC02D)
                                       : Colors.grey.shade400)),
                       borderRadius: BorderRadius.circular(8),
+                      border: task.status == 'Ready' ? Border.all(color: const Color(0xFFF57F17), width: 1) : null,
                     ),
                     child: Text(
                       task.status.isEmpty ? 'Pending' : (task.status == 'Ready' ? 'Allotted' : task.status),
-                      style: const TextStyle(
-                        color: Colors.white,
+                      style: TextStyle(
+                        color: task.status == 'Ready' ? const Color(0xFF3E2723) : Colors.white,
                         fontSize: 9,
                         fontWeight: FontWeight.bold,
                       ),
