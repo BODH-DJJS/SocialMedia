@@ -6,6 +6,7 @@ import '../providers/auth_provider.dart';
 import '../providers/dev_pipeline_provider.dart';
 import '../providers/event_provider.dart';
 import '../models/dev_pipeline_models.dart';
+import '../utils/due_date_utils.dart';
 
 class DevPipelineScreen extends StatefulWidget {
   final VoidCallback onSwitchToSocialMedia;
@@ -1491,7 +1492,27 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
     required IconData stageIcon,
     String? groupLabel,
   }) {
-    final readyCount = tasks.where((t) => t.status.toLowerCase() == 'ready').length;
+    final sortedTasks = List<DevTask>.from(tasks);
+    sortedTasks.sort((a, b) => compareDueDates(
+      a.dueDate,
+      b.dueDate,
+      secondaryCompare: () {
+        final aDone = a.status.toLowerCase() == 'done';
+        final bDone = b.status.toLowerCase() == 'done';
+        if (!aDone && bDone) return -1;
+        if (aDone && !bDone) return 1;
+        final aReady = a.status.toLowerCase() == 'ready';
+        final bReady = b.status.toLowerCase() == 'ready';
+        if (aReady && !bReady) return -1;
+        if (!aReady && bReady) return 1;
+        final numA = int.tryParse(a.projectId.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
+        final numB = int.tryParse(b.projectId.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
+        return numA.compareTo(numB);
+      },
+    ));
+
+    final readyCount = sortedTasks.where((t) => t.status.toLowerCase() == 'ready').length;
+    final expiredCount = sortedTasks.where((t) => isDueDateExpired(t.dueDate, isDone: t.status.toLowerCase() == 'done')).length;
 
     return Container(
       width: 310,
@@ -1557,6 +1578,20 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
                                   ),
                                 ),
                               ],
+                              if (expiredCount > 0) ...[
+                                const SizedBox(width: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                  decoration: BoxDecoration(
+                                    color: Colors.red.shade600,
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Text(
+                                    '$expiredCount Expired',
+                                    style: const TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.white),
+                                  ),
+                                ),
+                              ],
                             ],
                           ),
                         ],
@@ -1569,7 +1604,7 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Text(
-                        '${tasks.length}',
+                        '${sortedTasks.length}',
                         style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: stageColor),
                       ),
                     ),
@@ -1581,7 +1616,7 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
 
           // Task List
           Expanded(
-            child: tasks.isEmpty
+            child: sortedTasks.isEmpty
                 ? Center(
                     child: Padding(
                       padding: const EdgeInsets.all(20),
@@ -1600,8 +1635,8 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
                   )
                 : ListView.builder(
                     padding: const EdgeInsets.all(10),
-                    itemCount: tasks.length,
-                    itemBuilder: (context, i) => _buildTaskCard(tasks[i], stepNum, stageColor),
+                    itemCount: sortedTasks.length,
+                    itemBuilder: (context, i) => _buildTaskCard(sortedTasks[i], stepNum, stageColor),
                   ),
           ),
         ],
@@ -1612,6 +1647,7 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
   Widget _buildTaskCard(DevTask task, int stepNum, Color stageColor) {
     final isDone = task.status.toLowerCase() == 'done';
     final isReady = task.status.toLowerCase() == 'ready';
+    final isExpired = isDueDateExpired(task.dueDate, isDone: isDone);
     final isSm = task.stream == 'SM Development' || task.projectId.startsWith('SMD');
     final isWeb = task.stream == 'Website Reporting' || task.projectId.startsWith('WEB');
     final isBlog = task.stream == 'Blogs / Articles' || task.projectId.startsWith('BLOG');
@@ -1658,15 +1694,20 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
     }
 
     return Card(
-      elevation: isReady ? 3 : 1,
+      elevation: isExpired ? 3 : (isReady ? 3 : 1),
       margin: const EdgeInsets.only(bottom: 10),
+      color: isDone
+          ? Colors.grey.shade50
+          : (isExpired ? const Color(0xFFFFF5F5) : Colors.white),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
         side: BorderSide(
-          color: isReady
-              ? const Color(0xFF00897B).withOpacity(0.6)
-              : (isDone ? Colors.green.shade200 : Colors.grey.shade300),
-          width: isReady ? 1.8 : 1,
+          color: isExpired
+              ? Colors.red.shade400
+              : (isReady
+                  ? const Color(0xFF00897B).withOpacity(0.6)
+                  : (isDone ? Colors.green.shade200 : Colors.grey.shade300)),
+          width: isExpired ? 1.8 : (isReady ? 1.8 : 1),
         ),
       ),
       child: InkWell(
@@ -1677,8 +1718,10 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
             borderRadius: BorderRadius.circular(12),
             border: Border(
               left: BorderSide(
-                color: isDone ? Colors.green : (isReady ? const Color(0xFF00897B) : stageColor),
-                width: 4,
+                color: isExpired
+                    ? Colors.red.shade700
+                    : (isDone ? Colors.green : (isReady ? const Color(0xFF00897B) : stageColor)),
+                width: isExpired ? 5 : 4,
               ),
             ),
           ),
@@ -1717,6 +1760,27 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
                     ),
                   ),
                   const Spacer(),
+                  if (isExpired) ...[
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      margin: const EdgeInsets.only(right: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.red.shade600,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.warning_amber_rounded, size: 10, color: Colors.white),
+                          SizedBox(width: 3),
+                          Text(
+                            'EXPIRED',
+                            style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.white),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
@@ -1812,11 +1876,19 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
               const SizedBox(height: 4),
               Row(
                 children: [
-                  const Icon(Icons.calendar_today_outlined, size: 12, color: Colors.grey),
+                  Icon(
+                    isExpired ? Icons.alarm_off : Icons.calendar_today_outlined,
+                    size: 12,
+                    color: isExpired ? Colors.red.shade700 : Colors.grey,
+                  ),
                   const SizedBox(width: 4),
                   Text(
-                    'Due: ${task.dueDate.isNotEmpty ? task.dueDate : 'TBD'}',
-                    style: TextStyle(fontSize: 11, color: Colors.grey.shade700),
+                    '${isExpired ? 'Expired' : 'Due'}: ${task.dueDate.isNotEmpty ? formatDueDateDisplay(task.dueDate) : 'TBD'}',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: isExpired ? Colors.red.shade700 : Colors.grey.shade700,
+                      fontWeight: isExpired ? FontWeight.bold : FontWeight.normal,
+                    ),
                   ),
                 ],
               ),

@@ -10,6 +10,7 @@ import '../providers/event_provider.dart';
 import '../models/event.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dev_pipeline_screen.dart';
+import '../utils/due_date_utils.dart';
 
 class DashboardScreen extends StatefulWidget {
   final String? initialTab;
@@ -821,12 +822,30 @@ class _DashboardScreenState extends State<DashboardScreen>
             tasks.where((t) => t.status != 'Done').toList();
         final doneList = tasks.where((t) => t.status == 'Done').toList();
 
-        // Sort so that "Ready" tasks appear first
-        notStarted.sort((a, b) {
-          if (a.status == 'Ready' && b.status != 'Ready') return -1;
-          if (a.status != 'Ready' && b.status == 'Ready') return 1;
-          return 0;
-        });
+        // Sort in ascending order of due date (earliest & expired first, undated last)
+        notStarted.sort((a, b) => compareDueDates(
+          a.dueDate,
+          b.dueDate,
+          secondaryCompare: () {
+            if (a.status == 'Ready' && b.status != 'Ready') return -1;
+            if (a.status != 'Ready' && b.status == 'Ready') return 1;
+            final numA = int.tryParse(a.postNo.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
+            final numB = int.tryParse(b.postNo.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
+            return numA.compareTo(numB);
+          },
+        ));
+
+        doneList.sort((a, b) => compareDueDates(
+          a.dueDate,
+          b.dueDate,
+          secondaryCompare: () {
+            final numA = int.tryParse(a.postNo.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
+            final numB = int.tryParse(b.postNo.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
+            return numA.compareTo(numB);
+          },
+        ));
+
+        final expiredCount = notStarted.where((t) => isDueDateExpired(t.dueDate, isDone: false)).length;
 
         return Container(
           width: 300,
@@ -885,6 +904,27 @@ class _DashboardScreenState extends State<DashboardScreen>
                         ),
                       ),
                     ),
+                    if (expiredCount > 0) ...[
+                      const SizedBox(width: 4),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 3,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.red.shade600,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          '$expiredCount Expired',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 10,
+                          ),
+                        ),
+                      ),
+                    ],
                     const SizedBox(width: 4),
                     PopupMenuButton<String>(
                       icon: const Icon(Icons.filter_list, size: 18),
@@ -971,13 +1011,25 @@ class _DashboardScreenState extends State<DashboardScreen>
 
   Widget _buildTaskCard(Event task, Color accentColor) {
     final isDone = task.status == 'Done';
+    final isExpired = isDueDateExpired(task.dueDate, isDone: isDone);
     final combinedQuery = task.isCombined ? '&isCombined=true' : '';
     final taskUrl = '/event?postNo=${Uri.encodeComponent(task.postNo)}&stage=${Uri.encodeComponent(task.stage)}&taskId=${Uri.encodeComponent(task.taskId)}$combinedQuery';
 
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
-      elevation: isDone ? 0 : 2,
-      color: isDone ? Colors.grey.shade100 : Colors.white,
+      elevation: isDone ? 0 : (isExpired ? 3 : 2),
+      color: isDone
+          ? Colors.grey.shade100
+          : (isExpired ? const Color(0xFFFFF5F5) : Colors.white),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(
+          color: isExpired
+              ? Colors.red.shade400
+              : Colors.grey.shade200,
+          width: isExpired ? 1.5 : 1,
+        ),
+      ),
       child: Listener(
         onPointerDown: (event) {
           // Middle mouse button (wheel click)
@@ -1005,7 +1057,12 @@ class _DashboardScreenState extends State<DashboardScreen>
           child: Container(
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(16),
-              border: Border(left: BorderSide(color: accentColor, width: 4)),
+              border: Border(
+                left: BorderSide(
+                  color: isExpired ? Colors.red.shade700 : accentColor,
+                  width: isExpired ? 6 : 4,
+                ),
+              ),
             ),
             padding: const EdgeInsets.all(12),
             child: Column(
@@ -1057,6 +1114,35 @@ class _DashboardScreenState extends State<DashboardScreen>
                         ],
                       ),
                     ),
+                  if (isExpired) ...[
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 3,
+                      ),
+                      margin: const EdgeInsets.only(right: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.red.shade600,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.warning_amber_rounded, size: 10, color: Colors.white),
+                          SizedBox(width: 2),
+                          Text(
+                            'EXPIRED',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 9,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 0.3,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                   Container(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 8,
@@ -1180,14 +1266,33 @@ class _DashboardScreenState extends State<DashboardScreen>
                   ],
                   if (task.dueDate.isNotEmpty && !isDone) ...[
                     const Spacer(),
-                    Icon(Icons.timer, size: 12, color: Colors.red.shade400),
-                    const SizedBox(width: 2),
-                    Text(
-                      'Due ' + task.dueDate.split('T')[0],
-                      style: TextStyle(
-                        fontSize: 10,
-                        color: Colors.red.shade600,
-                        fontWeight: FontWeight.bold,
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: isExpired ? Colors.red.shade600 : Colors.grey.shade100,
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(
+                          color: isExpired ? Colors.red.shade700 : Colors.grey.shade300,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            isExpired ? Icons.alarm_off : Icons.timer,
+                            size: 11,
+                            color: isExpired ? Colors.white : Colors.grey.shade700,
+                          ),
+                          const SizedBox(width: 3),
+                          Text(
+                            (isExpired ? 'Expired: ' : 'Due ') + formatDueDateDisplay(task.dueDate),
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: isExpired ? Colors.white : Colors.grey.shade800,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ],
@@ -3843,6 +3948,19 @@ class _DashboardScreenState extends State<DashboardScreen>
       visibleEvents =
           visibleEvents.where((e) => e.status == _myQueueFilter).toList();
     }
+
+    // Sort in ascending order of due date (earliest & expired first, undated last)
+    visibleEvents.sort((a, b) => compareDueDates(
+      a.dueDate,
+      b.dueDate,
+      secondaryCompare: () {
+        if (a.status == 'Ready' && b.status != 'Ready') return -1;
+        if (a.status != 'Ready' && b.status == 'Ready') return 1;
+        final numA = int.tryParse(a.postNo.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
+        final numB = int.tryParse(b.postNo.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
+        return numA.compareTo(numB);
+      },
+    ));
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
