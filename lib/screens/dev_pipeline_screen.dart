@@ -628,6 +628,69 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
     return filtered.isNotEmpty ? filtered : allUsers;
   }
 
+  static String _mapStageToRole(String stage, String stream) {
+    final s = stage.trim().toLowerCase();
+    final st = stream.trim().toLowerCase();
+
+    if (s == 'ideation') return 'Campaign Ideator';
+    if (s == 'research') return 'Campaign Researcher';
+    if (s.contains('sequencing')) return 'Sequencer';
+    if (s == 'ppt development') return 'PPT Designer';
+    if (s == 'final check' || s.contains('final review')) return 'Final Reviewer';
+
+    if (s.contains('thumb')) return 'Thumbnail Designer';
+    if (s == 'raw photos' || s == 'photos clean' || s.contains('photo select')) return 'Raw Photos Selector';
+    if (s == 'selected photos' || s == 'photo editing') return 'Photo Editor';
+    if (s == 'video editing') return 'Video Editor';
+    if (s.contains('media cross')) return 'Media CrossChecker';
+    if (s.contains('uploader') || s == 'ready to post') return 'Uploader';
+    if (s.contains('crosscheck') || s.contains('cross check')) return 'CrossChecker';
+    if (s.contains('proof')) return st.contains('campaign') ? 'Campaign Proofreader' : 'Proofreader';
+    if (s.contains('edit')) return st.contains('campaign') ? 'Campaign Editor' : 'Editor';
+    if (s.contains('writ')) return st.contains('campaign') ? 'Campaign Writer' : 'Writer';
+
+    return stage;
+  }
+
+  static bool _matchesRole(String userRole, String targetRole) {
+    final u = userRole.trim().toLowerCase();
+    final t = targetRole.trim().toLowerCase();
+    if (u.isEmpty || u == 'all' || u == 'admin' || u == 'coordinator' || u == 'lead') {
+      return true;
+    }
+    if (u == t) return true;
+
+    if (t.contains('editor') && !t.contains('photo') && !t.contains('video')) {
+      return u.contains('editor') && !u.contains('photo') && !u.contains('video');
+    }
+    if (t.contains('writer') || t.contains('writ')) {
+      return u.contains('writer') || u.contains('writ');
+    }
+    if (t.contains('proof')) {
+      return u.contains('proof');
+    }
+    if (t.contains('cross')) {
+      return u.contains('cross');
+    }
+    if (t.contains('thumb')) {
+      return u.contains('thumb') || u.contains('designer');
+    }
+    if (t.contains('photo edit') || t == 'selected photos') {
+      return u.contains('photo edit') || u.contains('photo editor');
+    }
+    if (t.contains('photo select') || t.contains('raw photo') || t.contains('photos clean')) {
+      return u.contains('photo select') || u.contains('raw photo') || u.contains('photos clean') || u.contains('selector');
+    }
+    if (t.contains('video')) {
+      return u.contains('video');
+    }
+    if (t.contains('ppt')) {
+      return u.contains('ppt');
+    }
+
+    return u.contains(t) || t.contains(u);
+  }
+
   Widget _buildCampaignPipelineView(DevPipelineProvider provider) {
     final streamProjects = provider.projects.where(_isCampaignProject).toList();
     final streamTasks = provider.tasks.where(_isCampaignTask).toList();
@@ -3867,6 +3930,9 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
                         final idx = entry.key;
                         final st = entry.value;
                         final offset = (idx + 1) * 4;
+                        final expectedRole = _mapStageToRole(st, 'Campaign Development');
+                        final stageUsers = users.where((u) => _matchesRole(u['Role']?.toString() ?? u['role']?.toString() ?? '', expectedRole)).toList();
+                        final displayUsers = stageUsers.isNotEmpty ? stageUsers : users;
 
                         return Padding(
                           padding: const EdgeInsets.only(bottom: 8),
@@ -3887,10 +3953,10 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
                                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                                     isDense: true,
                                   ),
-                                  hint: const Text('Select Assignee', style: TextStyle(fontSize: 12)),
+                                  hint: Text('Select $expectedRole', style: const TextStyle(fontSize: 12)),
                                   value: assignees[st]?['email']?.isNotEmpty == true ? assignees[st]!['email'] : null,
                                   items: [
-                                    ...users.map((u) {
+                                    ...displayUsers.map((u) {
                                       final uEmail = u['Email']?.toString() ?? u['email']?.toString() ?? '';
                                       final uName = u['Name']?.toString() ?? u['name']?.toString() ?? uEmail;
                                       final uRole = u['Role']?.toString() ?? u['role']?.toString() ?? '';
@@ -4196,6 +4262,8 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
                         final roleName = r['role']!;
                         final stageName = r['stage']!;
                         final groupName = r['group']!;
+                        final stageUsers = users.where((u) => _matchesRole(u['Role']?.toString() ?? u['role']?.toString() ?? '', roleName)).toList();
+                        final displayUsers = stageUsers.isNotEmpty ? stageUsers : users;
 
                         return Padding(
                           padding: const EdgeInsets.only(bottom: 8),
@@ -4228,7 +4296,7 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
                                   hint: Text('Select $roleName', style: const TextStyle(fontSize: 12)),
                                   value: smAssignees[roleName]?['email']?.isNotEmpty == true ? smAssignees[roleName]!['email'] : null,
                                   items: [
-                                    ...users.map((u) {
+                                    ...displayUsers.map((u) {
                                       final uEmail = u['Email']?.toString() ?? u['email']?.toString() ?? '';
                                       final uName = u['Name']?.toString() ?? u['name']?.toString() ?? uEmail;
                                       final uRole = u['Role']?.toString() ?? u['role']?.toString() ?? '';
@@ -4538,6 +4606,8 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
                         final roleName = r['role']!;
                         final stageName = r['stage']!;
                         final groupName = r['group']!;
+                        final stageUsers = users.where((u) => _matchesRole(u['Role']?.toString() ?? u['role']?.toString() ?? '', roleName)).toList();
+                        final displayUsers = stageUsers.isNotEmpty ? stageUsers : users;
 
                         return Padding(
                           padding: const EdgeInsets.only(bottom: 8),
@@ -4570,7 +4640,7 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
                                   hint: Text('Select $roleName', style: const TextStyle(fontSize: 12)),
                                   value: webAssignees[roleName]?['email']?.isNotEmpty == true ? webAssignees[roleName]!['email'] : null,
                                   items: [
-                                    ...users.map((u) {
+                                    ...displayUsers.map((u) {
                                       final uEmail = u['Email']?.toString() ?? u['email']?.toString() ?? '';
                                       final uName = u['Name']?.toString() ?? u['name']?.toString() ?? uEmail;
                                       final uRole = u['Role']?.toString() ?? u['role']?.toString() ?? '';
@@ -4871,6 +4941,8 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
                         final roleName = r['role']!;
                         final stageName = r['stage']!;
                         final groupName = r['group']!;
+                        final stageUsers = users.where((u) => _matchesRole(u['Role']?.toString() ?? u['role']?.toString() ?? '', roleName)).toList();
+                        final displayUsers = stageUsers.isNotEmpty ? stageUsers : users;
 
                         return Padding(
                           padding: const EdgeInsets.only(bottom: 8),
@@ -4903,7 +4975,7 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
                                   hint: Text('Select $roleName', style: const TextStyle(fontSize: 12)),
                                   value: blogAssignees[roleName]?['email']?.isNotEmpty == true ? blogAssignees[roleName]!['email'] : null,
                                   items: [
-                                    ...users.map((u) {
+                                    ...displayUsers.map((u) {
                                       final uEmail = u['Email']?.toString() ?? u['email']?.toString() ?? '';
                                       final uName = u['Name']?.toString() ?? u['name']?.toString() ?? uEmail;
                                       final uRole = u['Role']?.toString() ?? u['role']?.toString() ?? '';
@@ -5087,7 +5159,15 @@ class _ReassignDevTaskDialogState extends State<_ReassignDevTaskDialog> {
       return cat.contains(target) || target.contains(cat);
     }).toList();
 
-    final displayUsers = categoryUsers.isNotEmpty ? categoryUsers : allUsers;
+    final categoryPool = categoryUsers.isNotEmpty ? categoryUsers : allUsers;
+    final expectedRole = _DevPipelineScreenState._mapStageToRole(widget.task.stage, streamCategory);
+
+    final roleFiltered = categoryPool.where((u) {
+      final uRole = (u['Role'] ?? u['role'] ?? '').toString();
+      return _DevPipelineScreenState._matchesRole(uRole, expectedRole);
+    }).toList();
+
+    final displayUsers = roleFiltered.isNotEmpty ? roleFiltered : categoryPool;
 
     return AlertDialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -5100,7 +5180,7 @@ class _ReassignDevTaskDialogState extends State<_ReassignDevTaskDialog> {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text('Reassign ${widget.task.stage}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                Text('Reassign ${widget.task.stage} ($expectedRole)', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                 Text(
                   '${widget.task.campaignName} (#${widget.task.projectId})',
                   style: TextStyle(fontSize: 12, color: Colors.grey.shade600, fontWeight: FontWeight.normal),
@@ -5131,7 +5211,7 @@ class _ReassignDevTaskDialogState extends State<_ReassignDevTaskDialog> {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        'Category: $streamCategory\nCurrent Assignee: ${widget.task.assignee.isNotEmpty ? widget.task.assignee : "Unassigned"}',
+                        'Category: $streamCategory • Role: $expectedRole\nCurrent: ${widget.task.assignee.isNotEmpty ? widget.task.assignee : "Unassigned"}',
                         style: TextStyle(fontSize: 11, color: Colors.blue.shade900),
                       ),
                     ),
@@ -5141,7 +5221,7 @@ class _ReassignDevTaskDialogState extends State<_ReassignDevTaskDialog> {
               const SizedBox(height: 16),
               DropdownButtonFormField<String>(
                 decoration: InputDecoration(
-                  labelText: 'Select Assignee',
+                  labelText: 'Select $expectedRole',
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                   contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                 ),
