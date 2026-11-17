@@ -744,7 +744,43 @@ function handleGetPostDetails(payload) {
     }
   }
 
-  var postObj = matchedPosts.length > 0 ? matchedPosts[0] : { 'PostNo': postNo };
+  var postObj;
+  var isCombinedGroup = isCombined || matchedPosts.length > 1;
+
+  if (matchedPosts.length === 1) {
+    postObj = matchedPosts[0];
+  } else if (matchedPosts.length > 1) {
+    var totalMale = 0, totalFemale = 0, totalChildren = 0;
+    for (var k = 0; k < matchedPosts.length; k++) {
+      totalMale += (Number(matchedPosts[k].Male) || 0);
+      totalFemale += (Number(matchedPosts[k].Female) || 0);
+      totalChildren += (Number(matchedPosts[k].Children) || 0);
+    }
+    var firstPost = matchedPosts[0];
+    var postNosList = matchedPosts.map(function(cp) { return cp.PostNo; }).filter(function(x) { return x; }).join(', ');
+    var branchName = firstPost.Branch || 'Combined';
+    
+    postObj = {
+      'PostNo': postNo,
+      'Theme': branchName + ' Events (' + postNosList + ')',
+      'Date': firstPost.Date,
+      'Branch': firstPost.Branch,
+      'State': firstPost.State,
+      'Venue': firstPost.Venue,
+      'FolderLink': firstPost.FolderLink,
+      'PublishPlatform': firstPost.PublishPlatform,
+      'PostType': firstPost.PostType,
+      'Male': totalMale,
+      'Female': totalFemale,
+      'Children': totalChildren,
+      'TotalBeneficiary': totalMale + totalFemale + totalChildren,
+      'GroupID': postNo,
+      'isCombined': true,
+      'CombinedPosts': matchedPosts
+    };
+  } else {
+    postObj = { 'PostNo': postNo };
+  }
 
   // Fetch tasks for this postNo or GroupID
   var taskHeaders = tasksData[0];
@@ -766,6 +802,16 @@ function handleGetPostDetails(payload) {
       tObj['PostNo'] = trow[1];
       tObj['rowIndex'] = t + 1;
       tObj['AssigneeName'] = userMap[(tObj['Assignee'] || '').toString().trim().toLowerCase()] || tObj['Assignee'];
+
+      // Enrich task with post metadata
+      for (var key in postObj) {
+        if (tObj[key] === undefined || tObj[key] === null || tObj[key] === '') {
+          tObj[key] = postObj[key];
+        }
+      }
+      tObj['isCombined'] = isCombinedGroup;
+      tObj['CombinedPosts'] = matchedPosts;
+
       resultTasks.push(tObj);
     }
   }
@@ -775,7 +821,7 @@ function handleGetPostDetails(payload) {
     postData: postObj,
     combinedPosts: matchedPosts,
     tasks: resultTasks,
-    isCombined: isCombined || matchedPosts.length > 1
+    isCombined: isCombinedGroup
   };
 }
 

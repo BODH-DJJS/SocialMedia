@@ -630,7 +630,20 @@ class EventProvider with ChangeNotifier {
         final postData = response['postData'] as Map<String, dynamic>? ?? {};
         final combinedPosts = (response['combinedPosts'] as List<dynamic>?)?.cast<Map<String, dynamic>>() ?? [];
         final rawTasks = response['tasks'] as List<dynamic>? ?? [];
-        final tasks = rawTasks.map((j) => Event.fromJson(j as Map<String, dynamic>)).toList();
+        final isCombinedVal = response['isCombined'] == true || combinedPosts.length > 1;
+
+        final tasks = rawTasks.map((j) {
+          final map = Map<String, dynamic>.from(j as Map<String, dynamic>);
+          // Merge postData fields so theme, venue, folderLink, beneficiaries are available
+          for (final key in postData.keys) {
+            if (!map.containsKey(key) || map[key] == null || map[key].toString().isEmpty) {
+              map[key] = postData[key];
+            }
+          }
+          map['isCombined'] = isCombinedVal;
+          map['CombinedPosts'] = combinedPosts;
+          return Event.fromJson(map);
+        }).toList();
 
         // Update in-memory tasks so other UI components can see them
         _events.removeWhere((t) => t.postNo == postNo);
@@ -640,7 +653,7 @@ class EventProvider with ChangeNotifier {
           'postData': postData,
           'combinedPosts': combinedPosts,
           'tasks': tasks,
-          'isCombined': response['isCombined'] == true,
+          'isCombined': isCombinedVal,
         };
       }
     } catch (e) {

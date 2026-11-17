@@ -20,6 +20,7 @@ class EventDetailScreen extends StatefulWidget {
   final String? postNo;
   final String? stage;
   final String? taskId;
+  final bool isCombined;
 
   const EventDetailScreen({
     super.key,
@@ -27,6 +28,7 @@ class EventDetailScreen extends StatefulWidget {
     this.postNo,
     this.stage,
     this.taskId,
+    this.isCombined = false,
   });
 
   @override
@@ -91,7 +93,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     // If not found in cache, fetch single post details (fast API call, 1-2 sec)
     if (found == null && pNo.isNotEmpty) {
       try {
-        final details = await provider.fetchSinglePostDetails(pNo);
+        final details = await provider.fetchSinglePostDetails(pNo, isCombined: widget.isCombined);
         if (details != null && details['tasks'] != null) {
           final tasks = (details['tasks'] as List<dynamic>).cast<Event>();
           found = _findMatchingEvent(tasks, pNo, stg, tId);
@@ -130,23 +132,27 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
 
   Event? _findMatchingEvent(List<Event> list, String pNo, String stg, String tId) {
     if (list.isEmpty) return null;
-    if (tId.isNotEmpty) {
+    final cleanPNo = pNo.trim().toLowerCase();
+    final cleanStg = stg.trim().toLowerCase();
+    final cleanTId = tId.trim().toLowerCase();
+
+    if (cleanTId.isNotEmpty) {
       try {
-        return list.firstWhere((e) => e.taskId == tId);
+        return list.firstWhere((e) => e.taskId.trim().toLowerCase() == cleanTId);
       } catch (_) {}
     }
-    if (pNo.isNotEmpty && stg.isNotEmpty) {
+    if (cleanPNo.isNotEmpty && cleanStg.isNotEmpty) {
       try {
         return list.firstWhere(
-          (e) => e.postNo == pNo && e.stage.trim().toLowerCase() == stg.trim().toLowerCase(),
+          (e) => e.postNo.trim().toLowerCase() == cleanPNo && e.stage.trim().toLowerCase() == cleanStg,
         );
       } catch (_) {}
     }
-    if (pNo.isNotEmpty) {
+    if (cleanPNo.isNotEmpty) {
       try {
-        final active = list.where((e) => e.postNo == pNo && e.status != 'Done').toList();
+        final active = list.where((e) => e.postNo.trim().toLowerCase() == cleanPNo && e.status != 'Done').toList();
         if (active.isNotEmpty) return active.first;
-        return list.firstWhere((e) => e.postNo == pNo);
+        return list.firstWhere((e) => e.postNo.trim().toLowerCase() == cleanPNo);
       } catch (_) {}
     }
     return null;

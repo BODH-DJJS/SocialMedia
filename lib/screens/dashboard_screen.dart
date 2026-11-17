@@ -971,7 +971,8 @@ class _DashboardScreenState extends State<DashboardScreen>
 
   Widget _buildTaskCard(Event task, Color accentColor) {
     final isDone = task.status == 'Done';
-    final taskUrl = '/event?postNo=${task.postNo}&stage=${Uri.encodeComponent(task.stage)}&taskId=${task.taskId}';
+    final combinedQuery = task.isCombined ? '&isCombined=true' : '';
+    final taskUrl = '/event?postNo=${Uri.encodeComponent(task.postNo)}&stage=${Uri.encodeComponent(task.stage)}&taskId=${Uri.encodeComponent(task.taskId)}$combinedQuery';
 
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
@@ -2251,9 +2252,9 @@ class _DashboardScreenState extends State<DashboardScreen>
       Offset.zero & overlay.size,
     );
 
-    final taskUrl = '/event?postNo=${task.postNo}&stage=${Uri.encodeComponent(task.stage)}&taskId=${task.taskId}';
     final combinedQuery = task.isCombined ? '&isCombined=true' : '';
-    final workflowUrl = '/admin-assign?postNo=${task.postNo}$combinedQuery';
+    final taskUrl = '/event?postNo=${Uri.encodeComponent(task.postNo)}&stage=${Uri.encodeComponent(task.stage)}&taskId=${Uri.encodeComponent(task.taskId)}$combinedQuery';
+    final workflowUrl = '/admin-assign?postNo=${Uri.encodeComponent(task.postNo)}$combinedQuery';
 
     showMenu<String>(
       context: context,

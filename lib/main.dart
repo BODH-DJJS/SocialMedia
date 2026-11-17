@@ -61,11 +61,13 @@ class BodhSocialMediaApp extends StatelessWidget {
             final postNo = state.uri.queryParameters['postNo'] ?? '';
             final stage = state.uri.queryParameters['stage'] ?? '';
             final taskId = state.uri.queryParameters['taskId'] ?? '';
+            final isCombined = state.uri.queryParameters['isCombined'] == 'true';
             return EventDetailScreen(
               event: event,
               postNo: postNo,
               stage: stage,
               taskId: taskId,
+              isCombined: isCombined,
             );
           },
         ),
