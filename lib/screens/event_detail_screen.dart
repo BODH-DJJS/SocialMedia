@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models/event.dart';
@@ -15,14 +16,30 @@ class GroupMediaLink {
 }
 
 class EventDetailScreen extends StatefulWidget {
-  final Event event;
-  const EventDetailScreen({super.key, required this.event});
+  final Event? event;
+  final String? postNo;
+  final String? stage;
+  final String? taskId;
+
+  const EventDetailScreen({
+    super.key,
+    this.event,
+    this.postNo,
+    this.stage,
+    this.taskId,
+  });
 
   @override
   State<EventDetailScreen> createState() => _EventDetailScreenState();
 }
 
 class _EventDetailScreenState extends State<EventDetailScreen> {
+  Event? _event;
+  bool _isLoadingEvent = false;
+  String? _errorMessage;
+
+  Event get event => _event ?? (widget.event ?? (throw StateError('Event is not loaded')));
+
   bool _isLoadingMedia = true;
   bool _isSaving = false;
   String _rawFolderLink = '';
@@ -37,20 +54,114 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   @override
   void initState() {
     super.initState();
-    _canvaLink = widget.event.canvaLink;
-    _fetchMediaLinks();
+    if (widget.event != null) {
+      _event = widget.event;
+      _canvaLink = _event!.canvaLink;
+      _fetchMediaLinks();
+    } else {
+      _loadEventFromQuery();
+    }
+  }
+
+  Future<void> _loadEventFromQuery() async {
+    setState(() {
+      _isLoadingEvent = true;
+      _errorMessage = null;
+    });
+
+    final pNo = widget.postNo?.trim() ?? '';
+    final stg = widget.stage?.trim() ?? '';
+    final tId = widget.taskId?.trim() ?? '';
+
+    if (pNo.isEmpty && tId.isEmpty) {
+      if (mounted) {
+        setState(() {
+          _isLoadingEvent = false;
+          _errorMessage = 'No post number or task ID provided.';
+        });
+      }
+      return;
+    }
+
+    final provider = context.read<EventProvider>();
+    final auth = context.read<AuthProvider>();
+
+    Event? found = _findMatchingEvent(provider.events, pNo, stg, tId);
+
+    // If not found in cache, fetch single post details (fast API call, 1-2 sec)
+    if (found == null && pNo.isNotEmpty) {
+      try {
+        final details = await provider.fetchSinglePostDetails(pNo);
+        if (details != null && details['tasks'] != null) {
+          final tasks = (details['tasks'] as List<dynamic>).cast<Event>();
+          found = _findMatchingEvent(tasks, pNo, stg, tId);
+        }
+      } catch (e) {
+        debugPrint('Error in fetchSinglePostDetails: $e');
+      }
+    }
+
+    // Fallback: fetch all events
+    if (found == null && auth.isLoggedIn) {
+      try {
+        await provider.fetchEvents(auth.role, auth.username);
+        found = _findMatchingEvent(provider.events, pNo, stg, tId);
+      } catch (e) {
+        debugPrint('Error in fetchEvents: $e');
+      }
+    }
+
+    if (mounted) {
+      if (found != null) {
+        setState(() {
+          _event = found;
+          _canvaLink = found!.canvaLink;
+          _isLoadingEvent = false;
+        });
+        _fetchMediaLinks();
+      } else {
+        setState(() {
+          _isLoadingEvent = false;
+          _errorMessage = 'Task for Post #$pNo (${stg.isNotEmpty ? stg : "Active Stage"}) not found.';
+        });
+      }
+    }
+  }
+
+  Event? _findMatchingEvent(List<Event> list, String pNo, String stg, String tId) {
+    if (list.isEmpty) return null;
+    if (tId.isNotEmpty) {
+      try {
+        return list.firstWhere((e) => e.taskId == tId);
+      } catch (_) {}
+    }
+    if (pNo.isNotEmpty && stg.isNotEmpty) {
+      try {
+        return list.firstWhere(
+          (e) => e.postNo == pNo && e.stage.trim().toLowerCase() == stg.trim().toLowerCase(),
+        );
+      } catch (_) {}
+    }
+    if (pNo.isNotEmpty) {
+      try {
+        final active = list.where((e) => e.postNo == pNo && e.status != 'Done').toList();
+        if (active.isNotEmpty) return active.first;
+        return list.firstWhere((e) => e.postNo == pNo);
+      } catch (_) {}
+    }
+    return null;
   }
 
   Future<void> _fetchMediaLinks() async {
     final provider = context.read<EventProvider>();
     
-    if (widget.event.isCombined) {
+    if (event.isCombined) {
       List<GroupMediaLink> groupLinks = [];
       String firstEdited = '';
       String firstWriting = '';
       
-      for (int i = 0; i < widget.event.combinedPosts.length; i++) {
-        final p = widget.event.combinedPosts[i];
+      for (int i = 0; i < event.combinedPosts.length; i++) {
+        final p = event.combinedPosts[i];
         final pDate = p['Date']?.toString() ?? '';
         final pVenue = p['Venue']?.toString() ?? '';
         final pMonth = p['FolderLink']?.toString() ?? '';
@@ -58,7 +169,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
         final pNo = p['PostNo']?.toString() ?? '';
         
         if (pMonth.isNotEmpty) {
-           final links = await provider.fetchMediaFolders(pMonth, pDate, widget.event.stage, venue: pVenue, postNo: pNo);
+           final links = await provider.fetchMediaFolders(pMonth, pDate, event.stage, venue: pVenue, postNo: pNo);
            groupLinks.add(GroupMediaLink(pNo, pTheme, links['raw'] ?? '', links['selected'] ?? '', pMonth));
            
            if (i == 0) {
@@ -77,7 +188,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
         });
       }
     } else {
-      final links = await provider.fetchMediaFolders(widget.event.folderLink, widget.event.date, widget.event.stage, venue: widget.event.venue, postNo: widget.event.postNo.toString());
+      final links = await provider.fetchMediaFolders(event.folderLink, event.date, event.stage, venue: event.venue, postNo: event.postNo.toString());
       
       List<Map<String, dynamic>> fetchedPhotos = [];
       if (links['raw'] != null && links['raw']!.isNotEmpty) {
@@ -100,12 +211,12 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   /// Get the best available doc link (prefer backend-found over stored)
   String get _bestDocLink {
     if (_writingDocLink.isNotEmpty && _writingDocLink.startsWith('http')) return _writingDocLink;
-    if (widget.event.docLink.isNotEmpty && widget.event.docLink.startsWith('http')) return widget.event.docLink;
+    if (event.docLink.isNotEmpty && event.docLink.startsWith('http')) return event.docLink;
 
     // Fallback: If Ready to Post (or if current docLink is empty), look for Crosscheck / Text Crosscheck doc from the same post
     try {
       final provider = context.read<EventProvider>();
-      final postTasks = provider.events.where((t) => t.postNo == widget.event.postNo).toList();
+      final postTasks = provider.events.where((t) => t.postNo == event.postNo).toList();
       for (final targetStage in ['text crosscheck', 'cross check', 'crosscheck', 'proofreading', 'editing', 'writing']) {
         final match = postTasks.firstWhere(
           (t) => t.stage.trim().toLowerCase() == targetStage && t.docLink.isNotEmpty && t.docLink.startsWith('http'),
@@ -123,12 +234,12 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   /// Get the best available Canva link (from current task or sibling tasks)
   String get _bestCanvaLink {
     if (_canvaLink.trim().isNotEmpty && _canvaLink.trim().startsWith('http')) return _canvaLink.trim();
-    if (widget.event.canvaLink.trim().isNotEmpty && widget.event.canvaLink.trim().startsWith('http')) {
-      return widget.event.canvaLink.trim();
+    if (event.canvaLink.trim().isNotEmpty && event.canvaLink.trim().startsWith('http')) {
+      return event.canvaLink.trim();
     }
     try {
       final provider = context.read<EventProvider>();
-      final postTasks = provider.events.where((t) => t.postNo == widget.event.postNo).toList();
+      final postTasks = provider.events.where((t) => t.postNo == event.postNo).toList();
       for (final t in postTasks) {
         if (t.canvaLink.trim().isNotEmpty && t.canvaLink.trim().startsWith('http')) {
           return t.canvaLink.trim();
@@ -189,7 +300,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                 _isSavingCanva = true;
               });
               final provider = context.read<EventProvider>();
-              final err = await provider.updateEvent(widget.event, {'CanvaLink': newLink});
+              final err = await provider.updateEvent(event, {'CanvaLink': newLink});
               if (mounted) {
                 setState(() => _isSavingCanva = false);
                 if (err == null || err == 'timeout') {
@@ -229,13 +340,13 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   }
 
   void _markDone() async {
-    final stageLower = widget.event.stage.toLowerCase();
+    final stageLower = event.stage.toLowerCase();
     
     if (stageLower.contains('editing') && (stageLower.contains('photo') || stageLower.contains('video'))) {
       final choice = await showDialog<String>(
         context: context,
         builder: (ctx) => AlertDialog(
-          title: Text('Submit ${widget.event.stage}'),
+          title: Text('Submit ${event.stage}'),
           content: const Text('Which action are you completing?'),
           actions: [
             TextButton(
@@ -258,7 +369,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       
       setState(() => _isSaving = true);
       final provider = context.read<EventProvider>();
-      final notEmpty = await provider.checkFolderNotEmpty(widget.event.postNo);
+      final notEmpty = await provider.checkFolderNotEmpty(event.postNo);
       if (!notEmpty) {
         setState(() => _isSaving = false);
         ScaffoldMessenger.of(context).showSnackBar(
@@ -280,7 +391,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
 
     final provider = context.read<EventProvider>();
     provider.invalidateCache(); 
-    provider.updateEvent(widget.event, {'Status': 'Done'}).then((error) {
+    provider.updateEvent(event, {'Status': 'Done'}).then((error) {
       if (error != null && error != 'timeout') {
          messenger.showSnackBar(
            const SnackBar(content: Text('Failed: Please resubmit task again.'), backgroundColor: Colors.red)
@@ -300,7 +411,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
 
 
   bool get _hasPreviousStage {
-    final s = widget.event.stage.toLowerCase().replaceAll(' ', '');
+    final s = event.stage.toLowerCase().replaceAll(' ', '');
     return s == 'editing' ||
         s == 'proofreading' ||
         s == 'crosscheck' ||
@@ -316,7 +427,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   }
 
   List<String> get _possiblePreviousStages {
-    final s = widget.event.stage.toLowerCase().replaceAll(' ', '');
+    final s = event.stage.toLowerCase().replaceAll(' ', '');
     if (s == 'thumbnailcrosschecking' || s == 'thumbnailcrosscheck') return ['Thumbnail Processing'];
     if (s == 'thumbnailprocessing') return ['Thumbnail Selection'];
     if (s == 'mediacrosscheck') return ['Photo Editing', 'Video Editing'];
@@ -431,8 +542,8 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       final messenger = ScaffoldMessenger.of(context);
       
       final success = await provider.reverseTask(
-        postNo: widget.event.postNo,
-        currentStage: widget.event.stage,
+        postNo: event.postNo,
+        currentStage: event.stage,
         targetStage: selectedStage,
         reason: reasonController.text.trim(),
       );
@@ -461,10 +572,79 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoadingEvent) {
+      return Scaffold(
+        appBar: AppBar(
+          title: Text(widget.postNo != null && widget.postNo!.isNotEmpty ? 'Post #${widget.postNo}' : 'Loading Post...'),
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back),
+            onPressed: () {
+              if (context.canPop()) {
+                context.pop();
+              } else {
+                context.go('/dashboard');
+              }
+            },
+          ),
+        ),
+        body: const Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(height: 16),
+              Text('Loading task details...', style: TextStyle(fontSize: 14, color: Colors.grey)),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (_event == null) {
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('Post Not Found'),
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back),
+            onPressed: () {
+              if (context.canPop()) {
+                context.pop();
+              } else {
+                context.go('/dashboard');
+              }
+            },
+          ),
+        ),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.error_outline, size: 54, color: Colors.orange),
+                const SizedBox(height: 16),
+                Text(
+                  _errorMessage ?? 'Unable to find task for this post.',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 20),
+                ElevatedButton.icon(
+                  onPressed: () => context.go('/dashboard'),
+                  icon: const Icon(Icons.dashboard),
+                  label: const Text('Go to Dashboard'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     final isSaving = _isSaving;
-    final isDone = widget.event.status == 'Done';
+    final isDone = event.status == 'Done';
     final theme = Theme.of(context);
-    final e = widget.event;
+    final e = event;
 
     Color stageColor = e.stage == 'Writing'
         ? const Color(0xFF42A5F5)
@@ -474,6 +654,16 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
 
     return Scaffold(
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go('/dashboard');
+            }
+          },
+        ),
         title: Text('Post ${e.postNo} • ${e.stage}'),
         actions: [
           Container(

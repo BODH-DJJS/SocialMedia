@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'dart:html' as html;
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
@@ -11,7 +12,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dev_pipeline_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
-  const DashboardScreen({super.key});
+  final String? initialTab;
+  final String? initialPipeline;
+  const DashboardScreen({super.key, this.initialTab, this.initialPipeline});
 
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
@@ -49,6 +52,14 @@ class _DashboardScreenState extends State<DashboardScreen>
   @override
   void initState() {
     super.initState();
+    if (widget.initialPipeline == 'dev') {
+      _activePipelineIndex = 1;
+    }
+    if (widget.initialTab == 'pipeline' || widget.initialTab == 'kanban') {
+      _currentIndex = 2;
+    } else if (widget.initialTab == 'posts' || widget.initialTab == 'all') {
+      _currentIndex = 1;
+    }
     _loadColumnWidths();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final auth = context.read<AuthProvider>();
@@ -960,34 +971,73 @@ class _DashboardScreenState extends State<DashboardScreen>
 
   Widget _buildTaskCard(Event task, Color accentColor) {
     final isDone = task.status == 'Done';
+    final taskUrl = '/event?postNo=${task.postNo}&stage=${Uri.encodeComponent(task.stage)}&taskId=${task.taskId}';
+
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       elevation: isDone ? 0 : 2,
       color: isDone ? Colors.grey.shade100 : Colors.white,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: () => context.push('/event', extra: task),
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            border: Border(left: BorderSide(color: accentColor, width: 4)),
-          ),
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      'Post ${task.postNo}',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
-                        color: isDone ? Colors.grey : const Color(0xFF1A1A2E),
+      child: Listener(
+        onPointerDown: (event) {
+          // Middle mouse button (wheel click)
+          if (event.buttons == 4) {
+            _openInNewTab(taskUrl);
+          }
+        },
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: () {
+            // Check for Ctrl (Windows/Linux) or Meta/Cmd (Mac)
+            final isCtrlOrMeta = HardwareKeyboard.instance.isControlPressed ||
+                HardwareKeyboard.instance.isMetaPressed;
+            if (isCtrlOrMeta) {
+              _openInNewTab(taskUrl);
+            } else {
+              context.push('/event', extra: task);
+            }
+          },
+          onSecondaryTapDown: (details) => _showPipelineTaskContextMenu(context, details, task),
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              border: Border(left: BorderSide(color: accentColor, width: 4)),
+            ),
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Flexible(
+                            child: Text(
+                              'Post ${task.postNo}',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                                color: isDone ? Colors.grey : const Color(0xFF1A1A2E),
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const SizedBox(width: 5),
+                          Tooltip(
+                            message: 'Open in new tab (Ctrl+Click)',
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(4),
+                              onTap: () => _openInNewTab(taskUrl),
+                              child: Padding(
+                                padding: const EdgeInsets.all(3),
+                                child: Icon(Icons.open_in_new, size: 14, color: Colors.blue.shade700),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                  ),
                   Container(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 8,
@@ -1128,8 +1178,9 @@ class _DashboardScreenState extends State<DashboardScreen>
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   // ── ALL POSTS ──
   Widget _buildAllPosts(EventProvider provider, AuthProvider auth) {
@@ -2140,6 +2191,67 @@ class _DashboardScreenState extends State<DashboardScreen>
     } catch (_) {
       html.window.open('#$path', '_blank');
     }
+  }
+
+  void _showPipelineTaskContextMenu(
+    BuildContext context,
+    TapDownDetails details,
+    Event task,
+  ) {
+    final RenderBox overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
+    final position = RelativeRect.fromRect(
+      details.globalPosition & const Size(40, 40),
+      Offset.zero & overlay.size,
+    );
+
+    final taskUrl = '/event?postNo=${task.postNo}&stage=${Uri.encodeComponent(task.stage)}&taskId=${task.taskId}';
+    final combinedQuery = task.isCombined ? '&isCombined=true' : '';
+    final workflowUrl = '/admin-assign?postNo=${task.postNo}$combinedQuery';
+
+    showMenu<String>(
+      context: context,
+      position: position,
+      items: [
+        const PopupMenuItem<String>(
+          value: 'open_task_new_tab',
+          child: Row(
+            children: [
+              Icon(Icons.open_in_new, size: 18, color: Colors.blue),
+              SizedBox(width: 10),
+              Text('Open Task in new tab', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+            ],
+          ),
+        ),
+        const PopupMenuItem<String>(
+          value: 'open_workflow_new_tab',
+          child: Row(
+            children: [
+              Icon(Icons.assignment_outlined, size: 18, color: Colors.purple),
+              SizedBox(width: 10),
+              Text('Open Workflow in new tab', style: TextStyle(fontSize: 13)),
+            ],
+          ),
+        ),
+        const PopupMenuItem<String>(
+          value: 'open_current_tab',
+          child: Row(
+            children: [
+              Icon(Icons.touch_app_outlined, size: 18, color: Colors.black87),
+              SizedBox(width: 10),
+              Text('Open in current screen', style: TextStyle(fontSize: 13)),
+            ],
+          ),
+        ),
+      ],
+    ).then((value) {
+      if (value == 'open_task_new_tab') {
+        _openInNewTab(taskUrl);
+      } else if (value == 'open_workflow_new_tab') {
+        _openInNewTab(workflowUrl);
+      } else if (value == 'open_current_tab') {
+        context.push('/event', extra: task);
+      }
+    });
   }
 
   void _showPostContextMenu(

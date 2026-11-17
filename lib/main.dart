@@ -8,6 +8,7 @@ import 'screens/login_screen.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/event_detail_screen.dart';
 import 'screens/admin_assign_screen.dart';
+import 'screens/dev_pipeline_screen.dart';
 import 'models/event.dart';
 
 void main() async {
@@ -44,14 +45,35 @@ class BodhSocialMediaApp extends StatelessWidget {
         ),
         GoRoute(
           path: '/dashboard',
-          builder: (context, state) => const DashboardScreen(),
+          builder: (context, state) {
+            final tabParam = state.uri.queryParameters['tab'];
+            final pipelineParam = state.uri.queryParameters['pipeline'];
+            return DashboardScreen(
+              initialTab: tabParam,
+              initialPipeline: pipelineParam,
+            );
+          },
         ),
         GoRoute(
           path: '/event',
           builder: (context, state) {
-            final event = state.extra as Event;
-            return EventDetailScreen(event: event);
+            final event = state.extra is Event ? state.extra as Event : null;
+            final postNo = state.uri.queryParameters['postNo'] ?? '';
+            final stage = state.uri.queryParameters['stage'] ?? '';
+            final taskId = state.uri.queryParameters['taskId'] ?? '';
+            return EventDetailScreen(
+              event: event,
+              postNo: postNo,
+              stage: stage,
+              taskId: taskId,
+            );
           },
+        ),
+        GoRoute(
+          path: '/dev-pipeline',
+          builder: (context, state) => DevPipelineScreen(
+            onSwitchToSocialMedia: () => context.go('/dashboard'),
+          ),
         ),
         GoRoute(
           path: '/admin-assign',
