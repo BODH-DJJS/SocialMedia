@@ -32,7 +32,7 @@ class DevPipelineProvider with ChangeNotifier {
     try {
       final projResp = await _apiService.postData({
         'action': 'getDevProjects',
-        'stream': _selectedStream,
+        'stream': '',
       });
 
       if (projResp['success'] == true && projResp['projects'] is List) {

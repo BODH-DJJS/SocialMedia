@@ -476,8 +476,79 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
     );
   }
 
+    bool _isCampaignTask(DevTask t) {
+    final s = t.stream.toLowerCase();
+    final p = t.projectId.toUpperCase();
+    return s == 'campaign development' ||
+        p.startsWith('CAMP') ||
+        p.startsWith('CAM') ||
+        (s.isEmpty && !p.startsWith('SMD') && !p.startsWith('WEB') && !p.startsWith('BLOG'));
+  }
+
+  bool _isCampaignProject(DevProject p) {
+    final s = p.stream.toLowerCase();
+    final pid = p.projectId.toUpperCase();
+    return s == 'campaign development' ||
+        pid.startsWith('CAMP') ||
+        pid.startsWith('CAM') ||
+        (s.isEmpty && !pid.startsWith('SMD') && !pid.startsWith('WEB') && !pid.startsWith('BLOG'));
+  }
+
+  bool _isSmTask(DevTask t) {
+    final s = t.stream.toLowerCase();
+    final p = t.projectId.toUpperCase();
+    return s == 'sm development' || s == 'social media development' || p.startsWith('SMD');
+  }
+
+  bool _isSmProject(DevProject p) {
+    final s = p.stream.toLowerCase();
+    final pid = p.projectId.toUpperCase();
+    return s == 'sm development' || s == 'social media development' || pid.startsWith('SMD');
+  }
+
+  bool _isWebTask(DevTask t) {
+    final s = t.stream.toLowerCase();
+    final p = t.projectId.toUpperCase();
+    return s == 'website reporting' || s.contains('website') || p.startsWith('WEB');
+  }
+
+  bool _isWebProject(DevProject p) {
+    final s = p.stream.toLowerCase();
+    final pid = p.projectId.toUpperCase();
+    return s == 'website reporting' || s.contains('website') || pid.startsWith('WEB');
+  }
+
+  bool _isBlogTask(DevTask t) {
+    final s = t.stream.toLowerCase();
+    final p = t.projectId.toUpperCase();
+    return s == 'blogs / articles' || s == 'blog / article' || s.contains('blog') || p.startsWith('BLOG');
+  }
+
+  bool _isBlogProject(DevProject p) {
+    final s = p.stream.toLowerCase();
+    final pid = p.projectId.toUpperCase();
+    return s == 'blogs / articles' || s == 'blog / article' || s.contains('blog') || pid.startsWith('BLOG');
+  }
+
+  List<Map<String, dynamic>> _filterUsersForCategory(List<Map<String, dynamic>> allUsers, String streamCategory) {
+    final target = streamCategory.toLowerCase();
+    final filtered = allUsers.where((u) {
+      final cat = (u['Category'] ?? u['category'] ?? '').toString().trim().toLowerCase();
+      if (cat.isEmpty || cat == 'all') return true;
+      if (target.contains('campaign') && (cat.contains('camp') || cat.contains('campaign'))) return true;
+      if (target.contains('sm') && (cat.contains('sm') || cat.contains('social'))) return true;
+      if (target.contains('web') && (cat.contains('web') || cat.contains('site'))) return true;
+      if (target.contains('blog') && (cat.contains('blog') || cat.contains('article'))) return true;
+      return cat.contains(target) || target.contains(cat);
+    }).toList();
+    return filtered.isNotEmpty ? filtered : allUsers;
+  }
+
   Widget _buildCampaignPipelineView(DevPipelineProvider provider) {
-    if (provider.tasks.isEmpty && provider.projects.isEmpty) {
+    final streamProjects = provider.projects.where(_isCampaignProject).toList();
+    final streamTasks = provider.tasks.where(_isCampaignTask).toList();
+
+    if (streamTasks.isEmpty && streamProjects.isEmpty) {
       return Center(
         child: Card(
           elevation: 2,
@@ -516,7 +587,7 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
     }
 
     // Filter tasks
-    var filteredTasks = provider.tasks;
+    var filteredTasks = streamTasks;
     if (_searchQuery.trim().isNotEmpty) {
       final q = _searchQuery.trim().toLowerCase();
       filteredTasks = filteredTasks.where((t) =>
@@ -533,8 +604,8 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
     final campaigns = <String>[
       'All',
       ...{
-        ...provider.projects.where((p) => p.campaignName.trim().isNotEmpty).map((p) => p.campaignName.trim()),
-        ...provider.tasks.where((t) => t.campaignName.trim().isNotEmpty).map((t) => t.campaignName.trim()),
+        ...streamProjects.where((p) => p.campaignName.trim().isNotEmpty).map((p) => p.campaignName.trim()),
+        ...streamTasks.where((t) => t.campaignName.trim().isNotEmpty).map((t) => t.campaignName.trim()),
       }
     ];
 
@@ -543,10 +614,10 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
     }
 
     // Counts for stats banner
-    final totalProjects = provider.projects.length;
-    final totalTasks = provider.tasks.length;
-    final readyTasks = provider.tasks.where((t) => t.status.toLowerCase() == 'ready').length;
-    final doneTasks = provider.tasks.where((t) => t.status.toLowerCase() == 'done').length;
+    final totalProjects = streamProjects.length;
+    final totalTasks = streamTasks.length;
+    final readyTasks = streamTasks.where((t) => t.status.toLowerCase() == 'ready').length;
+    final doneTasks = streamTasks.where((t) => t.status.toLowerCase() == 'done').length;
 
     return Column(
       children: [
@@ -627,14 +698,14 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
                     label: const Text('Delete Campaign', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                     onPressed: () {
                       String targetProjId = '';
-                      for (final p in provider.projects) {
+                      for (final p in streamProjects) {
                         if (p.campaignName.toLowerCase() == _campaignFilter.toLowerCase()) {
                           targetProjId = p.projectId;
                           break;
                         }
                       }
                       if (targetProjId.isEmpty) {
-                        for (final t in provider.tasks) {
+                        for (final t in streamTasks) {
                           if (t.campaignName.toLowerCase() == _campaignFilter.toLowerCase()) {
                             targetProjId = t.projectId;
                             break;
@@ -756,7 +827,10 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
   }
 
   Widget _buildSmPipelineView(DevPipelineProvider provider) {
-    if (provider.tasks.isEmpty && provider.projects.isEmpty) {
+    final streamProjects = provider.projects.where(_isSmProject).toList();
+    final streamTasks = provider.tasks.where(_isSmTask).toList();
+
+    if (streamTasks.isEmpty && streamProjects.isEmpty) {
       return Center(
         child: Card(
           elevation: 2,
@@ -795,7 +869,7 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
     }
 
     // Filter tasks
-    var filteredTasks = provider.tasks;
+    var filteredTasks = streamTasks;
     if (_searchQuery.trim().isNotEmpty) {
       final q = _searchQuery.trim().toLowerCase();
       filteredTasks = filteredTasks.where((t) =>
@@ -812,8 +886,8 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
     final postNames = <String>[
       'All',
       ...{
-        ...provider.projects.where((p) => p.campaignName.trim().isNotEmpty).map((p) => p.campaignName.trim()),
-        ...provider.tasks.where((t) => t.campaignName.trim().isNotEmpty).map((t) => t.campaignName.trim()),
+        ...streamProjects.where((p) => p.campaignName.trim().isNotEmpty).map((p) => p.campaignName.trim()),
+        ...streamTasks.where((t) => t.campaignName.trim().isNotEmpty).map((t) => t.campaignName.trim()),
       }
     ];
 
@@ -822,10 +896,10 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
     }
 
     // Counts for stats banner
-    final totalPosts = provider.projects.length;
-    final totalTasks = provider.tasks.length;
-    final readyTasks = provider.tasks.where((t) => t.status.toLowerCase() == 'ready').length;
-    final doneTasks = provider.tasks.where((t) => t.status.toLowerCase() == 'done').length;
+    final totalPosts = streamProjects.length;
+    final totalTasks = streamTasks.length;
+    final readyTasks = streamTasks.where((t) => t.status.toLowerCase() == 'ready').length;
+    final doneTasks = streamTasks.where((t) => t.status.toLowerCase() == 'done').length;
 
     return Column(
       children: [
@@ -906,14 +980,14 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
                     label: const Text('Delete Post', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                     onPressed: () {
                       String targetProjId = '';
-                      for (final p in provider.projects) {
+                      for (final p in streamProjects) {
                         if (p.campaignName.toLowerCase() == _smPostFilter.toLowerCase()) {
                           targetProjId = p.projectId;
                           break;
                         }
                       }
                       if (targetProjId.isEmpty) {
-                        for (final t in provider.tasks) {
+                        for (final t in streamTasks) {
                           if (t.campaignName.toLowerCase() == _smPostFilter.toLowerCase()) {
                             targetProjId = t.projectId;
                             break;
@@ -1004,7 +1078,10 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
   }
 
   Widget _buildWebPipelineView(DevPipelineProvider provider) {
-    if (provider.tasks.isEmpty && provider.projects.isEmpty) {
+    final streamProjects = provider.projects.where(_isWebProject).toList();
+    final streamTasks = provider.tasks.where(_isWebTask).toList();
+
+    if (streamTasks.isEmpty && streamProjects.isEmpty) {
       return Center(
         child: Card(
           elevation: 2,
@@ -1043,7 +1120,7 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
     }
 
     // Filter tasks
-    var filteredTasks = provider.tasks;
+    var filteredTasks = streamTasks;
     if (_searchQuery.trim().isNotEmpty) {
       final q = _searchQuery.trim().toLowerCase();
       filteredTasks = filteredTasks.where((t) =>
@@ -1060,8 +1137,8 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
     final ideaNames = <String>[
       'All',
       ...{
-        ...provider.projects.where((p) => p.campaignName.trim().isNotEmpty).map((p) => p.campaignName.trim()),
-        ...provider.tasks.where((t) => t.campaignName.trim().isNotEmpty).map((t) => t.campaignName.trim()),
+        ...streamProjects.where((p) => p.campaignName.trim().isNotEmpty).map((p) => p.campaignName.trim()),
+        ...streamTasks.where((t) => t.campaignName.trim().isNotEmpty).map((t) => t.campaignName.trim()),
       }
     ];
 
@@ -1069,10 +1146,10 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
       filteredTasks = filteredTasks.where((t) => t.campaignName.toLowerCase() == _webIdeaFilter.toLowerCase()).toList();
     }
 
-    final totalIdeas = provider.projects.length;
-    final totalTasks = provider.tasks.length;
-    final readyTasks = provider.tasks.where((t) => t.status.toLowerCase() == 'ready').length;
-    final doneTasks = provider.tasks.where((t) => t.status.toLowerCase() == 'done').length;
+    final totalIdeas = streamProjects.length;
+    final totalTasks = streamTasks.length;
+    final readyTasks = streamTasks.where((t) => t.status.toLowerCase() == 'ready').length;
+    final doneTasks = streamTasks.where((t) => t.status.toLowerCase() == 'done').length;
 
     return Column(
       children: [
@@ -1149,14 +1226,14 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
                     label: const Text('Delete Idea', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                     onPressed: () {
                       String targetProjId = '';
-                      for (final p in provider.projects) {
+                      for (final p in streamProjects) {
                         if (p.campaignName.toLowerCase() == _webIdeaFilter.toLowerCase()) {
                           targetProjId = p.projectId;
                           break;
                         }
                       }
                       if (targetProjId.isEmpty) {
-                        for (final t in provider.tasks) {
+                        for (final t in streamTasks) {
                           if (t.campaignName.toLowerCase() == _webIdeaFilter.toLowerCase()) {
                             targetProjId = t.projectId;
                             break;
@@ -1244,7 +1321,10 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
   }
 
   Widget _buildBlogPipelineView(DevPipelineProvider provider) {
-    if (provider.tasks.isEmpty && provider.projects.isEmpty) {
+    final streamProjects = provider.projects.where(_isBlogProject).toList();
+    final streamTasks = provider.tasks.where(_isBlogTask).toList();
+
+    if (streamTasks.isEmpty && streamProjects.isEmpty) {
       return Center(
         child: Card(
           elevation: 2,
@@ -1283,7 +1363,7 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
     }
 
     // Filter tasks
-    var filteredTasks = provider.tasks;
+    var filteredTasks = streamTasks;
     if (_searchQuery.trim().isNotEmpty) {
       final q = _searchQuery.trim().toLowerCase();
       filteredTasks = filteredTasks.where((t) =>
@@ -1300,8 +1380,8 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
     final ideaNames = <String>[
       'All',
       ...{
-        ...provider.projects.where((p) => p.campaignName.trim().isNotEmpty).map((p) => p.campaignName.trim()),
-        ...provider.tasks.where((t) => t.campaignName.trim().isNotEmpty).map((t) => t.campaignName.trim()),
+        ...streamProjects.where((p) => p.campaignName.trim().isNotEmpty).map((p) => p.campaignName.trim()),
+        ...streamTasks.where((t) => t.campaignName.trim().isNotEmpty).map((t) => t.campaignName.trim()),
       }
     ];
 
@@ -1309,10 +1389,10 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
       filteredTasks = filteredTasks.where((t) => t.campaignName.toLowerCase() == _blogIdeaFilter.toLowerCase()).toList();
     }
 
-    final totalArticles = provider.projects.length;
-    final totalTasks = provider.tasks.length;
-    final readyTasks = provider.tasks.where((t) => t.status.toLowerCase() == 'ready').length;
-    final doneTasks = provider.tasks.where((t) => t.status.toLowerCase() == 'done').length;
+    final totalArticles = streamProjects.length;
+    final totalTasks = streamTasks.length;
+    final readyTasks = streamTasks.where((t) => t.status.toLowerCase() == 'ready').length;
+    final doneTasks = streamTasks.where((t) => t.status.toLowerCase() == 'done').length;
 
     return Column(
       children: [
@@ -1389,14 +1469,14 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
                     label: const Text('Delete Article', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                     onPressed: () {
                       String targetProjId = '';
-                      for (final p in provider.projects) {
+                      for (final p in streamProjects) {
                         if (p.campaignName.toLowerCase() == _blogIdeaFilter.toLowerCase()) {
                           targetProjId = p.projectId;
                           break;
                         }
                       }
                       if (targetProjId.isEmpty) {
-                        for (final t in provider.tasks) {
+                        for (final t in streamTasks) {
                           if (t.campaignName.toLowerCase() == _blogIdeaFilter.toLowerCase()) {
                             targetProjId = t.projectId;
                             break;
@@ -3454,9 +3534,9 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
       'Final Check'
     ];
 
-    // Read all users from eventProvider
+    // Read all users from eventProvider filtered by category
     final eventProvider = context.read<EventProvider>();
-    final users = eventProvider.devUsers;
+    final users = _filterUsersForCategory(eventProvider.devUsers, 'Campaign Development');
 
     final assignees = <String, Map<String, String>>{};
     for (final st in stages) {
@@ -3819,7 +3899,7 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
     ];
 
     final eventProvider = context.read<EventProvider>();
-    final users = eventProvider.devUsers;
+    final users = _filterUsersForCategory(eventProvider.devUsers, 'SM Development');
 
     final smAssignees = <String, Map<String, String>>{};
     for (final r in smRoles) {
@@ -4149,7 +4229,7 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
     ];
 
     final eventProvider = context.read<EventProvider>();
-    final users = eventProvider.devUsers;
+    final users = _filterUsersForCategory(eventProvider.devUsers, 'Website Reporting');
 
     final webAssignees = <String, Map<String, String>>{};
     for (final r in webRoles) {
@@ -4460,7 +4540,7 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
     ];
 
     final eventProvider = context.read<EventProvider>();
-    final users = eventProvider.devUsers;
+    final users = _filterUsersForCategory(eventProvider.devUsers, 'Blogs / Articles');
 
     final blogAssignees = <String, Map<String, String>>{};
     for (final r in blogRoles) {

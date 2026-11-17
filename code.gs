@@ -2735,7 +2735,12 @@ function ensureDevSheets(ss) {
 
   if (!ss.getSheetByName(DEV_USERS_SHEET)) {
     var devUsersSheet = ss.insertSheet(DEV_USERS_SHEET);
-    devUsersSheet.appendRow(['Email', 'Name', 'Role']);
+    devUsersSheet.appendRow(['Email', 'Name', 'Role', 'Category']);
+  } else {
+    var devUsersSheet = ss.getSheetByName(DEV_USERS_SHEET);
+    if (devUsersSheet.getLastColumn() < 4) {
+      devUsersSheet.getRange(1, 4).setValue('Category');
+    }
   }
 }
 
@@ -3846,6 +3851,7 @@ function handleGetDevUsers() {
     var email = (usersData[i][0] || '').toString().trim();
     var name = (usersData[i][1] || '').toString().trim();
     var role = usersData[i][2] ? usersData[i][2].toString().trim() : '';
+    var category = usersData[i][3] ? usersData[i][3].toString().trim() : '';
     var activeTasks = activeCounts[email.toLowerCase()] || 0;
 
     if (email) {
@@ -3854,6 +3860,7 @@ function handleGetDevUsers() {
         username: email,
         name: name || email,
         role: role,
+        category: category,
         status: activeTasks > 0 ? 'Engaged' : 'Available',
         activeTasks: activeTasks
       });
