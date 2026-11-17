@@ -149,6 +149,35 @@ class DevPipelineProvider with ChangeNotifier {
     }
   }
 
+  Future<bool> reassignDevTask({
+    required DevTask task,
+    required String newEmail,
+    String? newName,
+    String? role,
+    String? category,
+  }) async {
+    try {
+      final resp = await _apiService.postData({
+        'action': 'reassignDevTask',
+        'taskId': task.taskId,
+        'newAssigneeEmail': newEmail,
+        'newAssigneeName': newName ?? newEmail,
+        'role': role ?? '',
+        'category': category ?? task.stream,
+      });
+
+      if (resp['success'] == true) {
+        // Refresh development pipeline tasks & data
+        await fetchDevData();
+        return true;
+      }
+      return false;
+    } catch (e) {
+      debugPrint('Error reassigning dev task: $e');
+      return false;
+    }
+  }
+
   Future<bool> deleteProject(String projectId) async {
     _isLoading = true;
     notifyListeners();

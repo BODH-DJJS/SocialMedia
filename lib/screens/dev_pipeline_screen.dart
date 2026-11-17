@@ -476,7 +476,91 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
     );
   }
 
-    bool _isCampaignTask(DevTask t) {
+      void _showReassignDevTaskDialog(DevTask task) {
+    showDialog(
+      context: context,
+      builder: (ctx) => _ReassignDevTaskDialog(
+        task: task,
+        onSuccess: () {
+          context.read<DevPipelineProvider>().fetchDevData();
+          context.read<EventProvider>().fetchDevUsers();
+        },
+      ),
+    );
+  }
+
+  void _promptAddNewAssignee(
+    BuildContext dialogCtx,
+    String defaultRole,
+    String streamCategory,
+    void Function(String name, String email) onAdded,
+  ) {
+    final nameCtrl = TextEditingController();
+    final emailCtrl = TextEditingController();
+    showDialog(
+      context: dialogCtx,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        title: Row(
+          children: [
+            const Icon(Icons.person_add_alt_1_rounded, color: Color(0xFF1A237E)),
+            const SizedBox(width: 8),
+            Text('Add Assignee ($defaultRole)', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            TextField(
+              controller: nameCtrl,
+              decoration: InputDecoration(
+                labelText: 'Full Name *',
+                hintText: 'e.g. Rahul Sharma',
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              ),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: emailCtrl,
+              decoration: InputDecoration(
+                labelText: 'Gmail Address *',
+                hintText: 'e.g. rahul@gmail.com',
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              ),
+              keyboardType: TextInputType.emailAddress,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Will be automatically written to Dev_Users under $streamCategory.',
+              style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1A237E), foregroundColor: Colors.white),
+            onPressed: () {
+              final n = nameCtrl.text.trim();
+              final e = emailCtrl.text.trim();
+              if (n.isEmpty || e.isEmpty) return;
+              Navigator.pop(ctx);
+              onAdded(n, e);
+            },
+            child: const Text('Add Assignee'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  bool _isCampaignTask(DevTask t) {
     final s = t.stream.toLowerCase();
     final p = t.projectId.toUpperCase();
     return s == 'campaign development' ||
@@ -1957,6 +2041,17 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
+                  Tooltip(
+                    message: 'Reassign / Change Assignee',
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(4),
+                      onTap: () => _showReassignDevTaskDialog(task),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                        child: Icon(Icons.edit_outlined, size: 14, color: Colors.indigo.shade600),
+                      ),
+                    ),
+                  ),
                 ],
               ),
               const SizedBox(height: 4),
@@ -2499,7 +2594,25 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
                             _infoRow(isSm ? 'Post Name' : ((isWeb || isBlog) ? 'Idea' : 'Campaign'), task.campaignName),
                             if (task.sessionName.isNotEmpty) _infoRow(isSm ? 'Post Topic' : 'Session', task.sessionName),
                             if (task.festivalsIncluded.isNotEmpty) _infoRow('Festivals / Days', task.festivalsIncluded),
-                            _infoRow('Assignee', '${task.assignee} ${task.assigneeEmail.isNotEmpty ? "(${task.assigneeEmail})" : ""}'),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: _infoRow('Assignee', '${task.assignee} ${task.assigneeEmail.isNotEmpty ? "(${task.assigneeEmail})" : ""}'),
+                                ),
+                                TextButton.icon(
+                                  style: TextButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    visualDensity: VisualDensity.compact,
+                                  ),
+                                  icon: const Icon(Icons.person_search_rounded, size: 15, color: Color(0xFF1A237E)),
+                                  label: const Text('Change', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF1A237E))),
+                                  onPressed: () {
+                                    Navigator.pop(ctx);
+                                    _showReassignDevTaskDialog(task);
+                                  },
+                                ),
+                              ],
+                            ),
                             _infoRow('Due Date', task.dueDate.isNotEmpty ? task.dueDate : 'TBD'),
                             if (task.allottedDate.isNotEmpty) _infoRow('Allotted On', task.allottedDate),
                             if (task.completedAt.isNotEmpty) _infoRow('Completed At', task.completedAt),
@@ -3536,7 +3649,7 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
 
     // Read all users from eventProvider filtered by category
     final eventProvider = context.read<EventProvider>();
-    final users = _filterUsersForCategory(eventProvider.devUsers, 'Campaign Development');
+    final users = List<Map<String, dynamic>>.from(_filterUsersForCategory(eventProvider.devUsers, 'Campaign Development'));
 
     final assignees = <String, Map<String, String>>{};
     for (final st in stages) {
@@ -3776,17 +3889,39 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
                                   ),
                                   hint: const Text('Select Assignee', style: TextStyle(fontSize: 12)),
                                   value: assignees[st]?['email']?.isNotEmpty == true ? assignees[st]!['email'] : null,
-                                  items: users.map((u) {
-                                    final uEmail = u['Email']?.toString() ?? u['email']?.toString() ?? '';
-                                    final uName = u['Name']?.toString() ?? u['name']?.toString() ?? uEmail;
-                                    final uRole = u['Role']?.toString() ?? u['role']?.toString() ?? '';
-                                    return DropdownMenuItem<String>(
-                                      value: uEmail,
-                                      child: Text('$uName ($uRole)', style: const TextStyle(fontSize: 12)),
-                                    );
-                                  }).toList(),
+                                  items: [
+                                    ...users.map((u) {
+                                      final uEmail = u['Email']?.toString() ?? u['email']?.toString() ?? '';
+                                      final uName = u['Name']?.toString() ?? u['name']?.toString() ?? uEmail;
+                                      final uRole = u['Role']?.toString() ?? u['role']?.toString() ?? '';
+                                      return DropdownMenuItem<String>(
+                                        value: uEmail,
+                                        child: Text('$uName ($uRole)', style: const TextStyle(fontSize: 12)),
+                                      );
+                                    }),
+                                    const DropdownMenuItem<String>(
+                                      value: '__add_new__',
+                                      child: Text('+ Add New Assignee...', style: TextStyle(fontSize: 12, color: Colors.blue, fontWeight: FontWeight.bold)),
+                                    ),
+                                  ],
                                   onChanged: (val) {
-                                    if (val != null) {
+                                    if (val == '__add_new__') {
+                                      _promptAddNewAssignee(ctx, st, 'Campaign Development', (name, email) {
+                                        final newUser = {
+                                          'Email': email,
+                                          'Name': name,
+                                          'Role': st,
+                                          'Category': 'Campaign Development'
+                                        };
+                                        setDialogState(() {
+                                          users.add(newUser);
+                                          assignees[st] = {
+                                            'name': name,
+                                            'email': email,
+                                          };
+                                        });
+                                      });
+                                    } else if (val != null) {
                                       final matched = users.firstWhere(
                                         (u) => (u['Email']?.toString() ?? u['email']?.toString()) == val,
                                         orElse: () => users.first,
@@ -3899,7 +4034,7 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
     ];
 
     final eventProvider = context.read<EventProvider>();
-    final users = _filterUsersForCategory(eventProvider.devUsers, 'SM Development');
+    final users = List<Map<String, dynamic>>.from(_filterUsersForCategory(eventProvider.devUsers, 'SM Development'));
 
     final smAssignees = <String, Map<String, String>>{};
     for (final r in smRoles) {
@@ -4092,17 +4227,39 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
                                   ),
                                   hint: Text('Select $roleName', style: const TextStyle(fontSize: 12)),
                                   value: smAssignees[roleName]?['email']?.isNotEmpty == true ? smAssignees[roleName]!['email'] : null,
-                                  items: users.map((u) {
-                                    final uEmail = u['Email']?.toString() ?? u['email']?.toString() ?? '';
-                                    final uName = u['Name']?.toString() ?? u['name']?.toString() ?? uEmail;
-                                    final uRole = u['Role']?.toString() ?? u['role']?.toString() ?? '';
-                                    return DropdownMenuItem<String>(
-                                      value: uEmail,
-                                      child: Text('$uName ($uRole)', style: const TextStyle(fontSize: 12)),
-                                    );
-                                  }).toList(),
+                                  items: [
+                                    ...users.map((u) {
+                                      final uEmail = u['Email']?.toString() ?? u['email']?.toString() ?? '';
+                                      final uName = u['Name']?.toString() ?? u['name']?.toString() ?? uEmail;
+                                      final uRole = u['Role']?.toString() ?? u['role']?.toString() ?? '';
+                                      return DropdownMenuItem<String>(
+                                        value: uEmail,
+                                        child: Text('$uName ($uRole)', style: const TextStyle(fontSize: 12)),
+                                      );
+                                    }),
+                                    const DropdownMenuItem<String>(
+                                      value: '__add_new__',
+                                      child: Text('+ Add New Assignee...', style: TextStyle(fontSize: 12, color: Colors.blue, fontWeight: FontWeight.bold)),
+                                    ),
+                                  ],
                                   onChanged: (val) {
-                                    if (val != null) {
+                                    if (val == '__add_new__') {
+                                      _promptAddNewAssignee(ctx, roleName, 'SM Development', (name, email) {
+                                        final newUser = {
+                                          'Email': email,
+                                          'Name': name,
+                                          'Role': roleName,
+                                          'Category': 'SM Development'
+                                        };
+                                        setDialogState(() {
+                                          users.add(newUser);
+                                          smAssignees[roleName] = {
+                                            'name': name,
+                                            'email': email,
+                                          };
+                                        });
+                                      });
+                                    } else if (val != null) {
                                       final matched = users.firstWhere(
                                         (u) => (u['Email']?.toString() ?? u['email']?.toString()) == val,
                                         orElse: () => users.first,
@@ -4229,7 +4386,7 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
     ];
 
     final eventProvider = context.read<EventProvider>();
-    final users = _filterUsersForCategory(eventProvider.devUsers, 'Website Reporting');
+    final users = List<Map<String, dynamic>>.from(_filterUsersForCategory(eventProvider.devUsers, 'Website Reporting'));
 
     final webAssignees = <String, Map<String, String>>{};
     for (final r in webRoles) {
@@ -4412,17 +4569,39 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
                                   ),
                                   hint: Text('Select $roleName', style: const TextStyle(fontSize: 12)),
                                   value: webAssignees[roleName]?['email']?.isNotEmpty == true ? webAssignees[roleName]!['email'] : null,
-                                  items: users.map((u) {
-                                    final uEmail = u['Email']?.toString() ?? u['email']?.toString() ?? '';
-                                    final uName = u['Name']?.toString() ?? u['name']?.toString() ?? uEmail;
-                                    final uRole = u['Role']?.toString() ?? u['role']?.toString() ?? '';
-                                    return DropdownMenuItem<String>(
-                                      value: uEmail,
-                                      child: Text('$uName ($uRole)', style: const TextStyle(fontSize: 12)),
-                                    );
-                                  }).toList(),
+                                  items: [
+                                    ...users.map((u) {
+                                      final uEmail = u['Email']?.toString() ?? u['email']?.toString() ?? '';
+                                      final uName = u['Name']?.toString() ?? u['name']?.toString() ?? uEmail;
+                                      final uRole = u['Role']?.toString() ?? u['role']?.toString() ?? '';
+                                      return DropdownMenuItem<String>(
+                                        value: uEmail,
+                                        child: Text('$uName ($uRole)', style: const TextStyle(fontSize: 12)),
+                                      );
+                                    }),
+                                    const DropdownMenuItem<String>(
+                                      value: '__add_new__',
+                                      child: Text('+ Add New Assignee...', style: TextStyle(fontSize: 12, color: Colors.blue, fontWeight: FontWeight.bold)),
+                                    ),
+                                  ],
                                   onChanged: (val) {
-                                    if (val != null) {
+                                    if (val == '__add_new__') {
+                                      _promptAddNewAssignee(ctx, roleName, 'Website Reporting', (name, email) {
+                                        final newUser = {
+                                          'Email': email,
+                                          'Name': name,
+                                          'Role': roleName,
+                                          'Category': 'Website Reporting'
+                                        };
+                                        setDialogState(() {
+                                          users.add(newUser);
+                                          webAssignees[roleName] = {
+                                            'name': name,
+                                            'email': email,
+                                          };
+                                        });
+                                      });
+                                    } else if (val != null) {
                                       final matched = users.firstWhere(
                                         (u) => (u['Email']?.toString() ?? u['email']?.toString()) == val,
                                         orElse: () => users.first,
@@ -4540,7 +4719,7 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
     ];
 
     final eventProvider = context.read<EventProvider>();
-    final users = _filterUsersForCategory(eventProvider.devUsers, 'Blogs / Articles');
+    final users = List<Map<String, dynamic>>.from(_filterUsersForCategory(eventProvider.devUsers, 'Blogs / Articles'));
 
     final blogAssignees = <String, Map<String, String>>{};
     for (final r in blogRoles) {
@@ -4723,17 +4902,39 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
                                   ),
                                   hint: Text('Select $roleName', style: const TextStyle(fontSize: 12)),
                                   value: blogAssignees[roleName]?['email']?.isNotEmpty == true ? blogAssignees[roleName]!['email'] : null,
-                                  items: users.map((u) {
-                                    final uEmail = u['Email']?.toString() ?? u['email']?.toString() ?? '';
-                                    final uName = u['Name']?.toString() ?? u['name']?.toString() ?? uEmail;
-                                    final uRole = u['Role']?.toString() ?? u['role']?.toString() ?? '';
-                                    return DropdownMenuItem<String>(
-                                      value: uEmail,
-                                      child: Text('$uName ($uRole)', style: const TextStyle(fontSize: 12)),
-                                    );
-                                  }).toList(),
+                                  items: [
+                                    ...users.map((u) {
+                                      final uEmail = u['Email']?.toString() ?? u['email']?.toString() ?? '';
+                                      final uName = u['Name']?.toString() ?? u['name']?.toString() ?? uEmail;
+                                      final uRole = u['Role']?.toString() ?? u['role']?.toString() ?? '';
+                                      return DropdownMenuItem<String>(
+                                        value: uEmail,
+                                        child: Text('$uName ($uRole)', style: const TextStyle(fontSize: 12)),
+                                      );
+                                    }),
+                                    const DropdownMenuItem<String>(
+                                      value: '__add_new__',
+                                      child: Text('+ Add New Assignee...', style: TextStyle(fontSize: 12, color: Colors.blue, fontWeight: FontWeight.bold)),
+                                    ),
+                                  ],
                                   onChanged: (val) {
-                                    if (val != null) {
+                                    if (val == '__add_new__') {
+                                      _promptAddNewAssignee(ctx, roleName, 'Blogs / Articles', (name, email) {
+                                        final newUser = {
+                                          'Email': email,
+                                          'Name': name,
+                                          'Role': roleName,
+                                          'Category': 'Blogs / Articles'
+                                        };
+                                        setDialogState(() {
+                                          users.add(newUser);
+                                          blogAssignees[roleName] = {
+                                            'name': name,
+                                            'email': email,
+                                          };
+                                        });
+                                      });
+                                    } else if (val != null) {
                                       final matched = users.firstWhere(
                                         (u) => (u['Email']?.toString() ?? u['email']?.toString()) == val,
                                         orElse: () => users.first,
@@ -4831,6 +5032,246 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
           },
         );
       },
+    );
+  }
+}
+
+
+class _ReassignDevTaskDialog extends StatefulWidget {
+  final DevTask task;
+  final VoidCallback onSuccess;
+
+  const _ReassignDevTaskDialog({required this.task, required this.onSuccess});
+
+  @override
+  State<_ReassignDevTaskDialog> createState() => _ReassignDevTaskDialogState();
+}
+
+class _ReassignDevTaskDialogState extends State<_ReassignDevTaskDialog> {
+  String? _selectedEmail;
+  bool _isOther = false;
+  final _nameController = TextEditingController();
+  final _emailController = TextEditingController();
+  bool _isLoading = false;
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _emailController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final eventProvider = context.watch<EventProvider>();
+    final allUsers = eventProvider.devUsers;
+
+    final streamCategory = widget.task.stream.isNotEmpty
+        ? widget.task.stream
+        : (widget.task.projectId.startsWith('WEB')
+            ? 'Website Reporting'
+            : (widget.task.projectId.startsWith('SMD')
+                ? 'SM Development'
+                : (widget.task.projectId.startsWith('BLOG')
+                    ? 'Blogs / Articles'
+                    : 'Campaign Development')));
+
+    final target = streamCategory.toLowerCase();
+    final categoryUsers = allUsers.where((u) {
+      final cat = (u['Category'] ?? u['category'] ?? '').toString().trim().toLowerCase();
+      if (cat.isEmpty || cat == 'all') return true;
+      if (target.contains('campaign') && (cat.contains('camp') || cat.contains('campaign'))) return true;
+      if (target.contains('sm') && (cat.contains('sm') || cat.contains('social'))) return true;
+      if (target.contains('web') && (cat.contains('web') || cat.contains('site'))) return true;
+      if (target.contains('blog') && (cat.contains('blog') || cat.contains('article'))) return true;
+      return cat.contains(target) || target.contains(cat);
+    }).toList();
+
+    final displayUsers = categoryUsers.isNotEmpty ? categoryUsers : allUsers;
+
+    return AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      title: Row(
+        children: [
+          const Icon(Icons.person_pin_rounded, color: Color(0xFF1A237E)),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text('Reassign ${widget.task.stage}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                Text(
+                  '${widget.task.campaignName} (#${widget.task.projectId})',
+                  style: TextStyle(fontSize: 12, color: Colors.grey.shade600, fontWeight: FontWeight.normal),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+      content: SingleChildScrollView(
+        child: SizedBox(
+          width: 440,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.blue.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.blue.shade100),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.info_outline, size: 16, color: Color(0xFF1A237E)),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Category: $streamCategory\nCurrent Assignee: ${widget.task.assignee.isNotEmpty ? widget.task.assignee : "Unassigned"}',
+                        style: TextStyle(fontSize: 11, color: Colors.blue.shade900),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              DropdownButtonFormField<String>(
+                decoration: InputDecoration(
+                  labelText: 'Select Assignee',
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                ),
+                value: _selectedEmail,
+                items: [
+                  ...displayUsers.map((u) {
+                    final email = u['Email']?.toString() ?? u['email']?.toString() ?? '';
+                    final name = u['Name']?.toString() ?? u['name']?.toString() ?? email;
+                    final role = u['Role']?.toString() ?? u['role']?.toString() ?? '';
+                    return DropdownMenuItem<String>(
+                      value: email,
+                      child: Text('$name ($role)', style: const TextStyle(fontSize: 13), overflow: TextOverflow.ellipsis),
+                    );
+                  }),
+                  const DropdownMenuItem<String>(
+                    value: '__other__',
+                    child: Text('+ Other (Add New User)', style: TextStyle(fontSize: 13, color: Colors.blue, fontWeight: FontWeight.bold)),
+                  ),
+                ],
+                onChanged: (val) {
+                  setState(() {
+                    _selectedEmail = val;
+                    _isOther = val == '__other__';
+                  });
+                },
+              ),
+              if (_isOther) ...[
+                const SizedBox(height: 14),
+                TextField(
+                  controller: _nameController,
+                  decoration: InputDecoration(
+                    labelText: 'New User Name *',
+                    hintText: 'e.g. John Sharma',
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: _emailController,
+                  decoration: InputDecoration(
+                    labelText: 'New User Gmail *',
+                    hintText: 'e.g. john@gmail.com',
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                  ),
+                  keyboardType: TextInputType.emailAddress,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'This user will be automatically added to the Dev_Users sheet under category "$streamCategory".',
+                  style: TextStyle(color: Colors.grey.shade600, fontSize: 11),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _isLoading ? null : () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        ElevatedButton.icon(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFF1A237E),
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          ),
+          icon: _isLoading
+              ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+              : const Icon(Icons.check, size: 16),
+          label: const Text('Save & Reassign'),
+          onPressed: _isLoading ? null : () async {
+            if (_selectedEmail == null) return;
+
+            String targetEmail = _selectedEmail!;
+            String? newName;
+
+            if (_isOther) {
+              targetEmail = _emailController.text.trim();
+              newName = _nameController.text.trim();
+              if (targetEmail.isEmpty || newName.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Please enter both name and email.')),
+                );
+                return;
+              }
+            } else {
+              final matched = displayUsers.firstWhere(
+                (u) => (u['Email']?.toString() ?? u['email']?.toString()) == targetEmail,
+                orElse: () => displayUsers.first,
+              );
+              newName = matched['Name']?.toString() ?? matched['name']?.toString() ?? targetEmail;
+            }
+
+            setState(() => _isLoading = true);
+            final messenger = ScaffoldMessenger.of(context);
+            final devProvider = context.read<DevPipelineProvider>();
+
+            final success = await devProvider.reassignDevTask(
+              task: widget.task,
+              newEmail: targetEmail,
+              newName: newName,
+              role: widget.task.stage,
+              category: streamCategory,
+            );
+
+            if (mounted) {
+              Navigator.pop(context);
+              if (success) {
+                messenger.showSnackBar(
+                  SnackBar(
+                    content: Text('Task reassigned to $newName successfully!'),
+                    backgroundColor: Colors.green,
+                  ),
+                );
+                widget.onSuccess();
+              } else {
+                messenger.showSnackBar(
+                  const SnackBar(
+                    content: Text('Failed to reassign task. Please try again.'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+              }
+            }
+          },
+        ),
+      ],
     );
   }
 }
