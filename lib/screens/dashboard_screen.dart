@@ -987,6 +987,10 @@ class _DashboardScreenState extends State<DashboardScreen>
         child: InkWell(
           borderRadius: BorderRadius.circular(16),
           onTap: () {
+            // Guard: If the open_in_new button was clicked within the last 600ms, do not navigate!
+            if (DateTime.now().difference(_lastNewTabClick).inMilliseconds < 600) {
+              return;
+            }
             // Check for Ctrl (Windows/Linux) or Meta/Cmd (Mac)
             final isCtrlOrMeta = HardwareKeyboard.instance.isControlPressed ||
                 HardwareKeyboard.instance.isMetaPressed;
@@ -1024,14 +1028,46 @@ class _DashboardScreenState extends State<DashboardScreen>
                             ),
                           ),
                           const SizedBox(width: 5),
-                          Tooltip(
-                            message: 'Open in new tab (Ctrl+Click)',
-                            child: InkWell(
-                              borderRadius: BorderRadius.circular(4),
-                              onTap: () => _openInNewTab(taskUrl),
-                              child: Padding(
-                                padding: const EdgeInsets.all(3),
-                                child: Icon(Icons.open_in_new, size: 14, color: Colors.blue.shade700),
+                          GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onTap: () {
+                              _lastNewTabClick = DateTime.now();
+                              _openInNewTab(taskUrl);
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('✓ Post #${task.postNo} opened in new tab'),
+                                    duration: const Duration(milliseconds: 1500),
+                                    behavior: SnackBarBehavior.floating,
+                                    width: 280,
+                                  ),
+                                );
+                              }
+                            },
+                            child: Tooltip(
+                              message: 'Open in new tab (Ctrl+Click)',
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(4),
+                                onTap: () {
+                                  _lastNewTabClick = DateTime.now();
+                                  _openInNewTab(taskUrl);
+                                  if (mounted) {
+                                    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text('✓ Post #${task.postNo} opened in new tab'),
+                                        duration: const Duration(milliseconds: 1500),
+                                        behavior: SnackBarBehavior.floating,
+                                        width: 280,
+                                      ),
+                                    );
+                                  }
+                                },
+                                child: Padding(
+                                  padding: const EdgeInsets.all(4),
+                                  child: Icon(Icons.open_in_new, size: 14, color: Colors.blue.shade700),
+                                ),
                               ),
                             ),
                           ),
@@ -2180,7 +2216,10 @@ class _DashboardScreenState extends State<DashboardScreen>
     );
   }
 
+  DateTime _lastNewTabClick = DateTime.fromMillisecondsSinceEpoch(0);
+
   void _openInNewTab(String path) {
+    _lastNewTabClick = DateTime.now();
     try {
       final currentUri = Uri.parse(html.window.location.href);
       final newUrl = currentUri.replace(
