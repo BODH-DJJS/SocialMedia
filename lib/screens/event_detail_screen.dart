@@ -348,6 +348,40 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   void _markDone() async {
     final stageLower = event.stage.toLowerCase();
     
+    // Thumbnail Processing check: "Edited Thumbnail" folder under "Selected (Edited)" must not be empty
+    if (stageLower == 'thumbnail processing' || stageLower == 'thumbnailprocessing') {
+      setState(() => _isSaving = true);
+      final provider = context.read<EventProvider>();
+      final res = await provider.checkThumbnailFolderNotEmpty(event.postNo, folderLink: event.folderLink);
+      if (res['notEmpty'] != true) {
+        setState(() => _isSaving = false);
+        if (mounted) {
+          showDialog(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: Row(
+                children: const [
+                  Icon(Icons.warning_amber_rounded, color: Colors.red, size: 28),
+                  SizedBox(width: 8),
+                  Text('Thumbnail Required'),
+                ],
+              ),
+              content: Text(res['error'] ?? 'The "Edited Thumbnail" folder under "Selected (Edited)" is empty! Please upload edited thumbnail files first.'),
+              actions: [
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('OK'),
+                ),
+              ],
+            ),
+          );
+        }
+        return;
+      }
+    }
+    
     if (stageLower.contains('editing') && (stageLower.contains('photo') || stageLower.contains('video'))) {
       final choice = await showDialog<String>(
         context: context,

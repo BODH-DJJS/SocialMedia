@@ -3261,6 +3261,42 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
     DevTask task,
     void Function(void Function()) setDialogState,
   ) async {
+    // Thumbnail Processing check: "Edited Thumbnail" folder under "Selected (Edited)" must not be empty
+    final stageLower = task.stage.toLowerCase();
+    if (stageLower == 'thumbnail processing' || stageLower == 'thumbnailprocessing') {
+      final eventProvider = context.read<EventProvider>();
+      final res = await eventProvider.checkThumbnailFolderNotEmpty(
+        task.projectId,
+        folderLink: task.thumbnailFolderLink.isNotEmpty ? task.thumbnailFolderLink : task.folderLink,
+      );
+      if (res['notEmpty'] != true) {
+        if (mounted) {
+          showDialog(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: Row(
+                children: const [
+                  Icon(Icons.warning_amber_rounded, color: Colors.red, size: 28),
+                  SizedBox(width: 8),
+                  Text('Thumbnail Required'),
+                ],
+              ),
+              content: Text(res['error'] ?? 'The "Edited Thumbnail" folder under "Selected (Edited)" is empty! Please upload edited thumbnail files first.'),
+              actions: [
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('OK'),
+                ),
+              ],
+            ),
+          );
+        }
+        return;
+      }
+    }
+
     // If task is waiting, show a friendly confirmation
     if (task.status.toLowerCase() == 'waiting') {
       final confirm = await showDialog<bool>(

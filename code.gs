@@ -1439,27 +1439,17 @@ function createTasksForPost(postNo) {
       try {
         var monthFolder = DriveApp.getFolderById(match[0]);
 
-        // Find or create date folder
-        var dateFolder = null;
-        var dateFolders = monthFolder.searchFolders("title = '" + dateStr + "'");
+        // Use existing folder directly (no folder creation)
+        var dateFolder = monthFolder;
+        var dateFolders = monthFolder.searchFolders("title = '" + dateStr + "' and trashed = false");
         if (dateFolders.hasNext()) {
           dateFolder = dateFolders.next();
-        } else {
-          dateFolder = monthFolder.createFolder(dateStr);
         }
 
-        // Create subfolders if not exist
-        var subfolderNames = ['Raw', 'Selected', 'Selected (Edited)'];
-        for (var s = 0; s < subfolderNames.length; s++) {
-          var sfName = subfolderNames[s];
-          var sfSearch = dateFolder.searchFolders("title = '" + sfName + "'");
-          if (!sfSearch.hasNext()) {
-            var newSf = dateFolder.createFolder(sfName);
-            newSf.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.EDIT);
-            if (sfName === 'Raw') rawFolderUrl = newSf.getUrl();
-          } else {
-            if (sfName === 'Raw') rawFolderUrl = sfSearch.next().getUrl();
-          }
+        // Find Raw subfolder URL if exists
+        var sfSearch = dateFolder.searchFolders("title = 'Raw' and trashed = false");
+        if (sfSearch.hasNext()) {
+          rawFolderUrl = sfSearch.next().getUrl();
         }
 
         // Create a single collaborative doc if not exist
@@ -2003,21 +1993,7 @@ function createTasksForPostV2(payload) {
         if (match) {
           try {
             var dateFolder = DriveApp.getFolderById(match[0]);
-
-            // Create subfolders inside this post's folder
-            var subfolderNames = (gp === 0) ? ['Raw', 'Selected', 'Selected (Edited)'] : ['Raw', 'Selected'];
-            for (var s = 0; s < subfolderNames.length; s++) {
-              var sfName = subfolderNames[s];
-              var exists = false;
-              var sfs = dateFolder.getFolders();
-              while (sfs.hasNext()) {
-                if (sfs.next().getName().toLowerCase() === sfName.toLowerCase()) { exists = true; break; }
-              }
-              if (!exists) {
-                var newSf = dateFolder.createFolder(sfName);
-                newSf.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.EDIT);
-              }
-            }
+            // No folder creation: reporting form already creates folders!
 
             // Create Google Docs for specific stages ONLY in the first post's folder
             if (gp === 0) {
@@ -2409,19 +2385,45 @@ function keepAlive() {
 
 function handleCheckFolderNotEmpty(payload) {
   var postNo = payload.postNo;
+  var stage = (payload.stage || '').toLowerCase();
+  var checkType = (payload.checkType || '').toLowerCase();
+  var isThumbnailCheck = checkType === 'thumbnail' || stage.indexOf('thumbnail') !== -1;
+
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var postsSheet = ss.getSheetByName(POSTS_SHEET);
-  var postsData = postsSheet.getDataRange().getValues();
+  var postsData = postsSheet ? postsSheet.getDataRange().getValues() : [];
   var postRow = null;
   for (var p = 1; p < postsData.length; p++) {
-    if (postsData[p][0] == postNo) { postRow = postsData[p]; break; }
+    if (postsData[p][0] == postNo || postsData[p][1] == postNo) { postRow = postsData[p]; break; }
   }
-  if (!postRow) return {success: true, notEmpty: true}; // failsafe
   
-  var dateStr = formatDate(postRow[6]);
-  var photosLink = postRow[20] || '';
-  var videosLink = postRow[21] || '';
-  var linksToTry = [photosLink, videosLink];
+  var linksToTry = [];
+  if (postRow) {
+    if (postRow[20]) linksToTry.push(postRow[20]);
+    if (postRow[21]) linksToTry.push(postRow[21]);
+  }
+  if (payload.folderLink) {
+    linksToTry.push(payload.folderLink);
+  }
+
+  // Also check Dev_Projects sheet if not found in POSTS_SHEET
+  if (linksToTry.length === 0) {
+    try {
+      var devProjSheet = ss.getSheetByName(DEV_PROJECTS_SHEET);
+      if (devProjSheet) {
+        var dpData = devProjSheet.getDataRange().getValues();
+        for (var dp = 1; dp < dpData.length; dp++) {
+          if (dpData[dp][0] == postNo) {
+            var fUrl = dpData[dp][7] || dpData[dp][8] || '';
+            if (fUrl) linksToTry.push(fUrl);
+            break;
+          }
+        }
+      }
+    } catch(devErr) {}
+  }
+  
+  if (linksToTry.length === 0) return {success: true, notEmpty: true}; // failsafe
   
   for (var i = 0; i < linksToTry.length; i++) {
     var link = linksToTry[i];
@@ -2432,19 +2434,118 @@ function handleCheckFolderNotEmpty(payload) {
     try {
       var dateFolder = DriveApp.getFolderById(match[0]);
       
-      var sfs = dateFolder.getFolders();
-      while(sfs.hasNext()) {
-        var sub = sfs.next();
-        var subName = sub.getName().toLowerCase();
-        if (subName.indexOf('edited') !== -1 || subName === 'selected') {
-          if (sub.getFiles().hasNext() || sub.getFolders().hasNext()) {
-             return {success: true, notEmpty: true};
+      if (isThumbnailCheck) {
+        // Specific requirement: Under "Selected (Edited)" folder, check "Edited Thumbnail" folder
+        var selectedEditedFolder = null;
+        var sfs = dateFolder.getFolders();
+        while (sfs.hasNext()) {
+          var sub = sfs.next();
+          var subName = sub.getName().toLowerCase().replace(/[\s\-_]/g, '');
+          if (subName === 'selected(edited)' || subName === 'selectededited' || subName === 'edited') {
+            selectedEditedFolder = sub;
+            break;
+          }
+        }
+        // Fallback: check if subName contains 'edited'
+        if (!selectedEditedFolder) {
+          var sfs2 = dateFolder.getFolders();
+          while (sfs2.hasNext()) {
+            var sub2 = sfs2.next();
+            if (sub2.getName().toLowerCase().indexOf('edited') !== -1) {
+              selectedEditedFolder = sub2;
+              break;
+            }
+          }
+        }
+        // Fallback: dateFolder itself might be Selected (Edited)
+        if (!selectedEditedFolder && dateFolder.getName().toLowerCase().indexOf('edited') !== -1) {
+          selectedEditedFolder = dateFolder;
+        }
+
+        if (selectedEditedFolder) {
+          var editedThumbFolder = null;
+          var tSearch = selectedEditedFolder.getFolders();
+          while (tSearch.hasNext()) {
+            var tf = tSearch.next();
+            var tfName = tf.getName().toLowerCase().replace(/[\s\-_]/g, '');
+            if (tfName === 'editedthumbnail' || tfName === 'editedthumbnails' || (tfName.indexOf('edited') !== -1 && tfName.indexOf('thumb') !== -1)) {
+              editedThumbFolder = tf;
+              break;
+            }
+          }
+          // Secondary fallback: any folder with 'thumb' inside Selected (Edited)
+          if (!editedThumbFolder) {
+            var tSearch2 = selectedEditedFolder.getFolders();
+            while (tSearch2.hasNext()) {
+              var tf2 = tSearch2.next();
+              if (tf2.getName().toLowerCase().indexOf('thumb') !== -1) {
+                editedThumbFolder = tf2;
+                break;
+              }
+            }
+          }
+
+          if (editedThumbFolder) {
+            if (editedThumbFolder.getFiles().hasNext() || editedThumbFolder.getFolders().hasNext()) {
+              return {success: true, notEmpty: true};
+            } else {
+              return {
+                success: true,
+                notEmpty: false,
+                error: 'The "Edited Thumbnail" folder under "Selected (Edited)" is empty! Please upload the edited thumbnail files before marking done.'
+              };
+            }
+          } else {
+            return {
+              success: true,
+              notEmpty: false,
+              error: '"Edited Thumbnail" folder was not found under "Selected (Edited)"! Please create it and upload the edited thumbnail files.'
+            };
+          }
+        } else {
+          // If Selected (Edited) folder wasn't found, check if dateFolder itself has Edited Thumbnail
+          var directThumb = null;
+          var dSearch = dateFolder.getFolders();
+          while (dSearch.hasNext()) {
+            var df = dSearch.next();
+            var dfName = df.getName().toLowerCase().replace(/[\s\-_]/g, '');
+            if (dfName === 'editedthumbnail' || (dfName.indexOf('edited') !== -1 && dfName.indexOf('thumb') !== -1)) {
+              directThumb = df;
+              break;
+            }
+          }
+          if (directThumb && (directThumb.getFiles().hasNext() || directThumb.getFolders().hasNext())) {
+            return {success: true, notEmpty: true};
+          }
+          return {
+            success: true,
+            notEmpty: false,
+            error: '"Selected (Edited)" folder was not found! Please ensure files are placed in "Selected (Edited) > Edited Thumbnail".'
+          };
+        }
+      } else {
+        // Standard Photo / Video editing check
+        var sfs = dateFolder.getFolders();
+        while(sfs.hasNext()) {
+          var sub = sfs.next();
+          var subName = sub.getName().toLowerCase();
+          if (subName.indexOf('edited') !== -1 || subName === 'selected') {
+            if (sub.getFiles().hasNext() || sub.getFolders().hasNext()) {
+               return {success: true, notEmpty: true};
+            }
           }
         }
       }
     } catch(e) {}
   }
   
+  if (isThumbnailCheck) {
+    return {
+      success: true,
+      notEmpty: false,
+      error: 'The "Edited Thumbnail" folder under "Selected (Edited)" is empty! Please upload the edited thumbnail files.'
+    };
+  }
   return {success: true, notEmpty: false};
 }
 

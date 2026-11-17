@@ -180,6 +180,27 @@ class EventProvider with ChangeNotifier {
     }
   }
 
+  Future<Map<String, dynamic>> checkThumbnailFolderNotEmpty(String postNo, {String? folderLink}) async {
+    try {
+      final payload = <String, dynamic>{
+        'action': 'checkFolderNotEmpty',
+        'postNo': postNo,
+        'checkType': 'thumbnail',
+        'stage': 'Thumbnail Processing',
+      };
+      if (folderLink != null && folderLink.isNotEmpty) {
+        payload['folderLink'] = folderLink;
+      }
+      final response = await _apiService.postData(payload);
+      return {
+        'notEmpty': response['notEmpty'] == true,
+        'error': response['error']?.toString() ?? 'The "Edited Thumbnail" folder under "Selected (Edited)" is empty! Please upload the edited thumbnail files.',
+      };
+    } catch (e) {
+      return {'notEmpty': true}; // Failsafe
+    }
+  }
+
   Future<String?> updateEvent(Event event, Map<String, dynamic> updates) async {
     // Optimistic UI update
     final originalStatus = event.status;
