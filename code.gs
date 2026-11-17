@@ -1571,6 +1571,125 @@ function handleGetMediaFolders(payload) {
   var postNo = payload.postNo || '';
 
   // ── Layer 1: GAS server cache (6 hours) ──
+  var cache = CacheService.getScriptCache();
+  var cacheKey = 'mf_' + (postNo || monthLink.slice(-20)) + '_' + dateStr.replace(/[^a-zA-Z0-9]/g, '') + (venue ? '_' + venue.replace(/[^a-zA-Z0-9]/g, '').slice(0, 10) : '');
+  var cached = cache.get(cacheKey);
+  if (cached) {
+    try {
+      var parsed = JSON.parse(cached);
+      if (parsed.editedThumbnail) {
+        return { success: true, folders: parsed, fromCache: true };
+      }
+    } catch(e) {}
+  }
+
+  var result = { raw: '', selected: '', edited: '', editedThumbnail: '' };
+
+  if (!monthLink || monthLink.indexOf('drive.google.com') === -1) {
+    return { success: true, folders: result };
+  }
+
+  var match = monthLink.match(/[-\w]{25,}/);
+  if (!match) return { success: true, folders: result };
+
+  var monthFolderId = match[0];
+  try {
+    var dateFolder = DriveApp.getFolderById(monthFolderId);
+
+    if (dateFolder) {
+      var sfs = dateFolder.getFolders();
+      while (sfs.hasNext()) {
+        var sub = sfs.next();
+        var subName = sub.getName().toLowerCase();
+        if (subName === 'raw') {
+          result.raw = sub.getUrl();
+        } else if (subName === 'selected') {
+          result.selected = sub.getUrl();
+        } else if (subName.indexOf('edited') !== -1 || subName === 'selected (edited)') {
+          result.edited = sub.getUrl();
+
+          // Check if 'Edited (Thumbnail)' or 'Edited Thumbnail' exists inside Selected (Edited) without duplicate
+          var thumbSearch = sub.getFolders();
+          var foundThumb = null;
+          while (thumbSearch.hasNext()) {
+            var tf = thumbSearch.next();
+            var tfNorm = tf.getName().toLowerCase().replace(/[\s\-_()]/g, '');
+            if (tfNorm === 'editedthumbnail' || tfNorm === 'editedthumbnails' || (tfNorm.indexOf('edited') !== -1 && tfNorm.indexOf('thumb') !== -1)) {
+              foundThumb = tf;
+              break;
+            }
+          }
+          if (!foundThumb) {
+            var thumbSearch2 = sub.getFolders();
+            while (thumbSearch2.hasNext()) {
+              var tf2 = thumbSearch2.next();
+              if (tf2.getName().toLowerCase().indexOf('thumb') !== -1) {
+                foundThumb = tf2;
+                break;
+              }
+            }
+          }
+          if (foundThumb) {
+            result.editedThumbnail = foundThumb.getUrl();
+          } else {
+            // Not found in Selected (Edited): create it cleanly without duplicate
+            try {
+              var newThumb = sub.createFolder('Edited (Thumbnail)');
+              newThumb.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.EDIT);
+              result.editedThumbnail = newThumb.getUrl();
+            } catch(crErr) {}
+          }
+        }
+      }
+    }
+
+    // Cache the result for 6 hours (21600 sec)
+    if (result.raw || result.selected || result.edited) {
+      try { cache.put(cacheKey, JSON.stringify(result), 21600); } catch(cErr) {}
+    }
+  } catch (e) {}
+
+  return { success: true, folders: result };
+}
+
+function handleGetPhotos(payload) {
+  var folderUrl = payload.folderUrl;
+  if (!folderUrl) return { success: true, photos: [] };
+
+  var match = folderUrl.match(/[-\w]{25,}/);
+  if (!match) return { success: true, photos: [] };
+
+  var photos = [];
+  try {
+    var folder = DriveApp.getFolderById(match[0]);
+    var files = folder.getFiles();
+    var count = 0;
+    while (files.hasNext() && count < 50) {
+      var file = files.next();
+      var mime = file.getMimeType();
+      if (mime.indexOf('image') !== -1 || mime.indexOf('video') !== -1) {
+        var id = file.getId();
+        photos.push({
+          name: file.getName(),
+          mimeType: mime,
+          thumbnailUrl: 'https://drive.google.com/thumbnail?id=' + id + '&sz=w400',
+          viewUrl: 'https://drive.google.com/file/d/' + id + '/view',
+        downloadUrl: 'https://drive.google.com/uc?export=view&id=' + id
+        });
+        count++;
+      }
+    }
+  } catch (e) {}
+  return { success: true, photos: photos };
+}
+
+function handleGetMediaFolders(payload) {
+  var monthLink = payload.monthLink;
+  var dateStr = payload.dateStr;
+  var venue = payload.venue || '';
+  var postNo = payload.postNo || '';
+
+  // ── Layer 1: GAS server cache (6 hours) ──
   // Folder links are fixed — Raw/Selected/Edited paths never change for a post.
   var cache = CacheService.getScriptCache();
   var cacheKey = 'mf_' + (postNo || monthLink.slice(-20)) + '_' + dateStr.replace(/[^a-zA-Z0-9]/g, '') + (venue ? '_' + venue.replace(/[^a-zA-Z0-9]/g, '').slice(0, 10) : '');
@@ -2435,18 +2554,17 @@ function handleCheckFolderNotEmpty(payload) {
       var dateFolder = DriveApp.getFolderById(match[0]);
       
       if (isThumbnailCheck) {
-        // Specific requirement: Under "Selected (Edited)" folder, check "Edited Thumbnail" folder
+        // Specific requirement: Under "Selected (Edited)" folder, check/create "Edited (Thumbnail)" folder
         var selectedEditedFolder = null;
         var sfs = dateFolder.getFolders();
         while (sfs.hasNext()) {
           var sub = sfs.next();
-          var subName = sub.getName().toLowerCase().replace(/[\s\-_]/g, '');
-          if (subName === 'selected(edited)' || subName === 'selectededited' || subName === 'edited') {
+          var subName = sub.getName().toLowerCase().replace(/[\s\-_()]/g, '');
+          if (subName === 'selectededited' || subName === 'selected(edited)' || subName === 'edited') {
             selectedEditedFolder = sub;
             break;
           }
         }
-        // Fallback: check if subName contains 'edited'
         if (!selectedEditedFolder) {
           var sfs2 = dateFolder.getFolders();
           while (sfs2.hasNext()) {
@@ -2457,7 +2575,6 @@ function handleCheckFolderNotEmpty(payload) {
             }
           }
         }
-        // Fallback: dateFolder itself might be Selected (Edited)
         if (!selectedEditedFolder && dateFolder.getName().toLowerCase().indexOf('edited') !== -1) {
           selectedEditedFolder = dateFolder;
         }
@@ -2467,13 +2584,12 @@ function handleCheckFolderNotEmpty(payload) {
           var tSearch = selectedEditedFolder.getFolders();
           while (tSearch.hasNext()) {
             var tf = tSearch.next();
-            var tfName = tf.getName().toLowerCase().replace(/[\s\-_]/g, '');
-            if (tfName === 'editedthumbnail' || tfName === 'editedthumbnails' || (tfName.indexOf('edited') !== -1 && tfName.indexOf('thumb') !== -1)) {
+            var tfNorm = tf.getName().toLowerCase().replace(/[\s\-_()]/g, '');
+            if (tfNorm === 'editedthumbnail' || tfNorm === 'editedthumbnails' || (tfNorm.indexOf('edited') !== -1 && tfNorm.indexOf('thumb') !== -1)) {
               editedThumbFolder = tf;
               break;
             }
           }
-          // Secondary fallback: any folder with 'thumb' inside Selected (Edited)
           if (!editedThumbFolder) {
             var tSearch2 = selectedEditedFolder.getFolders();
             while (tSearch2.hasNext()) {
@@ -2485,22 +2601,25 @@ function handleCheckFolderNotEmpty(payload) {
             }
           }
 
+          // If Edited (Thumbnail) folder is not there in Selected (Edited), create it without duplicate!
+          if (!editedThumbFolder) {
+            try {
+              editedThumbFolder = selectedEditedFolder.createFolder('Edited (Thumbnail)');
+              editedThumbFolder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.EDIT);
+            } catch(crErr) {}
+          }
+
           if (editedThumbFolder) {
             if (editedThumbFolder.getFiles().hasNext() || editedThumbFolder.getFolders().hasNext()) {
-              return {success: true, notEmpty: true};
+              return {success: true, notEmpty: true, folderUrl: editedThumbFolder.getUrl()};
             } else {
               return {
                 success: true,
                 notEmpty: false,
-                error: 'The "Edited Thumbnail" folder under "Selected (Edited)" is empty! Please upload the edited thumbnail files before marking done.'
+                folderUrl: editedThumbFolder.getUrl(),
+                error: 'The "Edited (Thumbnail)" folder under "Selected (Edited)" is empty! Please upload the edited thumbnail files before marking done.'
               };
             }
-          } else {
-            return {
-              success: true,
-              notEmpty: false,
-              error: '"Edited Thumbnail" folder was not found under "Selected (Edited)"! Please create it and upload the edited thumbnail files.'
-            };
           }
         } else {
           // If Selected (Edited) folder wasn't found, check if dateFolder itself has Edited Thumbnail
@@ -2508,19 +2627,19 @@ function handleCheckFolderNotEmpty(payload) {
           var dSearch = dateFolder.getFolders();
           while (dSearch.hasNext()) {
             var df = dSearch.next();
-            var dfName = df.getName().toLowerCase().replace(/[\s\-_]/g, '');
-            if (dfName === 'editedthumbnail' || (dfName.indexOf('edited') !== -1 && dfName.indexOf('thumb') !== -1)) {
+            var dfNorm = df.getName().toLowerCase().replace(/[\s\-_()]/g, '');
+            if (dfNorm === 'editedthumbnail' || (dfNorm.indexOf('edited') !== -1 && dfNorm.indexOf('thumb') !== -1)) {
               directThumb = df;
               break;
             }
           }
           if (directThumb && (directThumb.getFiles().hasNext() || directThumb.getFolders().hasNext())) {
-            return {success: true, notEmpty: true};
+            return {success: true, notEmpty: true, folderUrl: directThumb.getUrl()};
           }
           return {
             success: true,
             notEmpty: false,
-            error: '"Selected (Edited)" folder was not found! Please ensure files are placed in "Selected (Edited) > Edited Thumbnail".'
+            error: '"Selected (Edited)" folder was not found! Please ensure files are placed in "Selected (Edited) > Edited (Thumbnail)".'
           };
         }
       } else {
@@ -2543,7 +2662,7 @@ function handleCheckFolderNotEmpty(payload) {
     return {
       success: true,
       notEmpty: false,
-      error: 'The "Edited Thumbnail" folder under "Selected (Edited)" is empty! Please upload the edited thumbnail files.'
+      error: 'The "Edited (Thumbnail)" folder under "Selected (Edited)" is empty! Please upload the edited thumbnail files.'
     };
   }
   return {success: true, notEmpty: false};

@@ -47,6 +47,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   String _rawFolderLink = '';
   String _selectedFolderLink = '';
   String _editedFolderLink = '';
+  String _editedThumbnailFolderLink = '';
   String _writingDocLink = '';
   String _canvaLink = '';
   bool _isSavingCanva = false;
@@ -164,6 +165,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     if (event.isCombined) {
       List<GroupMediaLink> groupLinks = [];
       String firstEdited = '';
+      String firstEditedThumb = '';
       String firstWriting = '';
       
       for (int i = 0; i < event.combinedPosts.length; i++) {
@@ -180,6 +182,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
            
            if (i == 0) {
              firstEdited = links['edited'] ?? '';
+             firstEditedThumb = links['editedThumbnail'] ?? '';
              firstWriting = links['writingDoc'] ?? '';
            }
         }
@@ -189,6 +192,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
         setState(() {
           _groupMediaLinks = groupLinks;
           _editedFolderLink = firstEdited;
+          _editedThumbnailFolderLink = firstEditedThumb;
           _writingDocLink = firstWriting;
           _isLoadingMedia = false;
         });
@@ -206,6 +210,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
           _rawFolderLink = links['raw'] ?? '';
           _selectedFolderLink = links['selected'] ?? '';
           _editedFolderLink = links['edited'] ?? '';
+          _editedThumbnailFolderLink = links['editedThumbnail'] ?? '';
           _writingDocLink = links['writingDoc'] ?? '';
           _photos = fetchedPhotos;
           _isLoadingMedia = false;
@@ -356,6 +361,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       if (res['notEmpty'] != true) {
         setState(() => _isSaving = false);
         if (mounted) {
+          final fUrl = res['folderUrl']?.toString() ?? _editedThumbnailFolderLink;
           showDialog(
             context: context,
             builder: (ctx) => AlertDialog(
@@ -367,8 +373,16 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                   Text('Thumbnail Required'),
                 ],
               ),
-              content: Text(res['error'] ?? 'The "Edited Thumbnail" folder under "Selected (Edited)" is empty! Please upload edited thumbnail files first.'),
+              content: Text(res['error'] ?? 'The "Edited (Thumbnail)" folder under "Selected (Edited)" is empty! Please upload edited thumbnail files first.'),
               actions: [
+                if (fUrl.isNotEmpty)
+                  TextButton.icon(
+                    icon: const Icon(Icons.open_in_new, size: 16),
+                    label: const Text('Open Edited (Thumbnail) Folder'),
+                    onPressed: () {
+                      _openLink(fUrl);
+                    },
+                  ),
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
                   onPressed: () => Navigator.pop(ctx),
@@ -1120,6 +1134,8 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                             const SizedBox(height: 8),
                             if (_editedFolderLink.isNotEmpty)
                               _mediaButton(Icons.auto_fix_high, 'Selected (Edited) [Group Master]', 'Edited files for the whole group', Colors.purple, () => _openLink(_editedFolderLink)),
+                            if (_editedThumbnailFolderLink.isNotEmpty)
+                              _mediaButton(Icons.image, 'Edited (Thumbnail)', 'Thumbnail files under Selected (Edited)', Colors.amber.shade900, () => _openLink(_editedThumbnailFolderLink)),
                           ] else ...[
                             if (_rawFolderLink.isNotEmpty)
                               _mediaButton(Icons.photo_library, 'View Photos / Videos (Raw)', 'Original unedited files', Colors.blueGrey, () => _openLink(_rawFolderLink)),
@@ -1127,6 +1143,8 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                               _mediaButton(Icons.checklist, 'Selected Photos', 'Best picks from Raw', Colors.teal, () => _openLink(_selectedFolderLink)),
                             if (_editedFolderLink.isNotEmpty)
                               _mediaButton(Icons.auto_fix_high, 'Selected (Edited)', 'Edited and approved files', Colors.purple, () => _openLink(_editedFolderLink)),
+                            if (_editedThumbnailFolderLink.isNotEmpty)
+                              _mediaButton(Icons.image, 'Edited (Thumbnail)', 'Thumbnail files under Selected (Edited)', Colors.amber.shade900, () => _openLink(_editedThumbnailFolderLink)),
                             _mediaButton(Icons.folder_shared, 'Date Folder', 'Master event archive', const Color(0xFFF39C12), () => _openLink(e.folderLink)),
                           ],
                         ],
