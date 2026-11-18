@@ -50,6 +50,59 @@ class _DashboardScreenState extends State<DashboardScreen>
   final ScrollController _horizontalScrollController = ScrollController();
   final ScrollController _verticalScrollController = ScrollController();
 
+  String _getTabName(int index) {
+    switch (index) {
+      case 1: return 'posts';
+      case 2: return 'pipeline';
+      case 0:
+      default: return 'tasks';
+    }
+  }
+
+  void _switchPipeline(int index) async {
+    setState(() => _activePipelineIndex = index);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('last_pipeline', index == 1 ? 'dev' : 'social');
+    } catch (_) {}
+    if (mounted) {
+      final tabName = _getTabName(_currentIndex);
+      final pipelineName = index == 1 ? 'dev' : 'social';
+      context.go('/dashboard?pipeline=$pipelineName&tab=$tabName');
+    }
+  }
+
+  void _switchTab(int index) async {
+    setState(() => _currentIndex = index);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt('last_dashboard_tab', index);
+    } catch (_) {}
+    if (mounted) {
+      final tabName = _getTabName(index);
+      final pipelineName = _activePipelineIndex == 1 ? 'dev' : 'social';
+      context.go('/dashboard?pipeline=$pipelineName&tab=$tabName');
+    }
+  }
+
+  Future<void> _loadSavedState() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (widget.initialPipeline == null || widget.initialPipeline!.isEmpty) {
+        final savedPipeline = prefs.getString('last_pipeline');
+        if (savedPipeline == 'dev' && mounted) {
+          setState(() => _activePipelineIndex = 1);
+        }
+      }
+      if (widget.initialTab == null || widget.initialTab!.isEmpty) {
+        final savedTab = prefs.getInt('last_dashboard_tab');
+        if (savedTab != null && savedTab >= 0 && savedTab <= 2 && mounted) {
+          setState(() => _currentIndex = savedTab);
+        }
+      }
+    } catch (_) {}
+  }
+
   @override
   void initState() {
     super.initState();
@@ -60,7 +113,10 @@ class _DashboardScreenState extends State<DashboardScreen>
       _currentIndex = 2;
     } else if (widget.initialTab == 'posts' || widget.initialTab == 'all') {
       _currentIndex = 1;
+    } else if (widget.initialTab == 'tasks') {
+      _currentIndex = 0;
     }
+    _loadSavedState();
     _loadColumnWidths();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final auth = context.read<AuthProvider>();
@@ -122,7 +178,7 @@ class _DashboardScreenState extends State<DashboardScreen>
   Widget build(BuildContext context) {
     if (_activePipelineIndex == 1) {
       return DevPipelineScreen(
-        onSwitchToSocialMedia: () => setState(() => _activePipelineIndex = 0),
+        onSwitchToSocialMedia: () => _switchPipeline(0),
       );
     }
 
@@ -155,32 +211,40 @@ class _DashboardScreenState extends State<DashboardScreen>
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: const Text(
-                      'Social Media',
-                      style: TextStyle(
-                        color: Color(0xFF1E88E5),
-                        fontSize: 13,
-                        fontWeight: FontWeight.bold,
+                  InkWell(
+                    onTap: () => _switchPipeline(0),
+                    borderRadius: const BorderRadius.horizontal(left: Radius.circular(20)),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: _activePipelineIndex == 0 ? Colors.white : Colors.transparent,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        'Social Media',
+                        style: TextStyle(
+                          color: _activePipelineIndex == 0 ? const Color(0xFF1E88E5) : Colors.white.withOpacity(0.85),
+                          fontSize: 13,
+                          fontWeight: _activePipelineIndex == 0 ? FontWeight.bold : FontWeight.normal,
+                        ),
                       ),
                     ),
                   ),
                   InkWell(
-                    onTap: () => setState(() => _activePipelineIndex = 1),
+                    onTap: () => _switchPipeline(1),
                     borderRadius: const BorderRadius.horizontal(right: Radius.circular(20)),
-                    child: Padding(
+                    child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: _activePipelineIndex == 1 ? Colors.white : Colors.transparent,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
                       child: Text(
                         'Development',
                         style: TextStyle(
-                          color: Colors.white.withOpacity(0.85),
+                          color: _activePipelineIndex == 1 ? const Color(0xFF1E88E5) : Colors.white.withOpacity(0.85),
                           fontSize: 13,
-                          fontWeight: FontWeight.normal,
+                          fontWeight: _activePipelineIndex == 1 ? FontWeight.bold : FontWeight.normal,
                         ),
                       ),
                     ),
@@ -292,7 +356,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                   ),
                   child: NavigationBar(
                     selectedIndex: _currentIndex,
-                    onDestinationSelected: (i) => setState(() => _currentIndex = i),
+                    onDestinationSelected: (i) => _switchTab(i),
                     backgroundColor: theme.colorScheme.primary,
                     indicatorColor: theme.colorScheme.secondary.withOpacity(0.3),
                     destinations: const [
@@ -1050,7 +1114,7 @@ class _DashboardScreenState extends State<DashboardScreen>
             if (isCtrlOrMeta) {
               _openInNewTab(taskUrl);
             } else {
-              context.push('/event', extra: task);
+              context.push(taskUrl, extra: task);
             }
           },
           onSecondaryTapDown: (details) => _showPipelineTaskContextMenu(context, details, task),
@@ -1811,6 +1875,357 @@ class _DashboardScreenState extends State<DashboardScreen>
     });
   }
 
+  void _showEditPostBeneficiariesDialog(Map<String, dynamic> post, EventProvider provider) {
+    final auth = context.read<AuthProvider>();
+    if (auth.role.toLowerCase() != 'admin') {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Only administrators are authorized to edit beneficiaries.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    final postNo = post['PostNo']?.toString() ?? '';
+    final venue = post['Venue']?.toString() ?? '';
+    final date = post['Date']?.toString() ?? '';
+    final state = post['State']?.toString() ?? '';
+    final branch = post['Branch']?.toString() ?? '';
+
+    final initialMale = int.tryParse(post['Male']?.toString() ?? '0') ?? 0;
+    final initialFemale = int.tryParse(post['Female']?.toString() ?? '0') ?? 0;
+    final initialChildren = int.tryParse(post['Children']?.toString() ?? '0') ?? 0;
+
+    final maleController = TextEditingController(text: initialMale.toString());
+    final femaleController = TextEditingController(text: initialFemale.toString());
+    final childrenController = TextEditingController(text: initialChildren.toString());
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogCtx) {
+        bool isSaving = false;
+        String? errorMessage;
+
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            int m = int.tryParse(maleController.text.trim()) ?? 0;
+            int f = int.tryParse(femaleController.text.trim()) ?? 0;
+            int c = int.tryParse(childrenController.text.trim()) ?? 0;
+            int total = m + f + c;
+
+            return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.blue.shade50,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.people, color: Colors.blue),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Edit Beneficiaries', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+                        Text(
+                          'Post #$postNo ${venue.isNotEmpty ? '• $venue' : ''}',
+                          style: TextStyle(fontSize: 12, color: Colors.grey.shade600, fontWeight: FontWeight.normal),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              content: SizedBox(
+                width: 440,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: Colors.amber.shade50,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.amber.shade200),
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Icon(Icons.info_outline, size: 18, color: Colors.amber.shade900),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'This update will be permanently written to the source Google Sheet (BODH Responses tab).',
+                                style: TextStyle(fontSize: 11, color: Colors.amber.shade900),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      if (errorMessage != null) ...[
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          margin: const EdgeInsets.only(bottom: 12),
+                          decoration: BoxDecoration(
+                            color: Colors.red.shade50,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.red.shade200),
+                          ),
+                          child: Text(
+                            errorMessage!,
+                            style: TextStyle(fontSize: 12, color: Colors.red.shade800),
+                          ),
+                        ),
+                      ],
+                      TextFormField(
+                        controller: maleController,
+                        keyboardType: TextInputType.number,
+                        decoration: InputDecoration(
+                          labelText: 'पुरुष / Male',
+                          prefixIcon: const Icon(Icons.man, color: Color(0xFF42A5F5)),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                        ),
+                        onChanged: (_) => setDialogState(() {}),
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: femaleController,
+                        keyboardType: TextInputType.number,
+                        decoration: InputDecoration(
+                          labelText: 'महिलाएं / Female',
+                          prefixIcon: const Icon(Icons.woman, color: Color(0xFFE91E63)),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                        ),
+                        onChanged: (_) => setDialogState(() {}),
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: childrenController,
+                        keyboardType: TextInputType.number,
+                        decoration: InputDecoration(
+                          labelText: 'बच्चे / Children',
+                          prefixIcon: const Icon(Icons.child_care, color: Color(0xFFFF9800)),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                        ),
+                        onChanged: (_) => setDialogState(() {}),
+                      ),
+                      const SizedBox(height: 16),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade100,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text(
+                              'कुल लाभार्थी / Total Beneficiaries:',
+                              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                            ),
+                            Text(
+                              '$total',
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.indigo),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: isSaving ? null : () => Navigator.of(dialogCtx).pop(),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: isSaving
+                      ? null
+                      : () async {
+                          setDialogState(() {
+                            isSaving = true;
+                            errorMessage = null;
+                          });
+
+                          final result = await provider.updateBeneficiaries(
+                            postNo: postNo,
+                            state: state,
+                            branch: branch,
+                            venue: venue,
+                            date: date,
+                            prevMale: initialMale,
+                            prevFemale: initialFemale,
+                            prevChildren: initialChildren,
+                            male: m,
+                            female: f,
+                            children: c,
+                            subPost: post,
+                          );
+
+                          if (result['success'] == true) {
+                            if (mounted) {
+                              setState(() {});
+                            }
+                            if (dialogCtx.mounted) {
+                              Navigator.of(dialogCtx).pop();
+                            }
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(result['message'] ?? 'Beneficiaries updated successfully!'),
+                                  backgroundColor: Colors.green,
+                                ),
+                              );
+                            }
+                          } else {
+                            setDialogState(() {
+                              isSaving = false;
+                              errorMessage = result['message'] ?? 'Failed to update beneficiaries.';
+                            });
+                          }
+                        },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.indigo,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  child: isSaving
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        )
+                      : const Text('Save Changes'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _showEditCombinedBeneficiariesDialog(Map<String, dynamic> group, EventProvider provider) {
+    final auth = context.read<AuthProvider>();
+    if (auth.role.toLowerCase() != 'admin') {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Only administrators are authorized to edit beneficiaries.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    final List<Map<String, dynamic>> posts = (group['Posts'] as List<dynamic>?)?.cast<Map<String, dynamic>>() ?? [];
+    if (posts.isEmpty) return;
+    if (posts.length == 1) {
+      _showEditPostBeneficiariesDialog(posts.first, provider);
+      return;
+    }
+
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.purple.shade50,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.people, color: Colors.purple),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Select Event to Edit', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                    Text(
+                      'Combined Group #${group['GroupID'] ?? ''} (${posts.length} events)',
+                      style: TextStyle(fontSize: 12, color: Colors.grey.shade600, fontWeight: FontWeight.normal),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          content: SizedBox(
+            width: 480,
+            child: ListView.separated(
+              shrinkWrap: true,
+              itemCount: posts.length,
+              separatorBuilder: (_, __) => const Divider(height: 1),
+              itemBuilder: (context, idx) {
+                final p = posts[idx];
+                final pNo = p['PostNo']?.toString() ?? '';
+                final theme = p['Theme']?.toString() ?? p['Program']?.toString() ?? '';
+                final venue = p['Venue']?.toString() ?? '';
+                final date = p['Date']?.toString() ?? '';
+                final male = p['Male'] ?? 0;
+                final female = p['Female'] ?? 0;
+                final children = p['Children'] ?? 0;
+                final total = p['TotalBeneficiary'] ?? 0;
+
+                return ListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  title: Text('#$pNo - $theme', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (venue.isNotEmpty) Text('📍 $venue', style: const TextStyle(fontSize: 11)),
+                      if (date.isNotEmpty) Text('📅 $date', style: const TextStyle(fontSize: 11)),
+                      Text('👨 $male  👩 $female  🧒 $children  👥 Total: $total', style: TextStyle(fontSize: 11, color: Colors.indigo.shade700, fontWeight: FontWeight.w600)),
+                    ],
+                  ),
+                  trailing: ElevatedButton.icon(
+                    icon: const Icon(Icons.edit, size: 14),
+                    label: const Text('Edit', style: TextStyle(fontSize: 11)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.indigo,
+                      foregroundColor: Colors.white,
+                      visualDensity: VisualDensity.compact,
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    ),
+                    onPressed: () {
+                      Navigator.of(ctx).pop();
+                      _showEditPostBeneficiariesDialog(p, provider);
+                    },
+                  ),
+                );
+              },
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Close'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   void _showPostLifecycle(Map<String, dynamic> post, EventProvider provider) {
     final postNo = post['PostNo']?.toString() ?? '';
     final postTasks = provider.events.where((t) => t.postNo == postNo).toList();
@@ -1996,7 +2411,8 @@ class _DashboardScreenState extends State<DashboardScreen>
               ),
               onPressed: () {
                 Navigator.pop(ctx);
-                context.push('/admin-assign', extra: {
+                final adminUrl = '/admin-assign?postNo=${Uri.encodeComponent(postNo)}';
+                context.push(adminUrl, extra: {
                   ...post,
                   'isInitialized': isInitialized,
                   'existingTasks': postTasks,
@@ -2409,7 +2825,7 @@ class _DashboardScreenState extends State<DashboardScreen>
       } else if (value == 'open_workflow_new_tab') {
         _openInNewTab(workflowUrl);
       } else if (value == 'open_current_tab') {
-        context.push('/event', extra: task);
+        context.push(taskUrl, extra: task);
       }
     });
   }
@@ -2467,6 +2883,17 @@ class _DashboardScreenState extends State<DashboardScreen>
               ],
             ),
           ),
+        if (auth.role.toLowerCase() == 'admin')
+          const PopupMenuItem<String>(
+            value: 'edit_beneficiaries',
+            child: Row(
+              children: [
+                Icon(Icons.people_alt_outlined, size: 18, color: Colors.indigo),
+                SizedBox(width: 10),
+                Text('Edit Beneficiaries', style: TextStyle(fontSize: 13, color: Colors.indigo)),
+              ],
+            ),
+          ),
         if (isInitialized)
           const PopupMenuItem<String>(
             value: 'delete_workflow',
@@ -2483,10 +2910,23 @@ class _DashboardScreenState extends State<DashboardScreen>
       if (value == 'open_new_tab') {
         final combinedQuery = isCombined ? '&isCombined=true' : '';
         _openInNewTab('/admin-assign?postNo=$postNo$combinedQuery');
+      } else if (value == 'edit_beneficiaries') {
+        if (isCombined && group != null) {
+          _showEditCombinedBeneficiariesDialog(group, provider);
+        } else if (post != null) {
+          _showEditPostBeneficiariesDialog(post, provider);
+        } else {
+          final foundPost = provider.rawPosts.firstWhere(
+            (p) => p['PostNo']?.toString() == postNo,
+            orElse: () => {'PostNo': postNo},
+          );
+          _showEditPostBeneficiariesDialog(foundPost, provider);
+        }
       } else if (value == 'edit_workflow') {
         if (isCombined && group != null) {
           final List<Map<String, dynamic>> posts = (group['Posts'] as List<dynamic>?)?.cast<Map<String, dynamic>>() ?? [];
-          context.push('/admin-assign', extra: {
+          final adminUrl = '/admin-assign?postNo=${Uri.encodeComponent(postNo)}&isCombined=true';
+          context.push(adminUrl, extra: {
             'postNo': postNo,
             'isCombined': true,
             'isInitialized': isInitialized,
@@ -2495,7 +2935,8 @@ class _DashboardScreenState extends State<DashboardScreen>
             if (posts.isNotEmpty) ...posts.first,
           });
         } else if (post != null) {
-          context.push('/admin-assign', extra: {
+          final adminUrl = '/admin-assign?postNo=${Uri.encodeComponent(postNo)}';
+          context.push(adminUrl, extra: {
             ...post,
             'isInitialized': isInitialized,
             'existingTasks': provider.events.where((t) => t.postNo == postNo).toList(),
@@ -2681,7 +3122,8 @@ class _DashboardScreenState extends State<DashboardScreen>
               ),
               onPressed: () {
                 Navigator.pop(ctx);
-                context.push('/admin-assign', extra: {
+                final adminUrl = '/admin-assign?postNo=${Uri.encodeComponent(groupId)}&isCombined=true';
+                context.push(adminUrl, extra: {
                   'postNo': groupId,
                   'isCombined': true,
                   'isInitialized': isInitialized,
@@ -2902,6 +3344,8 @@ class _DashboardScreenState extends State<DashboardScreen>
                       ),
                     ],
                     rows: posts.map((post) {
+                      final auth = context.read<AuthProvider>();
+                      final isAdmin = auth.role.toLowerCase() == 'admin';
                       final postNo = post['PostNo']?.toString() ?? '';
                       final activityType = post['ActivityType']?.toString() ?? '';
                       final branch = post['Branch']?.toString() ?? '';
@@ -3022,9 +3466,24 @@ class _DashboardScreenState extends State<DashboardScreen>
                             SizedBox(
                               width: _colWidths['totalBen'] ?? _defaultColWidths['totalBen']!,
                               child: InkWell(
-                                onTap: () => _showPostLifecycle(post, provider),
+                                onTap: () {
+                                  if (isAdmin) {
+                                    _showEditPostBeneficiariesDialog(post, provider);
+                                  } else {
+                                    _showPostLifecycle(post, provider);
+                                  }
+                                },
                                 onSecondaryTapDown: (details) => _showPostContextMenu(context, details, postNo, post: post),
-                                child: Text(totalBen, overflow: TextOverflow.ellipsis),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Expanded(child: Text(totalBen, overflow: TextOverflow.ellipsis)),
+                                    if (isAdmin) ...[
+                                      const SizedBox(width: 2),
+                                      Icon(Icons.edit, size: 12, color: Colors.indigo.shade400),
+                                    ],
+                                  ],
+                                ),
                               ),
                             ),
                           ),
@@ -3048,13 +3507,24 @@ class _DashboardScreenState extends State<DashboardScreen>
                                     padding: EdgeInsets.zero,
                                     constraints: const BoxConstraints(minWidth: 26, minHeight: 26),
                                     onPressed: () {
-                                      context.push('/admin-assign', extra: {
+                                      final adminUrl = '/admin-assign?postNo=${Uri.encodeComponent(postNo)}';
+                                      context.push(adminUrl, extra: {
                                         ...post,
                                         'isInitialized': isInitialized,
                                         'existingTasks': postTasks,
                                       });
                                     },
                                   ),
+                                  if (isAdmin) ...[
+                                    const SizedBox(width: 4),
+                                    IconButton(
+                                      icon: Icon(Icons.people_alt_outlined, size: 18, color: Colors.indigo.shade700),
+                                      tooltip: 'Edit Beneficiaries',
+                                      padding: EdgeInsets.zero,
+                                      constraints: const BoxConstraints(minWidth: 26, minHeight: 26),
+                                      onPressed: () => _showEditPostBeneficiariesDialog(post, provider),
+                                    ),
+                                  ],
                                   if (isInitialized) ...[
                                     const SizedBox(width: 4),
                                     IconButton(
@@ -3166,6 +3636,8 @@ class _DashboardScreenState extends State<DashboardScreen>
                   ),
                 ],
                 rows: groups.map((group) {
+                  final auth = context.read<AuthProvider>();
+                  final isAdmin = auth.role.toLowerCase() == 'admin';
                   final groupId = group['GroupID']?.toString() ?? '';
                   final List<Map<String, dynamic>> posts = (group['Posts'] as List<dynamic>?)?.cast<Map<String, dynamic>>() ?? [];
                   final firstPost = posts.isNotEmpty ? posts.first : <String, dynamic>{};
@@ -3254,9 +3726,24 @@ class _DashboardScreenState extends State<DashboardScreen>
                       ),
                       DataCell(
                         InkWell(
-                          onTap: () => _showCombinedLifecycle(group, provider),
+                          onTap: () {
+                            if (isAdmin) {
+                              _showEditCombinedBeneficiariesDialog(group, provider);
+                            } else {
+                              _showCombinedLifecycle(group, provider);
+                            }
+                          },
                           onSecondaryTapDown: (details) => _showPostContextMenu(context, details, groupId, isCombined: true, group: group),
-                          child: Text(totalBen.toString()),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(totalBen.toString()),
+                              if (isAdmin) ...[
+                                const SizedBox(width: 4),
+                                Icon(Icons.edit, size: 12, color: Colors.purple.shade400),
+                              ],
+                            ],
+                          ),
                         ),
                       ),
                       DataCell(
@@ -3285,8 +3772,9 @@ class _DashboardScreenState extends State<DashboardScreen>
                               padding: EdgeInsets.zero,
                               constraints: const BoxConstraints(minWidth: 26, minHeight: 26),
                               onPressed: () {
+                                final adminUrl = '/admin-assign?postNo=${Uri.encodeComponent(groupId)}&isCombined=true';
                                 context.push(
-                                  '/admin-assign',
+                                  adminUrl,
                                   extra: {
                                     'postNo': groupId,
                                     'isCombined': true,
@@ -3298,6 +3786,16 @@ class _DashboardScreenState extends State<DashboardScreen>
                                 );
                               },
                             ),
+                            if (isAdmin) ...[
+                              const SizedBox(width: 4),
+                              IconButton(
+                                icon: Icon(Icons.people_alt_outlined, size: 18, color: Colors.purple.shade700),
+                                tooltip: 'Edit Beneficiaries',
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints(minWidth: 26, minHeight: 26),
+                                onPressed: () => _showEditCombinedBeneficiariesDialog(group, provider),
+                              ),
+                            ],
                             if (isInitialized) ...[
                               const SizedBox(width: 4),
                               IconButton(
@@ -3492,11 +3990,14 @@ class _DashboardScreenState extends State<DashboardScreen>
                     tooltip: isInitialized
                         ? 'Edit Workflow & Assignees'
                         : 'Assign & Setup Workflow',
-                    onPressed: () => context.push('/admin-assign', extra: {
-                      ...post,
-                      'isInitialized': isInitialized,
-                      'existingTasks': postTasks,
-                    }),
+                    onPressed: () {
+                      final adminUrl = '/admin-assign?postNo=${Uri.encodeComponent(postNo)}';
+                      context.push(adminUrl, extra: {
+                        ...post,
+                        'isInitialized': isInitialized,
+                        'existingTasks': postTasks,
+                      });
+                    },
                   ),
                   if (isInitialized)
                     IconButton(
@@ -3603,16 +4104,42 @@ class _DashboardScreenState extends State<DashboardScreen>
                   color: const Color(0xFFF0F7FF),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                child: Column(
                   children: [
-                    _benStat('👨', 'Male', '$male'),
-                    _benDivider(),
-                    _benStat('👩', 'Female', '$female'),
-                    _benDivider(),
-                    _benStat('🧒', 'Children', '$children'),
-                    _benDivider(),
-                    _benStat('👥', 'Total', '$totalBen', bold: true),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceAround,
+                      children: [
+                        _benStat('👨', 'Male', '$male'),
+                        _benDivider(),
+                        _benStat('👩', 'Female', '$female'),
+                        _benDivider(),
+                        _benStat('🧒', 'Children', '$children'),
+                        _benDivider(),
+                        _benStat('👥', 'Total', '$totalBen', bold: true),
+                      ],
+                    ),
+                    if (auth.role.toLowerCase() == 'admin') ...[
+                      const SizedBox(height: 6),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: InkWell(
+                          onTap: () {
+                            _showEditPostBeneficiariesDialog(post, provider);
+                          },
+                          child: const Padding(
+                            padding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.edit, size: 12, color: Colors.indigo),
+                                SizedBox(width: 4),
+                                Text('Edit Beneficiaries', style: TextStyle(fontSize: 11, color: Colors.indigo, fontWeight: FontWeight.bold)),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -3740,8 +4267,9 @@ class _DashboardScreenState extends State<DashboardScreen>
                         ? 'Edit Combined Workflow'
                         : 'Assign & Setup Workflow',
                     onPressed: () {
+                      final adminUrl = '/admin-assign?postNo=${Uri.encodeComponent(groupId)}&isCombined=true';
                       context.push(
-                        '/admin-assign',
+                        adminUrl,
                         extra: {
                           'postNo': groupId,
                           'isCombined': true,

@@ -1857,36 +1857,34 @@ function handleUpdateBeneficiaries(payload) {
 
     var header = data[0];
     
-    // Column indices (0-based) in BODH Responses:
-    // C = State (index 2)
-    // D to W = Branches (indices 3 to 22)
-    // X = Venue (index 23)
-    // Z = Date (index 25)
-    // AB = Male (index 27)
-    // AC = Female (index 28)
-    // AD = Children (index 29)
+    // Exact column indices (0-based) based on BODH Responses sheet:
+    // C = State (index 2, Col 3)
+    // D to W = Branches (indices 3 to 22, Cols 4 to 23)
+    // X = Venue (index 23, Col 24)
+    // Z = Date (index 25, Col 26)
+    // AB = Male (index 27, Col 28)
+    // AC = Female (index 28, Col 29)
+    // AD = Children (index 29, Col 30)
     var stateCol = 2;
     var venueCol = 23;
     var dateCol = 25;
-    var maleCol = 27;
-    var femaleCol = 28;
-    var childrenCol = 29;
+    var maleCol = 27;     // Column AB (1-based: 28)
+    var femaleCol = 28;   // Column AC (1-based: 29)
+    var childrenCol = 29; // Column AD (1-based: 30)
 
-    // Search header if available to verify or adjust column indices
-    for (var c = 0; c < header.length; c++) {
+    // Verify and adjust column indices specifically around columns 20 to 35
+    for (var c = 20; c < Math.min(header.length, 35); c++) {
       var hText = (header[c] || '').toString().toLowerCase();
       if (hText.indexOf('स्थान') !== -1 || hText.indexOf('venue') !== -1) {
         venueCol = c;
       } else if (hText.indexOf('दिनांक') !== -1 || hText.indexOf('date') !== -1) {
         dateCol = c;
-      } else if (hText.indexOf('पुरुष') !== -1 || hText.indexOf('male') !== -1) {
-        maleCol = c;
       } else if (hText.indexOf('महिलाएं') !== -1 || hText.indexOf('female') !== -1) {
         femaleCol = c;
+      } else if (hText.indexOf('पुरुष') !== -1 || (hText.indexOf('male') !== -1 && hText.indexOf('female') === -1)) {
+        maleCol = c;
       } else if (hText.indexOf('बच्चे') !== -1 || hText.indexOf('children') !== -1) {
         childrenCol = c;
-      } else if (hText.indexOf('राज्य') !== -1 || hText.indexOf('state') !== -1) {
-        stateCol = c;
       }
     }
 
@@ -1999,21 +1997,29 @@ function handleUpdateBeneficiaries(payload) {
     }
 
     if (bestRowIndex !== -1 && bestScore >= 40) {
-      // Update values in source sheet
+      // 1. Write new values to source sheet (Columns AB=28, AC=29, AD=30)
       sourceSheet.getRange(bestRowIndex + 1, maleCol + 1).setValue(newMale);
       sourceSheet.getRange(bestRowIndex + 1, femaleCol + 1).setValue(newFemale);
       sourceSheet.getRange(bestRowIndex + 1, childrenCol + 1).setValue(newChildren);
+      SpreadsheetApp.flush();
 
       // Invalidate script cache
       try {
         CacheService.getScriptCache().remove('all_posts');
       } catch(ce) {}
 
+      var colABLetter = 'AB (Col ' + (maleCol + 1) + ')';
+      var colACLetter = 'AC (Col ' + (femaleCol + 1) + ')';
+      var colADLetter = 'AD (Col ' + (childrenCol + 1) + ')';
+
       return {
         success: true,
-        message: 'Beneficiaries successfully updated in BODH Responses sheet at row ' + (bestRowIndex + 1) + '.',
+        message: 'Beneficiaries successfully updated in BODH Responses sheet at row ' + (bestRowIndex + 1) + ' (Cols: ' + colABLetter + ', ' + colACLetter + ', ' + colADLetter + '). New counts: 👨 ' + newMale + ', 👩 ' + newFemale + ', 🧒 ' + newChildren + '.',
         matchedRow: bestRowIndex + 1,
-        matchScore: bestScore
+        matchScore: bestScore,
+        maleCol: maleCol + 1,
+        femaleCol: femaleCol + 1,
+        childrenCol: childrenCol + 1
       };
     } else {
       return {
