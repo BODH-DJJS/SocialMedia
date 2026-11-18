@@ -507,6 +507,111 @@ class EventProvider with ChangeNotifier {
     return false;
   }
 
+  Future<Map<String, dynamic>> updateBeneficiaries({
+    required String postNo,
+    required String state,
+    required String branch,
+    required String venue,
+    required String date,
+    required int prevMale,
+    required int prevFemale,
+    required int prevChildren,
+    required int male,
+    required int female,
+    required int children,
+    Event? event,
+    Map<String, dynamic>? subPost,
+  }) async {
+    try {
+      final Map<String, dynamic> payload = {
+        'action': 'updateBeneficiaries',
+        'postNo': postNo,
+        'state': state,
+        'branch': branch,
+        'venue': venue,
+        'date': date,
+        'prevMale': prevMale,
+        'prevFemale': prevFemale,
+        'prevChildren': prevChildren,
+        'male': male,
+        'female': female,
+        'children': children,
+      };
+      final response = await _apiService.postData(payload);
+      if (response['success'] == true) {
+        final total = male + female + children;
+        // 1. Update the Event object if provided
+        if (event != null) {
+          event.male = male;
+          event.female = female;
+          event.children = children;
+          event.totalBeneficiary = total;
+        }
+        // 2. Update subPost if provided
+        if (subPost != null) {
+          subPost['Male'] = male;
+          subPost['Female'] = female;
+          subPost['Children'] = children;
+          subPost['TotalBeneficiary'] = total;
+        }
+        // If event is combined, recompute total across its subposts
+        if (event != null && event.isCombined && event.combinedPosts.isNotEmpty) {
+          int cMale = 0, cFemale = 0, cChildren = 0;
+          for (var sp in event.combinedPosts) {
+            cMale += int.tryParse(sp['Male']?.toString() ?? '0') ?? 0;
+            cFemale += int.tryParse(sp['Female']?.toString() ?? '0') ?? 0;
+            cChildren += int.tryParse(sp['Children']?.toString() ?? '0') ?? 0;
+          }
+          event.male = cMale;
+          event.female = cFemale;
+          event.children = cChildren;
+          event.totalBeneficiary = cMale + cFemale + cChildren;
+        }
+        // 3. Update in _rawPosts
+        for (var p in _rawPosts) {
+          if (p['PostNo']?.toString() == postNo) {
+            p['Male'] = male;
+            p['Female'] = female;
+            p['Children'] = children;
+            p['TotalBeneficiary'] = total;
+            break;
+          }
+        }
+        // 4. Update in _events list
+        for (var ev in _events) {
+          if (ev.postNo == postNo) {
+            ev.male = male;
+            ev.female = female;
+            ev.children = children;
+            ev.totalBeneficiary = total;
+          }
+          if (ev.isCombined && ev.combinedPosts.isNotEmpty) {
+            for (var sp in ev.combinedPosts) {
+              if (sp['PostNo']?.toString() == postNo) {
+                sp['Male'] = male;
+                sp['Female'] = female;
+                sp['Children'] = children;
+                sp['TotalBeneficiary'] = total;
+              }
+            }
+          }
+        }
+        // 5. Update local storage cache
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          prefs.setString(_cacheKeyPosts, json.encode(_rawPosts));
+        } catch (_) {}
+        notifyListeners();
+        return {'success': true, 'message': response['message'] ?? 'Beneficiaries updated successfully!'};
+      } else {
+        return {'success': false, 'message': response['message'] ?? 'Failed to update beneficiaries.'};
+      }
+    } catch (e) {
+      debugPrint('Error updating beneficiaries: $e');
+      return {'success': false, 'message': e.toString()};
+    }
+  }
+
   Future<bool> createTasksForPostV2({
     required String postNo,
     required Map<String, String> assignees,

@@ -951,17 +951,40 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                                     if (pVenue.isNotEmpty)
                                       _infoRow(Icons.place, 'Venue', pVenue),
                                     // Beneficiaries
-                                    if ((pTotal as num) > 0)
-                                      Padding(
-                                        padding: const EdgeInsets.only(top: 4),
-                                        child: Row(
-                                          children: [
-                                            const Icon(Icons.people, size: 14, color: Colors.grey),
-                                            const SizedBox(width: 4),
-                                            Text(
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 4),
+                                      child: Row(
+                                        children: [
+                                          const Icon(Icons.people, size: 14, color: Colors.grey),
+                                          const SizedBox(width: 4),
+                                          Expanded(
+                                            child: Text(
                                               '👨 $pMale  👩 $pFemale  🧒 $pChildren  👥 Total: $pTotal',
                                               style: TextStyle(fontSize: 11, color: Colors.grey.shade700),
                                             ),
+                                          ),
+                                          InkWell(
+                                            onTap: () => _showEditBeneficiariesDialog(context, e, subPost: p),
+                                            child: Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                              decoration: BoxDecoration(
+                                                color: Colors.blue.shade50,
+                                                borderRadius: BorderRadius.circular(4),
+                                                border: Border.all(color: Colors.blue.shade200),
+                                              ),
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: const [
+                                                  Icon(Icons.edit, size: 11, color: Colors.blue),
+                                                  SizedBox(width: 2),
+                                                  Text('Edit', style: TextStyle(fontSize: 10, color: Colors.blue, fontWeight: FontWeight.bold)),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
                                     // Guest / Speaker / Participant Info
                                     if ((p['GuestName']?.toString().isNotEmpty ?? false) ||
                                         (p['GuestOrg']?.toString().isNotEmpty ?? false) ||
@@ -995,9 +1018,6 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                                         ),
                                       ),
                                     ],
-                                          ],
-                                        ),
-                                      ),
                                   ],
                                 ),
                               );
@@ -1086,7 +1106,27 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text('Beneficiaries', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text('Beneficiaries', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                              if (!e.isCombined)
+                                TextButton.icon(
+                                  onPressed: () => _showEditBeneficiariesDialog(context, e),
+                                  icon: const Icon(Icons.edit, size: 16),
+                                  label: const Text('Edit Beneficiaries', style: TextStyle(fontSize: 12)),
+                                  style: TextButton.styleFrom(
+                                    visualDensity: VisualDensity.compact,
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  ),
+                                )
+                              else
+                                Text(
+                                  'Edit per sub-post above',
+                                  style: TextStyle(fontSize: 11, color: Colors.grey.shade500, fontStyle: FontStyle.italic),
+                                ),
+                            ],
+                          ),
                           const SizedBox(height: 12),
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -1432,6 +1472,246 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  void _showEditBeneficiariesDialog(BuildContext context, Event event, {Map<String, dynamic>? subPost}) {
+    final postNo = subPost != null ? (subPost['PostNo']?.toString() ?? '') : event.postNo;
+    final venue = subPost != null ? (subPost['Venue']?.toString() ?? '') : event.venue;
+    final date = subPost != null ? (subPost['Date']?.toString() ?? '') : event.date;
+    final state = subPost != null ? (subPost['State']?.toString() ?? '') : event.state;
+    final branch = subPost != null ? (subPost['Branch']?.toString() ?? '') : event.branch;
+
+    final initialMale = subPost != null ? (int.tryParse(subPost['Male']?.toString() ?? '0') ?? 0) : event.male;
+    final initialFemale = subPost != null ? (int.tryParse(subPost['Female']?.toString() ?? '0') ?? 0) : event.female;
+    final initialChildren = subPost != null ? (int.tryParse(subPost['Children']?.toString() ?? '0') ?? 0) : event.children;
+
+    final maleController = TextEditingController(text: initialMale.toString());
+    final femaleController = TextEditingController(text: initialFemale.toString());
+    final childrenController = TextEditingController(text: initialChildren.toString());
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogCtx) {
+        bool isSaving = false;
+        String? errorMessage;
+
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            int m = int.tryParse(maleController.text.trim()) ?? 0;
+            int f = int.tryParse(femaleController.text.trim()) ?? 0;
+            int c = int.tryParse(childrenController.text.trim()) ?? 0;
+            int total = m + f + c;
+
+            return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.blue.shade50,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.people, color: Colors.blue),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Edit Beneficiaries', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+                        Text(
+                          'Post #$postNo ${venue.isNotEmpty ? '• $venue' : ''}',
+                          style: TextStyle(fontSize: 12, color: Colors.grey.shade600, fontWeight: FontWeight.normal),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              content: SizedBox(
+                width: 440,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: Colors.amber.shade50,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.amber.shade200),
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Icon(Icons.info_outline, size: 18, color: Colors.amber.shade900),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'This update will be permanently written to the source Google Sheet (BODH Responses tab).',
+                                style: TextStyle(fontSize: 11, color: Colors.amber.shade900),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      if (errorMessage != null) ...[
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          margin: const EdgeInsets.only(bottom: 12),
+                          decoration: BoxDecoration(
+                            color: Colors.red.shade50,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.red.shade200),
+                          ),
+                          child: Text(
+                            errorMessage!,
+                            style: TextStyle(fontSize: 12, color: Colors.red.shade800),
+                          ),
+                        ),
+                      ],
+                      // Male Input
+                      TextFormField(
+                        controller: maleController,
+                        keyboardType: TextInputType.number,
+                        decoration: InputDecoration(
+                          labelText: 'पुरुष / Male',
+                          prefixIcon: const Icon(Icons.man, color: Color(0xFF42A5F5)),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                        ),
+                        onChanged: (_) => setDialogState(() {}),
+                      ),
+                      const SizedBox(height: 12),
+                      // Female Input
+                      TextFormField(
+                        controller: femaleController,
+                        keyboardType: TextInputType.number,
+                        decoration: InputDecoration(
+                          labelText: 'महिलाएं / Female',
+                          prefixIcon: const Icon(Icons.woman, color: Color(0xFFE91E63)),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                        ),
+                        onChanged: (_) => setDialogState(() {}),
+                      ),
+                      const SizedBox(height: 12),
+                      // Children Input
+                      TextFormField(
+                        controller: childrenController,
+                        keyboardType: TextInputType.number,
+                        decoration: InputDecoration(
+                          labelText: 'बच्चे / Children',
+                          prefixIcon: const Icon(Icons.child_care, color: Color(0xFFFF9800)),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                        ),
+                        onChanged: (_) => setDialogState(() {}),
+                      ),
+                      const SizedBox(height: 16),
+                      // Calculated Total Card
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade100,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text(
+                              'कुल लाभार्थी / Total Beneficiaries:',
+                              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                            ),
+                            Text(
+                              '$total',
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.indigo),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: isSaving ? null : () => Navigator.of(dialogCtx).pop(),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: isSaving
+                      ? null
+                      : () async {
+                          setDialogState(() {
+                            isSaving = true;
+                            errorMessage = null;
+                          });
+
+                          final provider = Provider.of<EventProvider>(context, listen: false);
+                          final result = await provider.updateBeneficiaries(
+                            postNo: postNo,
+                            state: state,
+                            branch: branch,
+                            venue: venue,
+                            date: date,
+                            prevMale: initialMale,
+                            prevFemale: initialFemale,
+                            prevChildren: initialChildren,
+                            male: m,
+                            female: f,
+                            children: c,
+                            event: event,
+                            subPost: subPost,
+                          );
+
+                          if (result['success'] == true) {
+                            if (mounted) {
+                              setState(() {});
+                            }
+                            if (dialogCtx.mounted) {
+                              Navigator.of(dialogCtx).pop();
+                            }
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(result['message'] ?? 'Beneficiaries updated successfully!'),
+                                  backgroundColor: Colors.green,
+                                ),
+                              );
+                            }
+                          } else {
+                            setDialogState(() {
+                              isSaving = false;
+                              errorMessage = result['message'] ?? 'Failed to update beneficiaries.';
+                            });
+                          }
+                        },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.indigo,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  child: isSaving
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        )
+                      : const Text('Save Changes'),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 

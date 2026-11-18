@@ -4,6 +4,10 @@ var USERS_SHEET = 'Users';
 var PIPELINE_SHEET = 'Pipeline Config';
 var BRANCH_SPOC_SHEET = 'Branch SPOC';
 
+// ── Source Form Responses Sheet (BODH Responses) ──
+var SOURCE_RESPONSES_SPREADSHEET_ID = '1OvVqqDI5JwTMJA4svMKXUb2JuOMQUaPgH7Un-UMum14';
+var SOURCE_RESPONSES_TAB = 'BODH Responses';
+
 // ── Development Pipeline Sheets ──
 var DEV_PROJECTS_SHEET = 'Dev_Projects';
 var DEV_TASKS_SHEET = 'Dev_Tasks';
@@ -267,6 +271,24 @@ function doPost(e) {
       lock.waitLock(10000);
       try {
         var res = handleRedoDevTask(payload);
+        return respond(res);
+      } finally {
+        lock.releaseLock();
+      }
+    } else if (action === 'reassignDevTask') {
+      var lock = LockService.getScriptLock();
+      lock.waitLock(10000);
+      try {
+        var res = handleReassignDevTask(payload);
+        return respond(res);
+      } finally {
+        lock.releaseLock();
+      }
+    } else if (action === 'updateBeneficiaries') {
+      var lock = LockService.getScriptLock();
+      lock.waitLock(15000);
+      try {
+        var res = handleUpdateBeneficiaries(payload);
         return respond(res);
       } finally {
         lock.releaseLock();
@@ -1805,6 +1827,206 @@ function handleUpdateBranchSPOC(payload) {
   // New branch entry
   sheet.appendRow([payload.branch, payload.spocName, payload.spocEmail]);
   return { success: true, message: 'SPOC added for ' + payload.branch };
+}
+
+function handleUpdateBeneficiaries(payload) {
+  var postNo = (payload.postNo || '').toString().trim();
+  var state = (payload.state || '').toString().trim();
+  var branch = (payload.branch || '').toString().trim();
+  var venue = (payload.venue || '').toString().trim();
+  var dateStr = (payload.date || '').toString().trim();
+  var prevMale = safeNum(payload.prevMale);
+  var prevFemale = safeNum(payload.prevFemale);
+  var prevChildren = safeNum(payload.prevChildren);
+
+  var newMale = safeNum(payload.male);
+  var newFemale = safeNum(payload.female);
+  var newChildren = safeNum(payload.children);
+
+  try {
+    var sourceSS = SpreadsheetApp.openById(SOURCE_RESPONSES_SPREADSHEET_ID);
+    var sourceSheet = sourceSS.getSheetByName(SOURCE_RESPONSES_TAB);
+    if (!sourceSheet) {
+      return { success: false, message: 'Source sheet "' + SOURCE_RESPONSES_TAB + '" not found in spreadsheet.' };
+    }
+
+    var data = sourceSheet.getDataRange().getValues();
+    if (data.length < 2) {
+      return { success: false, message: 'Source sheet is empty.' };
+    }
+
+    var header = data[0];
+    
+    // Column indices (0-based) in BODH Responses:
+    // C = State (index 2)
+    // D to W = Branches (indices 3 to 22)
+    // X = Venue (index 23)
+    // Z = Date (index 25)
+    // AB = Male (index 27)
+    // AC = Female (index 28)
+    // AD = Children (index 29)
+    var stateCol = 2;
+    var venueCol = 23;
+    var dateCol = 25;
+    var maleCol = 27;
+    var femaleCol = 28;
+    var childrenCol = 29;
+
+    // Search header if available to verify or adjust column indices
+    for (var c = 0; c < header.length; c++) {
+      var hText = (header[c] || '').toString().toLowerCase();
+      if (hText.indexOf('स्थान') !== -1 || hText.indexOf('venue') !== -1) {
+        venueCol = c;
+      } else if (hText.indexOf('दिनांक') !== -1 || hText.indexOf('date') !== -1) {
+        dateCol = c;
+      } else if (hText.indexOf('पुरुष') !== -1 || hText.indexOf('male') !== -1) {
+        maleCol = c;
+      } else if (hText.indexOf('महिलाएं') !== -1 || hText.indexOf('female') !== -1) {
+        femaleCol = c;
+      } else if (hText.indexOf('बच्चे') !== -1 || hText.indexOf('children') !== -1) {
+        childrenCol = c;
+      } else if (hText.indexOf('राज्य') !== -1 || hText.indexOf('state') !== -1) {
+        stateCol = c;
+      }
+    }
+
+    function cleanString(s) {
+      if (!s) return '';
+      return s.toString().toLowerCase().replace(/[\s\r\n\t,.\-_/\\()|:;]/g, '');
+    }
+
+    function parseDateObj(val) {
+      if (!val) return null;
+      if (val instanceof Date) {
+        if (isNaN(val.getTime())) return null;
+        return { y: val.getFullYear(), m: val.getMonth() + 1, d: val.getDate() };
+      }
+      var str = val.toString().trim();
+      var parts = str.match(/(\d{1,4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,4})/);
+      if (parts) {
+        var p1 = parseInt(parts[1], 10);
+        var p2 = parseInt(parts[2], 10);
+        var p3 = parseInt(parts[3], 10);
+        if (p1 > 1000) {
+          return { y: p1, m: p2, d: p3 };
+        } else if (p3 > 1000) {
+          if (p1 > 12) {
+            return { y: p3, m: p2, d: p1 };
+          } else {
+            return { y: p3, m: p1, d: p2 };
+          }
+        }
+      }
+      var dt = new Date(str);
+      if (!isNaN(dt.getTime()) && dt.getFullYear() > 1990) {
+        return { y: dt.getFullYear(), m: dt.getMonth() + 1, d: dt.getDate() };
+      }
+      return null;
+    }
+
+    function dateEquals(v1, v2) {
+      var d1 = parseDateObj(v1);
+      var d2 = parseDateObj(v2);
+      if (!d1 || !d2) return false;
+      return d1.y === d2.y && ((d1.m === d2.m && d1.d === d2.d) || (d1.m === d2.d && d1.d === d2.m));
+    }
+
+    var cleanTargetVenue = cleanString(venue);
+    var cleanTargetState = cleanString(state);
+    var cleanTargetBranch = cleanString(branch);
+
+    var bestRowIndex = -1;
+    var bestScore = 0;
+
+    for (var r = 1; r < data.length; r++) {
+      var row = data[r];
+      var score = 0;
+
+      // 1. Date match (30 pts)
+      if (dateStr && row[dateCol]) {
+        if (dateEquals(row[dateCol], dateStr)) {
+          score += 30;
+        }
+      }
+
+      // 2. Venue match (30 pts)
+      var rowVenue = cleanString(row[venueCol]);
+      if (cleanTargetVenue && rowVenue) {
+        if (rowVenue === cleanTargetVenue) {
+          score += 30;
+        } else if (rowVenue.indexOf(cleanTargetVenue) !== -1 || cleanTargetVenue.indexOf(rowVenue) !== -1) {
+          score += 25;
+        } else {
+          var vSub = cleanTargetVenue.substring(0, Math.min(12, cleanTargetVenue.length));
+          if (vSub.length >= 6 && rowVenue.indexOf(vSub) !== -1) {
+            score += 15;
+          }
+        }
+      }
+
+      // 3. Beneficiaries match (up to 30 pts)
+      var rowM = safeNum(row[maleCol]);
+      var rowF = safeNum(row[femaleCol]);
+      var rowC = safeNum(row[childrenCol]);
+
+      var benMatches = 0;
+      if (rowM === prevMale) benMatches += 10;
+      if (rowF === prevFemale) benMatches += 10;
+      if (rowC === prevChildren) benMatches += 10;
+      score += benMatches;
+
+      // 4. State match (10 pts)
+      var rowState = cleanString(row[stateCol]);
+      if (cleanTargetState && rowState && (rowState === cleanTargetState || rowState.indexOf(cleanTargetState) !== -1)) {
+        score += 10;
+      }
+
+      // 5. Branch match (15 pts) - check across columns D to W (index 3 to 22)
+      if (cleanTargetBranch) {
+        for (var b = 3; b <= 22 && b < row.length; b++) {
+          var bVal = cleanString(row[b]);
+          if (bVal && (bVal === cleanTargetBranch || bVal.indexOf(cleanTargetBranch) !== -1 || cleanTargetBranch.indexOf(bVal) !== -1)) {
+            score += 15;
+            break;
+          }
+        }
+      }
+
+      if (score > bestScore) {
+        bestScore = score;
+        bestRowIndex = r;
+      }
+    }
+
+    if (bestRowIndex !== -1 && bestScore >= 40) {
+      // Update values in source sheet
+      sourceSheet.getRange(bestRowIndex + 1, maleCol + 1).setValue(newMale);
+      sourceSheet.getRange(bestRowIndex + 1, femaleCol + 1).setValue(newFemale);
+      sourceSheet.getRange(bestRowIndex + 1, childrenCol + 1).setValue(newChildren);
+
+      // Invalidate script cache
+      try {
+        CacheService.getScriptCache().remove('all_posts');
+      } catch(ce) {}
+
+      return {
+        success: true,
+        message: 'Beneficiaries successfully updated in BODH Responses sheet at row ' + (bestRowIndex + 1) + '.',
+        matchedRow: bestRowIndex + 1,
+        matchScore: bestScore
+      };
+    } else {
+      return {
+        success: false,
+        message: 'Could not find a confident matching row in BODH Responses (Best score: ' + bestScore + ', required >= 40).'
+      };
+    }
+  } catch (err) {
+    return {
+      success: false,
+      message: 'Error updating beneficiaries in source sheet: ' + err.toString()
+    };
+  }
 }
 
 function handleUpdatePostMeta(payload) {
@@ -3533,6 +3755,30 @@ function handleCreateDevProject(payload) {
     tSheet.getRange(tLastRow + 1, 1, taskRows.length, taskRows[0].length).setValues(taskRows);
   }
 
+  // Ensure any newly specified assignees are recorded in Dev_Users sheet
+  try {
+    var devUsersSheet = ss.getSheetByName(DEV_USERS_SHEET);
+    if (devUsersSheet) {
+      var existingDevUserData = devUsersSheet.getDataRange().getValues();
+      var existingDevEmails = {};
+      for (var u = 1; u < existingDevUserData.length; u++) {
+        var em = (existingDevUserData[u][0] || '').toString().trim().toLowerCase();
+        if (em) existingDevEmails[em] = true;
+      }
+      for (var k in assignees) {
+        var aObj = assignees[k];
+        if (aObj && typeof aObj === 'object') {
+          var aEmail = (aObj.email || '').toString().trim();
+          var aName = (aObj.name || '').toString().trim();
+          if (aEmail && aEmail.indexOf('@') !== -1 && !existingDevEmails[aEmail.toLowerCase()]) {
+            devUsersSheet.appendRow([aEmail, aName || aEmail, k, stream]);
+            existingDevEmails[aEmail.toLowerCase()] = true;
+          }
+        }
+      }
+    }
+  } catch(ue) {}
+
   return {
     success: true,
     message: 'Campaign Development project and 8 sequential tasks created successfully.',
@@ -3546,6 +3792,96 @@ function handleCreateDevProject(payload) {
     iecProofreadDocUrl: iecProofreadDocUrl,
     iecFinalCheckDocUrl: iecFinalCheckDocUrl
   };
+}
+
+function handleReassignDevTask(payload) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  ensureDevSheets(ss);
+  
+  var taskId = payload.taskId;
+  var newAssigneeName = payload.newAssigneeName || '';
+  var newAssigneeEmail = payload.newAssigneeEmail || '';
+  var role = payload.role || '';
+  var category = payload.category || '';
+
+  if (!taskId) {
+    return { success: false, message: 'TaskId is required.' };
+  }
+
+  // 1. Ensure user exists in Dev_Users sheet, or append if new
+  var devUsersSheet = ss.getSheetByName(DEV_USERS_SHEET);
+  if (devUsersSheet && newAssigneeEmail) {
+    var usersData = devUsersSheet.getDataRange().getValues();
+    var found = false;
+    for (var i = 1; i < usersData.length; i++) {
+      if ((usersData[i][0] || '').toString().toLowerCase() === newAssigneeEmail.toLowerCase()) {
+        found = true;
+        // Update name if changed
+        if (newAssigneeName && usersData[i][1] !== newAssigneeName) {
+          devUsersSheet.getRange(i + 1, 2).setValue(newAssigneeName);
+        }
+        break;
+      }
+    }
+    if (!found) {
+      devUsersSheet.appendRow([newAssigneeEmail, newAssigneeName || newAssigneeEmail, role, category || 'All']);
+    }
+  }
+
+  // 2. Update task in Dev_Tasks sheet
+  var tSheet = ss.getSheetByName(DEV_TASKS_SHEET);
+  if (!tSheet) return { success: false, message: 'Dev_Tasks sheet not found.' };
+
+  var tData = tSheet.getDataRange().getValues();
+  var headers = tData[0];
+  var taskIdCol = headers.indexOf('TaskID');
+  var assigneeCol = headers.indexOf('Assignee');
+  var assigneeEmailCol = headers.indexOf('AssigneeEmail');
+  var allottedDateCol = headers.indexOf('AllottedDate');
+  var statusCol = headers.indexOf('Status');
+  var docLinkCol = headers.indexOf('DocLink');
+
+  if (taskIdCol === -1 || assigneeCol === -1) {
+    return { success: false, message: 'Invalid Dev_Tasks headers.' };
+  }
+
+  var updated = false;
+  var targetDocUrl = '';
+  for (var i = 1; i < tData.length; i++) {
+    if (tData[i][taskIdCol] && tData[i][taskIdCol].toString() === taskId) {
+      tSheet.getRange(i + 1, assigneeCol + 1).setValue(newAssigneeName || newAssigneeEmail);
+      if (assigneeEmailCol !== -1) {
+        tSheet.getRange(i + 1, assigneeEmailCol + 1).setValue(newAssigneeEmail);
+      }
+      if (allottedDateCol !== -1 && (!tData[i][allottedDateCol] || tData[i][statusCol] === 'Ready')) {
+        tSheet.getRange(i + 1, allottedDateCol + 1).setValue(new Date().toLocaleString());
+      }
+      if (docLinkCol !== -1) {
+        targetDocUrl = tData[i][docLinkCol];
+      }
+      updated = true;
+      break;
+    }
+  }
+
+  // 3. Grant edit access to new assignee if Google Doc / Folder exists
+  if (targetDocUrl && newAssigneeEmail && newAssigneeEmail.indexOf('@') !== -1) {
+    try {
+      if (targetDocUrl.indexOf('/document/d/') !== -1) {
+        var docId = targetDocUrl.split('/document/d/')[1].split('/')[0];
+        DriveApp.getFileById(docId).addEditor(newAssigneeEmail);
+      } else if (targetDocUrl.indexOf('/folders/') !== -1) {
+        var folderId = targetDocUrl.split('/folders/')[1].split('?')[0].split('/')[0];
+        DriveApp.getFolderById(folderId).addEditor(newAssigneeEmail);
+      }
+    } catch(e) {}
+  }
+
+  if (updated) {
+    return { success: true, message: 'Task reassigned successfully!' };
+  } else {
+    return { success: false, message: 'Task not found: ' + taskId };
+  }
 }
 
 function handleUpdateDevTask(payload) {

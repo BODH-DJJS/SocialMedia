@@ -19,10 +19,10 @@ class Event {
   final String date;
   final String theme;
   final String timings;
-  final int male;
-  final int female;
-  final int children;
-  final int totalBeneficiary;
+  int male;
+  int female;
+  int children;
+  int totalBeneficiary;
   final String organizers;
   final String partners;
   final String importantInfo;
