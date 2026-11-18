@@ -9,6 +9,52 @@ import '../providers/event_provider.dart';
 import '../models/dev_pipeline_models.dart';
 import '../utils/due_date_utils.dart';
 
+class _PreviousDocItem {
+  final String label;
+  final String shortLabel;
+  final String url;
+  final bool isViewMode;
+  final Color color;
+  final IconData icon;
+
+  const _PreviousDocItem({
+    required this.label,
+    required this.shortLabel,
+    required this.url,
+    required this.isViewMode,
+    required this.color,
+    required this.icon,
+  });
+}
+
+String _toViewModeUrl(String url) {
+  if (url.isEmpty) return url;
+  var u = url.trim();
+  if (u.contains('docs.google.com')) {
+    if (u.contains('/edit')) {
+      u = u.replaceAll(RegExp(r'/edit.*'), '/preview');
+    } else if (!u.contains('/preview') && !u.contains('/view')) {
+      u = u.endsWith('/') ? '${u}preview' : '$u/preview';
+    }
+  } else if (u.contains('drive.google.com/file/d/')) {
+    if (u.contains('/view')) {
+      u = u.replaceAll(RegExp(r'/view.*'), '/preview');
+    } else if (!u.contains('/preview')) {
+      u = u.replaceAll(RegExp(r'(\?.*)?$'), '/preview');
+    }
+  }
+  return u;
+}
+
+extension _FirstWhereOrNullExt<T> on Iterable<T> {
+  T? firstWhereOrNull(bool Function(T element) test) {
+    for (final element in this) {
+      if (test(element)) return element;
+    }
+    return null;
+  }
+}
+
 class DevPipelineScreen extends StatefulWidget {
   final VoidCallback onSwitchToSocialMedia;
 
@@ -290,6 +336,246 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
   void dispose() {
     _tabController.dispose();
     super.dispose();
+  }
+
+  bool _isTaskEligibleForStageColumn(DevTask task, List<DevTask> allTasks, String statusFilter) {
+    if (statusFilter == 'Waiting') {
+      return task.status.toLowerCase() == 'waiting';
+    }
+    if (statusFilter == 'Done') {
+      return task.status.toLowerCase() == 'done';
+    }
+
+    // Under 'All' (Active) or 'Ready':
+    // If task itself is waiting, it hasn't been forwarded yet!
+    if (task.status.toLowerCase() == 'waiting') {
+      return false;
+    }
+
+    final stLower = task.stage.trim().toLowerCase();
+
+    // Specifically for Text Crosscheck: only show if Proofreading has completed / passed
+    if (stLower == 'text crosscheck' || stLower == 'cross check') {
+      final proofTask = allTasks.firstWhereOrNull((t) =>
+        (t.projectId == task.projectId || (t.sessionName.isNotEmpty && t.sessionName == task.sessionName && t.campaignName == task.campaignName)) &&
+        t.stage.trim().toLowerCase() == 'proofreading'
+      );
+      if (proofTask != null && proofTask.status.toLowerCase() != 'done') {
+        return false;
+      }
+    }
+
+    // Specifically for Proofreading: only show if Editing has completed / forwarded
+    if (stLower == 'proofreading') {
+      final isCampaign = task.stream == 'Campaign Development' || task.projectId.startsWith('CAMP');
+      if (isCampaign) {
+        final pptTask = allTasks.firstWhereOrNull((t) =>
+          (t.projectId == task.projectId || (t.sessionName.isNotEmpty && t.sessionName == task.sessionName && t.campaignName == task.campaignName)) &&
+          t.stage.trim().toLowerCase() == 'ppt development'
+        );
+        if (pptTask != null && pptTask.status.toLowerCase() != 'done') {
+          return false;
+        }
+      } else {
+        final editTask = allTasks.firstWhereOrNull((t) =>
+          (t.projectId == task.projectId || (t.sessionName.isNotEmpty && t.sessionName == task.sessionName && t.campaignName == task.campaignName)) &&
+          t.stage.trim().toLowerCase() == 'editing'
+        );
+        if (editTask != null && editTask.status.toLowerCase() != 'done') {
+          return false;
+        }
+      }
+    }
+
+    // Specifically for Editing: only show if Writing has completed / forwarded
+    if (stLower == 'editing') {
+      final isCampaign = task.stream == 'Campaign Development' || task.projectId.startsWith('CAMP');
+      if (isCampaign) {
+        final proofTask = allTasks.firstWhereOrNull((t) =>
+          (t.projectId == task.projectId || (t.sessionName.isNotEmpty && t.sessionName == task.sessionName && t.campaignName == task.campaignName)) &&
+          t.stage.trim().toLowerCase() == 'proofreading'
+        );
+        if (proofTask != null && proofTask.status.toLowerCase() != 'done') {
+          return false;
+        }
+      } else {
+        final writeTask = allTasks.firstWhereOrNull((t) =>
+          (t.projectId == task.projectId || (t.sessionName.isNotEmpty && t.sessionName == task.sessionName && t.campaignName == task.campaignName)) &&
+          t.stage.trim().toLowerCase() == 'writing'
+        );
+        if (writeTask != null && writeTask.status.toLowerCase() != 'done') {
+          return false;
+        }
+      }
+    }
+
+    return true;
+  }
+
+  List<_PreviousDocItem> _getPreviousDocs(DevTask task, DevPipelineProvider devProvider) {
+    final items = <_PreviousDocItem>[];
+
+    final siblingTasks = devProvider.tasks.where((t) =>
+      (t.projectId.isNotEmpty && t.projectId == task.projectId) ||
+      (task.sessionName.isNotEmpty && t.sessionName == task.sessionName && t.campaignName == task.campaignName)
+    ).toList();
+
+    DevTask? findSibling(String stageName) {
+      return siblingTasks.firstWhereOrNull(
+        (t) => t.stage.trim().toLowerCase() == stageName.trim().toLowerCase(),
+      );
+    }
+
+    final writingSibling = findSibling('Writing');
+    final editingSibling = findSibling('Editing');
+    final proofreadingSibling = findSibling('Proofreading');
+    final crosscheckSibling = findSibling('Text Crosscheck') ?? findSibling('Cross Check');
+
+    String writingUrl = writingSibling?.docLink.trim() ?? '';
+    if (writingUrl.isEmpty) {
+      writingUrl = task.writingDocLink.trim().isNotEmpty ? task.writingDocLink.trim() : task.prevDocLink.trim();
+    }
+    String editingUrl = editingSibling?.docLink.trim() ?? '';
+    if (editingUrl.isEmpty) {
+      editingUrl = task.editingDocLink.trim();
+    }
+    String proofreadingUrl = proofreadingSibling?.docLink.trim() ?? '';
+    if (proofreadingUrl.isEmpty) {
+      proofreadingUrl = task.proofreadingDocLink.trim();
+    }
+    String crosscheckUrl = crosscheckSibling?.docLink.trim() ?? '';
+    if (crosscheckUrl.isEmpty) {
+      crosscheckUrl = task.crosscheckDocLink.trim();
+    }
+
+    final stLower = task.stage.trim().toLowerCase();
+    final isCampaign = task.stream == 'Campaign Development' || task.projectId.startsWith('CAMP');
+    final isCrosscheck = stLower == 'text crosscheck' || stLower == 'cross check';
+    final isProofreading = stLower == 'proofreading';
+    final isEditing = stLower == 'editing';
+    final isWriting = stLower == 'writing';
+
+    if (isCampaign) {
+      if (stLower == 'proofreading') {
+        if (writingUrl.isNotEmpty) {
+          items.add(_PreviousDocItem(
+            label: 'Writing Doc',
+            shortLabel: 'Writing Doc',
+            url: writingUrl,
+            isViewMode: false,
+            color: const Color(0xFF8E44AD),
+            icon: Icons.draw_outlined,
+          ));
+        }
+      } else if (stLower == 'editing') {
+        if (writingUrl.isNotEmpty) {
+          items.add(_PreviousDocItem(
+            label: 'Writing Doc',
+            shortLabel: 'Writing Doc',
+            url: writingUrl,
+            isViewMode: false,
+            color: const Color(0xFF8E44AD),
+            icon: Icons.draw_outlined,
+          ));
+        }
+        if (proofreadingUrl.isNotEmpty) {
+          items.add(_PreviousDocItem(
+            label: 'Proofreading Doc',
+            shortLabel: 'Proofreading Doc',
+            url: proofreadingUrl,
+            isViewMode: false,
+            color: const Color(0xFF00897B),
+            icon: Icons.spellcheck_rounded,
+          ));
+        }
+      } else if (stLower == 'final check') {
+        if (writingUrl.isNotEmpty) {
+          items.add(_PreviousDocItem(
+            label: 'Writing Doc',
+            shortLabel: 'Writing Doc',
+            url: writingUrl,
+            isViewMode: false,
+            color: const Color(0xFF8E44AD),
+            icon: Icons.draw_outlined,
+          ));
+        }
+        if (proofreadingUrl.isNotEmpty) {
+          items.add(_PreviousDocItem(
+            label: 'Proofreading Doc',
+            shortLabel: 'Proofreading Doc',
+            url: proofreadingUrl,
+            isViewMode: false,
+            color: const Color(0xFF00897B),
+            icon: Icons.spellcheck_rounded,
+          ));
+        }
+        if (editingUrl.isNotEmpty) {
+          items.add(_PreviousDocItem(
+            label: 'Editing Doc',
+            shortLabel: 'Editing Doc',
+            url: editingUrl,
+            isViewMode: false,
+            color: const Color(0xFF3F51B5),
+            icon: Icons.auto_fix_high_rounded,
+          ));
+        }
+      }
+    } else {
+      final isSubsequent = !isWriting && !isEditing && !isProofreading && !isCrosscheck;
+
+      // 1. Writing Doc
+      if (!isWriting && writingUrl.isNotEmpty) {
+        final viewOnly = isCrosscheck;
+        items.add(_PreviousDocItem(
+          label: viewOnly ? 'Writing Doc (View Mode)' : 'Writing Doc',
+          shortLabel: viewOnly ? 'Writing (View)' : 'Writing Doc',
+          url: viewOnly ? _toViewModeUrl(writingUrl) : writingUrl,
+          isViewMode: viewOnly,
+          color: const Color(0xFF8E44AD),
+          icon: viewOnly ? Icons.visibility_outlined : Icons.draw_outlined,
+        ));
+      }
+
+      // 2. Editing Doc
+      if (!isWriting && !isEditing && editingUrl.isNotEmpty) {
+        final viewOnly = isCrosscheck;
+        items.add(_PreviousDocItem(
+          label: viewOnly ? 'Editing Doc (View Mode)' : 'Editing Doc',
+          shortLabel: viewOnly ? 'Editing (View)' : 'Editing Doc',
+          url: viewOnly ? _toViewModeUrl(editingUrl) : editingUrl,
+          isViewMode: viewOnly,
+          color: const Color(0xFF3F51B5),
+          icon: viewOnly ? Icons.visibility_outlined : Icons.auto_fix_high_rounded,
+        ));
+      }
+
+      // 3. Proofreading Doc
+      if (!isWriting && !isEditing && !isProofreading && proofreadingUrl.isNotEmpty) {
+        final viewOnly = isCrosscheck;
+        items.add(_PreviousDocItem(
+          label: viewOnly ? 'Proofreading Doc (View Mode)' : 'Proofreading Doc',
+          shortLabel: viewOnly ? 'Proofreading (View)' : 'Proofreading Doc',
+          url: viewOnly ? _toViewModeUrl(proofreadingUrl) : proofreadingUrl,
+          isViewMode: viewOnly,
+          color: const Color(0xFF00897B),
+          icon: viewOnly ? Icons.visibility_outlined : Icons.spellcheck_rounded,
+        ));
+      }
+
+      // 4. Text Crosscheck Doc (for subsequent stages)
+      if (isSubsequent && crosscheckUrl.isNotEmpty) {
+        items.add(_PreviousDocItem(
+          label: 'Crosscheck Doc',
+          shortLabel: 'Crosscheck Doc',
+          url: crosscheckUrl,
+          isViewMode: false,
+          color: const Color(0xFF27AE60),
+          icon: Icons.verified_outlined,
+        ));
+      }
+    }
+
+    return items;
   }
 
   void _openUrl(String? url) async {
@@ -768,7 +1054,9 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
         t.projectId.toLowerCase().contains(q)
       ).toList();
     }
-    if (_statusFilter != 'All') {
+    if (_statusFilter == 'All') {
+      filteredTasks = filteredTasks.where((t) => t.status.toLowerCase() != 'done').toList();
+    } else {
       filteredTasks = filteredTasks.where((t) => t.status.toLowerCase() == _statusFilter.toLowerCase()).toList();
     }
 
@@ -905,7 +1193,7 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
                     value: _statusFilter,
                     style: const TextStyle(fontSize: 12, color: Colors.black87, fontWeight: FontWeight.w500),
                     items: const [
-                      DropdownMenuItem(value: 'All', child: Text('Filter: All')),
+                      DropdownMenuItem(value: 'All', child: Text('Filter: Active (Hide Done)')),
                       DropdownMenuItem(value: 'Ready', child: Text('Filter: Ready')),
                       DropdownMenuItem(value: 'Waiting', child: Text('Filter: Waiting')),
                       DropdownMenuItem(value: 'Done', child: Text('Filter: Done')),
@@ -941,7 +1229,8 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
                           final cadence = cfg['cadence'] as int;
 
                           final stageTasks = filteredTasks
-                              .where((t) => t.stage.toLowerCase() == stageName.toLowerCase())
+                              .where((t) => t.stage.toLowerCase() == stageName.toLowerCase() &&
+                                            _isTaskEligibleForStageColumn(t, streamTasks, _statusFilter))
                               .toList();
 
                           return _buildKanbanColumn(
@@ -1050,7 +1339,9 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
         t.projectId.toLowerCase().contains(q)
       ).toList();
     }
-    if (_statusFilter != 'All') {
+    if (_statusFilter == 'All') {
+      filteredTasks = filteredTasks.where((t) => t.status.toLowerCase() != 'done').toList();
+    } else {
       filteredTasks = filteredTasks.where((t) => t.status.toLowerCase() == _statusFilter.toLowerCase()).toList();
     }
 
@@ -1187,7 +1478,7 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
                     value: _statusFilter,
                     style: const TextStyle(fontSize: 12, color: Colors.black87, fontWeight: FontWeight.w500),
                     items: const [
-                      DropdownMenuItem(value: 'All', child: Text('Filter: All')),
+                      DropdownMenuItem(value: 'All', child: Text('Filter: Active (Hide Done)')),
                       DropdownMenuItem(value: 'Ready', child: Text('Filter: Ready')),
                       DropdownMenuItem(value: 'Waiting', child: Text('Filter: Waiting')),
                       DropdownMenuItem(value: 'Done', child: Text('Filter: Done')),
@@ -1223,7 +1514,8 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
                           final group = cfg['group'] as String;
 
                           final stageTasks = filteredTasks
-                              .where((t) => t.stage.toLowerCase() == stageName.toLowerCase())
+                              .where((t) => t.stage.toLowerCase() == stageName.toLowerCase() &&
+                                            _isTaskEligibleForStageColumn(t, streamTasks, _statusFilter))
                               .toList();
 
                           return _buildKanbanColumn(
@@ -1301,7 +1593,9 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
         t.projectId.toLowerCase().contains(q)
       ).toList();
     }
-    if (_statusFilter != 'All') {
+    if (_statusFilter == 'All') {
+      filteredTasks = filteredTasks.where((t) => t.status.toLowerCase() != 'done').toList();
+    } else {
       filteredTasks = filteredTasks.where((t) => t.status.toLowerCase() == _statusFilter.toLowerCase()).toList();
     }
 
@@ -1432,7 +1726,7 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
                     value: _statusFilter,
                     style: const TextStyle(fontSize: 12, color: Colors.black87, fontWeight: FontWeight.w500),
                     items: const [
-                      DropdownMenuItem(value: 'All', child: Text('Filter: All')),
+                      DropdownMenuItem(value: 'All', child: Text('Filter: Active (Hide Done)')),
                       DropdownMenuItem(value: 'Ready', child: Text('Filter: Ready')),
                       DropdownMenuItem(value: 'Waiting', child: Text('Filter: Waiting')),
                       DropdownMenuItem(value: 'Done', child: Text('Filter: Done')),
@@ -1466,7 +1760,8 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
                           final group = cfg['group'] as String;
 
                           final stageTasks = filteredTasks
-                              .where((t) => t.stage.toLowerCase() == stageName.toLowerCase())
+                              .where((t) => t.stage.toLowerCase() == stageName.toLowerCase() &&
+                                            _isTaskEligibleForStageColumn(t, streamTasks, _statusFilter))
                               .toList();
 
                           return _buildKanbanColumn(
@@ -1544,7 +1839,9 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
         t.projectId.toLowerCase().contains(q)
       ).toList();
     }
-    if (_statusFilter != 'All') {
+    if (_statusFilter == 'All') {
+      filteredTasks = filteredTasks.where((t) => t.status.toLowerCase() != 'done').toList();
+    } else {
       filteredTasks = filteredTasks.where((t) => t.status.toLowerCase() == _statusFilter.toLowerCase()).toList();
     }
 
@@ -1675,7 +1972,7 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
                     value: _statusFilter,
                     style: const TextStyle(fontSize: 12, color: Colors.black87, fontWeight: FontWeight.w500),
                     items: const [
-                      DropdownMenuItem(value: 'All', child: Text('Filter: All')),
+                      DropdownMenuItem(value: 'All', child: Text('Filter: Active (Hide Done)')),
                       DropdownMenuItem(value: 'Ready', child: Text('Filter: Ready')),
                       DropdownMenuItem(value: 'Waiting', child: Text('Filter: Waiting')),
                       DropdownMenuItem(value: 'Done', child: Text('Filter: Done')),
@@ -1709,7 +2006,8 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
                           final group = cfg['group'] as String;
 
                           final stageTasks = filteredTasks
-                              .where((t) => t.stage.toLowerCase() == stageName.toLowerCase())
+                              .where((t) => t.stage.toLowerCase() == stageName.toLowerCase() &&
+                                            _isTaskEligibleForStageColumn(t, streamTasks, _statusFilter))
                               .toList();
 
                           return _buildKanbanColumn(
@@ -2189,6 +2487,48 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
               ],
 
               const Divider(height: 16),
+
+              // Previous Documents Pills (Writing, Editing, Proofreading, Crosscheck)
+              if (_getPreviousDocs(task, devProvider).isNotEmpty) ...[
+                const SizedBox(height: 2),
+                Wrap(
+                  spacing: 4,
+                  runSpacing: 4,
+                  children: _getPreviousDocs(task, devProvider).map((docItem) {
+                    return Tooltip(
+                      message: docItem.label,
+                      child: InkWell(
+                        onTap: () => _openUrl(docItem.url),
+                        borderRadius: BorderRadius.circular(5),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2.5),
+                          decoration: BoxDecoration(
+                            color: docItem.color.withOpacity(0.08),
+                            borderRadius: BorderRadius.circular(5),
+                            border: Border.all(color: docItem.color.withOpacity(0.35)),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(docItem.icon, size: 11, color: docItem.color),
+                              const SizedBox(width: 3),
+                              Text(
+                                docItem.shortLabel,
+                                style: TextStyle(
+                                  fontSize: 9.5,
+                                  color: docItem.color,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 6),
+              ],
 
               // Quick Actions on Card
               Row(
@@ -2739,6 +3079,81 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
                       ],
 
                       const SizedBox(height: 16),
+
+                      // ── Previous Stage Documents Section ──
+                      if (_getPreviousDocs(task, devProvider).isNotEmpty) ...[
+                        Builder(
+                          builder: (context) {
+                            final prevDocs = _getPreviousDocs(task, devProvider);
+                            final isCross = task.stage.trim().toLowerCase() == 'text crosscheck' || task.stage.trim().toLowerCase() == 'cross check';
+                            return Container(
+                              margin: const EdgeInsets.only(bottom: 14),
+                              padding: const EdgeInsets.all(14),
+                              decoration: BoxDecoration(
+                                color: isCross ? const Color(0xFFF0FDF4) : const Color(0xFFF8FAFC),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: isCross ? const Color(0xFF86EFAC) : Colors.grey.shade300,
+                                  width: isCross ? 1.5 : 1.2,
+                                ),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Icon(
+                                        isCross ? Icons.visibility_rounded : Icons.history_edu_rounded,
+                                        color: isCross ? const Color(0xFF15803D) : const Color(0xFF1A237E),
+                                        size: 20,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        isCross ? 'Previous Stage Documents (View Mode Only)' : 'Previous Stage Documents',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 14,
+                                          color: isCross ? const Color(0xFF15803D) : const Color(0xFF1A237E),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 5),
+                                  Text(
+                                    isCross
+                                        ? 'For Text Crosscheck, all previous documents open in read-only View Mode to prevent unintended modifications.'
+                                        : 'Access documents completed and forwarded from preceding stages for reference.',
+                                    style: TextStyle(fontSize: 11, color: isCross ? Colors.black87 : Colors.grey.shade700),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  ...prevDocs.map((docItem) {
+                                    return Padding(
+                                      padding: const EdgeInsets.only(bottom: 8),
+                                      child: SizedBox(
+                                        width: double.infinity,
+                                        height: 42,
+                                        child: ElevatedButton.icon(
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: docItem.color,
+                                            foregroundColor: Colors.white,
+                                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                          ),
+                                          icon: Icon(docItem.icon, size: 18),
+                                          label: Text(
+                                            'Open ${docItem.label}',
+                                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                                          ),
+                                          onPressed: () => _openUrl(docItem.url),
+                                        ),
+                                      ),
+                                    );
+                                  }).toList(),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+                      ],
 
                       // ── Workspace Section (Tailored for Web, Blog, SM, PPT Folder / Docs) ──
                       if (isWeb) ...[

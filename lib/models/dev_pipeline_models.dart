@@ -106,6 +106,9 @@ class DevTask {
   final String pptFolderLink;
   final String prevDocLink;
   final String writingDocLink;
+  final String editingDocLink;
+  final String proofreadingDocLink;
+  final String crosscheckDocLink;
   final String iecFolderLink;
   final String iecWritingDocLink;
   final String iecDesigningFolderLink;
@@ -136,6 +139,9 @@ class DevTask {
     this.pptFolderLink = '',
     this.prevDocLink = '',
     this.writingDocLink = '',
+    this.editingDocLink = '',
+    this.proofreadingDocLink = '',
+    this.crosscheckDocLink = '',
     this.iecFolderLink = '',
     this.iecWritingDocLink = '',
     this.iecDesigningFolderLink = '',
@@ -168,6 +174,9 @@ class DevTask {
       pptFolderLink: json['PptFolderLink']?.toString() ?? '',
       prevDocLink: json['PrevDocLink']?.toString() ?? '',
       writingDocLink: json['WritingDocLink']?.toString() ?? '',
+      editingDocLink: json['EditingDocLink']?.toString() ?? '',
+      proofreadingDocLink: json['ProofreadingDocLink']?.toString() ?? '',
+      crosscheckDocLink: json['CrosscheckDocLink']?.toString() ?? '',
       iecFolderLink: json['IecFolderLink']?.toString() ?? '',
       iecWritingDocLink: json['IecWritingDocLink']?.toString() ?? '',
       iecDesigningFolderLink: json['IecDesigningFolderLink']?.toString() ?? '',

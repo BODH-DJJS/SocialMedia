@@ -3227,8 +3227,11 @@ function handleGetDevTasks(payload) {
     }
   }
 
-  // Pre-scan data to build project maps for Writing doc and PPT folder
+  // Pre-scan data to build project maps for Writing doc, Editing doc, Proofreading doc, Crosscheck doc, and PPT folder
   var projectWritingDocMap = {};
+  var projectEditingDocMap = {};
+  var projectProofDocMap = {};
+  var projectCrosscheckDocMap = {};
   var projectPptFolderMap = {};
   var stageColIdx = headers.indexOf('Stage');
   var projIdColIdx = headers.indexOf('ProjectID');
@@ -3243,6 +3246,15 @@ function handleGetDevTasks(payload) {
 
     if (st === 'writing' && dLink) {
       projectWritingDocMap[pId] = dLink;
+    }
+    if (st === 'editing' && dLink) {
+      projectEditingDocMap[pId] = dLink;
+    }
+    if (st === 'proofreading' && dLink) {
+      projectProofDocMap[pId] = dLink;
+    }
+    if ((st === 'text crosscheck' || st === 'cross check') && dLink) {
+      projectCrosscheckDocMap[pId] = dLink;
     }
     if (st === 'ppt development') {
       projectPptFolderMap[pId] = pLink || dLink;
@@ -3273,6 +3285,9 @@ function handleGetDevTasks(payload) {
     t.FolderLink = proj.FolderLink || '';
     t.PptFolderLink = proj.PptFolderLink || projectPptFolderMap[t.ProjectID] || t.PptFolderLink || '';
     t.WritingDocLink = projectWritingDocMap[t.ProjectID] || '';
+    t.EditingDocLink = projectEditingDocMap[t.ProjectID] || '';
+    t.ProofreadingDocLink = projectProofDocMap[t.ProjectID] || '';
+    t.CrosscheckDocLink = projectCrosscheckDocMap[t.ProjectID] || '';
     if (t.Stage && t.Stage.toLowerCase() === 'ppt development') {
       t.PrevDocLink = projectWritingDocMap[t.ProjectID] || '';
     }
