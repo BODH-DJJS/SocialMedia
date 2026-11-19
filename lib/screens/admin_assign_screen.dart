@@ -718,9 +718,19 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text('Post #$postNo', style: TextStyle(color: theme.colorScheme.primary, fontWeight: FontWeight.bold)),
+                                  Text(
+                                    (isCombined || postNo.toString().toLowerCase().startsWith('combined'))
+                                        ? '$postNo'
+                                        : 'Post #$postNo',
+                                    style: TextStyle(color: theme.colorScheme.primary, fontWeight: FontWeight.bold),
+                                  ),
                                   const SizedBox(height: 4),
-                                  Text(themeName, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                                  Text(
+                                    (isCombined && (themeName == 'Combined Group' || themeName.toString().toLowerCase().startsWith('combined')))
+                                        ? '$postNo'
+                                        : themeName,
+                                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                                  ),
                                   if (_postData['Program']?.toString().isNotEmpty == true) ...[
                                     const SizedBox(height: 2),
                                     Text(_postData['Program'].toString(), style: TextStyle(color: Colors.grey.shade700, fontSize: 13)),

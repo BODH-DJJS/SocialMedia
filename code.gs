@@ -657,8 +657,10 @@ function handleGetTasks(payload) {
         
         // Populate standard fields for the task card using the first post as a base, but aggregate totals
         var postNosList = combinedPosts.map(function(cp) { return cp.PostNo; }).filter(function(x) { return x; }).join(', ');
-        var branchName = firstPost.Branch || 'Combined';
-        tObj['Theme'] = branchName + ' Events (' + postNosList + ')';
+        var combinedTitle = (tObj['PostNo'] && (tObj['PostNo'].indexOf('Combined') !== -1 || tObj['PostNo'].indexOf('Group') !== -1))
+            ? tObj['PostNo']
+            : ('Combined_Post(' + postNosList + ')');
+        tObj['Theme'] = combinedTitle;
         tObj['Date'] = firstPost.Date;
         tObj['Branch'] = firstPost.Branch;
         tObj['State'] = firstPost.State;
@@ -780,11 +782,13 @@ function handleGetPostDetails(payload) {
     }
     var firstPost = matchedPosts[0];
     var postNosList = matchedPosts.map(function(cp) { return cp.PostNo; }).filter(function(x) { return x; }).join(', ');
-    var branchName = firstPost.Branch || 'Combined';
+    var combinedTitle = (postNo && (postNo.indexOf('Combined') !== -1 || postNo.indexOf('Group') !== -1))
+        ? postNo
+        : ('Combined_Post(' + postNosList + ')');
     
     postObj = {
       'PostNo': postNo,
-      'Theme': branchName + ' Events (' + postNosList + ')',
+      'Theme': combinedTitle,
       'Date': firstPost.Date,
       'Branch': firstPost.Branch,
       'State': firstPost.State,

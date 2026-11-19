@@ -125,7 +125,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       } else {
         setState(() {
           _isLoadingEvent = false;
-          _errorMessage = 'Task for Post #$pNo (${stg.isNotEmpty ? stg : "Active Stage"}) not found.';
+          _errorMessage = 'Task for ${(widget.isCombined || pNo.toLowerCase().startsWith('combined')) ? pNo : 'Post #$pNo'} (${stg.isNotEmpty ? stg : "Active Stage"}) not found.';
         });
       }
     }
@@ -476,7 +476,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
           ],
         ),
         content: Text(
-          'Are you sure you want to delete all workflow tasks for Post #${event.postNo}?\n\n'
+          'Are you sure you want to delete all workflow tasks for ${(event.isCombined || event.postNo.toLowerCase().startsWith('combined')) ? event.postNo : 'Post #${event.postNo}'}?\n\n'
           'This will remove all assigned tasks and convert the post back to Inactive.',
           style: const TextStyle(fontSize: 14, height: 1.4),
         ),
@@ -505,7 +505,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                 messenger.showSnackBar(
                   SnackBar(
                     content: Text(ok
-                        ? 'Post #${event.postNo} workflow deleted and marked Inactive.'
+                        ? '${(event.isCombined || event.postNo.toLowerCase().startsWith('combined')) ? event.postNo : 'Post #${event.postNo}'} workflow deleted and marked Inactive.'
                         : 'Failed to delete workflow.'),
                     backgroundColor: ok ? Colors.green : Colors.red,
                   ),
@@ -691,7 +691,11 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     if (_isLoadingEvent) {
       return Scaffold(
         appBar: AppBar(
-          title: Text(widget.postNo != null && widget.postNo!.isNotEmpty ? 'Post #${widget.postNo}' : 'Loading Post...'),
+          title: Text(widget.postNo != null && widget.postNo!.isNotEmpty
+              ? ((widget.isCombined || widget.postNo!.toLowerCase().startsWith('combined'))
+                  ? widget.postNo!
+                  : 'Post #${widget.postNo}')
+              : 'Loading Post...'),
           leading: IconButton(
             icon: const Icon(Icons.arrow_back),
             onPressed: () {
@@ -780,7 +784,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
             }
           },
         ),
-        title: Text('Post ${e.postNo} • ${e.stage}'),
+        title: Text('${(e.isCombined || e.postNo.toLowerCase().startsWith('combined')) ? e.postNo : 'Post ${e.postNo}'} • ${e.stage}'),
         actions: [
           Consumer<AuthProvider>(
             builder: (context, auth, _) {

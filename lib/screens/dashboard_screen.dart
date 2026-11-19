@@ -1146,7 +1146,9 @@ class _DashboardScreenState extends State<DashboardScreen>
                         children: [
                           Flexible(
                             child: Text(
-                              'Post ${task.postNo}',
+                              (task.isCombined || task.postNo.toLowerCase().startsWith('combined'))
+                                  ? task.postNo
+                                  : 'Post ${task.postNo}',
                               style: TextStyle(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 14,
@@ -1167,7 +1169,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                                   ScaffoldMessenger.of(context).hideCurrentSnackBar();
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     SnackBar(
-                                      content: Text('✓ Post #${task.postNo} opened in background tab'),
+                                      content: Text('✓ ${(task.isCombined || task.postNo.toLowerCase().startsWith('combined')) ? task.postNo : 'Post #${task.postNo}'} opened in background tab'),
                                       duration: const Duration(milliseconds: 1500),
                                       behavior: SnackBarBehavior.floating,
                                       width: 280,
@@ -1242,7 +1244,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                 ],
               ),
               const SizedBox(height: 6),
-              if (task.theme.isNotEmpty)
+              if (task.theme.isNotEmpty && task.theme.trim() != task.postNo.trim())
                 Text(
                   task.theme,
                   maxLines: 1,
@@ -1676,7 +1678,6 @@ class _DashboardScreenState extends State<DashboardScreen>
   }
 
   void _groupSelectedPosts() {
-    final provider = context.read<EventProvider>();
     final selectedList = _selectedPosts.toList();
     // Sort selected post numbers
     selectedList.sort((a, b) {
@@ -1685,43 +1686,29 @@ class _DashboardScreenState extends State<DashboardScreen>
       return intA.compareTo(intB);
     });
 
-    // Detect branch from selected posts
-    String branch = '';
-    for (final pNo in selectedList) {
-      final p = provider.rawPosts.firstWhere(
-        (rp) => rp['PostNo']?.toString() == pNo,
-        orElse: () => <String, dynamic>{},
-      );
-      if (p['Branch'] != null && p['Branch'].toString().trim().isNotEmpty) {
-        branch = p['Branch'].toString().trim();
-        break;
-      }
-    }
-    if (branch.isEmpty) branch = 'Group';
-
-    // Auto-generate default name: e.g. "Darbhanga Events (234, 256, 278)"
-    final defaultGroupName = '$branch Events (${selectedList.join(', ')})';
+    // Auto-generate default name: format Combined_Post(373, 374) or Combined Post(45, 56, 78) - branch name not required
+    final defaultGroupName = 'Combined_Post(${selectedList.join(', ')})';
     final ctrl = TextEditingController(text: defaultGroupName);
 
     showDialog(
       context: context,
       builder:
           (ctx) => AlertDialog(
-            title: const Text('Group Posts'),
+            title: const Text('Group / Combine Posts'),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  'Name this combined group. The name is auto-generated based on the branch and post numbers, and you can edit it anytime.',
+                  'Name this combined post. Format should be Combined_Post(...) or Combined Post(...). Branch name is not required.',
                   style: TextStyle(fontSize: 13, color: Colors.black87),
                 ),
                 const SizedBox(height: 12),
                 TextField(
                   controller: ctrl,
                   decoration: const InputDecoration(
-                    labelText: 'Group Name / ID',
-                    hintText: 'e.g., Darbhanga Events (234, 256)',
+                    labelText: 'Combined Post Name / ID',
+                    hintText: 'e.g., Combined_Post(373, 374) or Combined Post(45, 56, 78)',
                     border: OutlineInputBorder(),
                   ),
                 ),
@@ -2557,15 +2544,36 @@ class _DashboardScreenState extends State<DashboardScreen>
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Group Name', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                    Row(
+                      children: [
+                        const Text('Combined Post Name', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                        const Spacer(),
+                        TextButton.icon(
+                          style: TextButton.styleFrom(visualDensity: VisualDensity.compact, padding: EdgeInsets.zero),
+                          icon: const Icon(Icons.auto_fix_high, size: 14),
+                          label: const Text('Auto-format: Combined_Post(...)', style: TextStyle(fontSize: 11)),
+                          onPressed: () {
+                            final activeNos = currentPosts
+                                .map((p) => p['PostNo']?.toString() ?? '')
+                                .where((n) => n.isNotEmpty && !selectedToRemove.contains(n))
+                                .toSet()
+                              ..addAll(selectedToAdd);
+                            final sortedNos = activeNos.toList()
+                              ..sort((a, b) => (int.tryParse(a) ?? 0).compareTo(int.tryParse(b) ?? 0));
+                            nameController.text = 'Combined_Post(${sortedNos.join(', ')})';
+                          },
+                        ),
+                      ],
+                    ),
                     const SizedBox(height: 6),
                     TextField(
                       controller: nameController,
                       decoration: const InputDecoration(
-                        labelText: 'Group Name / ID',
+                        labelText: 'Combined Post Name / ID',
+                        hintText: 'e.g., Combined_Post(373, 374) or Combined Post(45, 56, 78)',
                         border: OutlineInputBorder(),
                         prefixIcon: Icon(Icons.label_outline),
-                        helperText: 'You can change this name anytime',
+                        helperText: 'Format: Combined_Post(373, 374) or Combined Post(45, 56, 78). Branch name not required.',
                       ),
                     ),
                     const SizedBox(height: 16),
