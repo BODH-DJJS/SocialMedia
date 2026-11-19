@@ -3056,18 +3056,10 @@ function ensureDevSheets(ss) {
     ['lead.admin@djjs.org', 'Sample Lead Coordinator (Replace Me)', 'Coordinator', 'All']
   ];
 
-  var existingUserData = devUsersSheet.getDataRange().getValues();
-  var existingEmails = {};
-  for (var u = 1; u < existingUserData.length; u++) {
-    var emailKey = (existingUserData[u][0] || '').toString().trim().toLowerCase();
-    if (emailKey) existingEmails[emailKey] = true;
-  }
-
-  for (var u = 0; u < sampleDevUsers.length; u++) {
-    var sEmail = sampleDevUsers[u][0].toLowerCase();
-    if (!existingEmails[sEmail]) {
+  // Only seed sample users when devUsersSheet is brand new or completely empty (< 2 rows)
+  if (devUsersSheet.getLastRow() < 2) {
+    for (var u = 0; u < sampleDevUsers.length; u++) {
       devUsersSheet.appendRow(sampleDevUsers[u]);
-      existingEmails[sEmail] = true;
     }
   }
 }
@@ -4304,9 +4296,13 @@ function handleGetDevUsers() {
   }
 
   var users = [];
+  var devEmailSet = {};
   for (var i = 1; i < usersData.length; i++) {
-    var email = (usersData[i][0] || '').toString().trim();
-    var name = (usersData[i][1] || '').toString().trim();
+    var raw0 = (usersData[i][0] || '').toString().trim();
+    var raw1 = (usersData[i][1] || '').toString().trim();
+    var email = raw0.indexOf('@') !== -1 ? raw0 : (raw1.indexOf('@') !== -1 ? raw1 : raw0);
+    var name = raw0.indexOf('@') !== -1 ? raw1 : raw0;
+    if (!name) name = email;
     var role = usersData[i][2] ? usersData[i][2].toString().trim() : '';
     var category = usersData[i][3] ? usersData[i][3].toString().trim() : '';
     var activeTasks = activeCounts[email.toLowerCase()] || 0;
@@ -4321,6 +4317,31 @@ function handleGetDevUsers() {
         status: activeTasks > 0 ? 'Engaged' : 'Available',
         activeTasks: activeTasks
       });
+      devEmailSet[email.toLowerCase()] = true;
+    }
+  }
+
+  // Also include any users from main Users sheet that aren't already in Dev_Users
+  var smUsersSheet = ss.getSheetByName(USERS_SHEET);
+  if (smUsersSheet && smUsersSheet.getLastRow() >= 2) {
+    var smData = smUsersSheet.getDataRange().getValues();
+    for (var j = 1; j < smData.length; j++) {
+      var sEmail = (smData[j][0] || '').toString().trim();
+      var sName = (smData[j][1] || '').toString().trim();
+      var sRole = (smData[j][2] || '').toString().trim();
+      if (sEmail && !devEmailSet[sEmail.toLowerCase()]) {
+        var aCount = activeCounts[sEmail.toLowerCase()] || 0;
+        users.push({
+          email: sEmail,
+          username: sEmail,
+          name: sName || sEmail,
+          role: sRole,
+          category: 'All',
+          status: aCount > 0 ? 'Engaged' : 'Available',
+          activeTasks: aCount
+        });
+        devEmailSet[sEmail.toLowerCase()] = true;
+      }
     }
   }
 

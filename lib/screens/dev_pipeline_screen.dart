@@ -693,7 +693,20 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
           IconButton(
             tooltip: 'Refresh Data',
             icon: const Icon(Icons.refresh_rounded, color: Colors.white),
-            onPressed: () => devProvider.fetchDevData(role: auth.role, username: auth.username),
+            onPressed: () async {
+              final scaffold = ScaffoldMessenger.of(context);
+              scaffold.showSnackBar(
+                const SnackBar(
+                  content: Text('Refreshing pipeline data and assignees...'),
+                  duration: Duration(seconds: 1),
+                ),
+              );
+              await Future.wait([
+                devProvider.fetchDevData(role: auth.role, username: auth.username),
+                context.read<EventProvider>().fetchDevUsers(),
+              ]);
+              if (mounted) setState(() {});
+            },
           ),
           if (isAdmin)
             Padding(
@@ -717,7 +730,10 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
                               : 'Create Event / Topic')),
                   style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                 ),
-                onPressed: () {
+                onPressed: () async {
+                  // Fetch the latest assignees/users before opening the creation dialog
+                  await context.read<EventProvider>().fetchDevUsers();
+                  if (!mounted) return;
                   if (_tabController.index == 1) {
                     _showCreateSmProjectDialog(context);
                   } else if (_tabController.index == 2) {

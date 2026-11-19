@@ -398,38 +398,76 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     }
     
     if (stageLower.contains('editing') && (stageLower.contains('photo') || stageLower.contains('video'))) {
-      final choice = await showDialog<String>(
+      final confirm = await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
-          title: Text('Submit ${event.stage}'),
-          content: const Text('Which action are you completing?'),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Row(
+            children: [
+              const Icon(Icons.check_circle_outline, color: Color(0xFF1A237E), size: 24),
+              const SizedBox(width: 8),
+              Text('Submit ${event.stage}'),
+            ],
+          ),
+          content: Text(
+            'Are you sure you want to mark ${event.stage} as Done and proceed with handoff?\n\n'
+            'Please ensure the selected photos and edited media have been uploaded to the Selected Folder.',
+            style: const TextStyle(fontSize: 14, height: 1.4),
+          ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(ctx, 'Selection Only'),
-              child: const Text('Photo/Video selection As Mark Done'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, 'Selection & Editing'),
-              child: const Text('Photo/Video Editing As Mark Done'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, null),
+              onPressed: () => Navigator.pop(ctx, false),
               child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF1A237E),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Confirm & Mark Done'),
             ),
           ],
         ),
       );
       
-      if (choice == null) return;
+      if (confirm != true) return;
       
       setState(() => _isSaving = true);
       final provider = context.read<EventProvider>();
       final notEmpty = await provider.checkFolderNotEmpty(event.postNo);
       if (!notEmpty) {
         setState(() => _isSaving = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Error: Selected folder is empty! Please upload files first.'), backgroundColor: Colors.red),
-        );
+        if (mounted) {
+          showDialog(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: Row(
+                children: const [
+                  Icon(Icons.warning_amber_rounded, color: Colors.red, size: 28),
+                  SizedBox(width: 8),
+                  Text('Selected Folder Empty'),
+                ],
+              ),
+              content: const Text('The Selected folder is empty! Please upload the selected photos/videos into the Selected folder before marking this task as Done.'),
+              actions: [
+                if (_selectedFolderLink.isNotEmpty)
+                  TextButton.icon(
+                    icon: const Icon(Icons.open_in_new, size: 16),
+                    label: const Text('Open Selected Folder'),
+                    onPressed: () => _openLink(_selectedFolderLink),
+                  ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('OK'),
+                ),
+              ],
+            ),
+          );
+        }
         return;
       }
     }
