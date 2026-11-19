@@ -34,7 +34,9 @@ String _toViewModeUrl(String url) {
   if (u.contains('docs.google.com')) {
     if (u.contains('/edit')) {
       u = u.replaceAll(RegExp(r'/edit.*'), '/preview');
-    } else if (!u.contains('/preview') && !u.contains('/view')) {
+    } else if (u.contains('/view')) {
+      u = u.replaceAll(RegExp(r'/view.*'), '/preview');
+    } else if (!u.contains('/preview')) {
       u = u.endsWith('/') ? '${u}preview' : '$u/preview';
     }
   } else if (u.contains('drive.google.com/file/d/')) {
@@ -460,118 +462,115 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
       if (stLower == 'proofreading') {
         if (writingUrl.isNotEmpty) {
           items.add(_PreviousDocItem(
-            label: 'Writing Doc',
-            shortLabel: 'Writing Doc',
-            url: writingUrl,
-            isViewMode: false,
+            label: 'Writing Doc (View Mode)',
+            shortLabel: 'Writing (View)',
+            url: _toViewModeUrl(writingUrl),
+            isViewMode: true,
             color: const Color(0xFF8E44AD),
-            icon: Icons.draw_outlined,
+            icon: Icons.visibility_outlined,
           ));
         }
       } else if (stLower == 'editing') {
         if (writingUrl.isNotEmpty) {
           items.add(_PreviousDocItem(
-            label: 'Writing Doc',
-            shortLabel: 'Writing Doc',
-            url: writingUrl,
-            isViewMode: false,
+            label: 'Writing Doc (View Mode)',
+            shortLabel: 'Writing (View)',
+            url: _toViewModeUrl(writingUrl),
+            isViewMode: true,
             color: const Color(0xFF8E44AD),
-            icon: Icons.draw_outlined,
+            icon: Icons.visibility_outlined,
           ));
         }
         if (proofreadingUrl.isNotEmpty) {
           items.add(_PreviousDocItem(
-            label: 'Proofreading Doc',
-            shortLabel: 'Proofreading Doc',
-            url: proofreadingUrl,
-            isViewMode: false,
+            label: 'Proofreading Doc (View Mode)',
+            shortLabel: 'Proofreading (View)',
+            url: _toViewModeUrl(proofreadingUrl),
+            isViewMode: true,
             color: const Color(0xFF00897B),
-            icon: Icons.spellcheck_rounded,
+            icon: Icons.visibility_outlined,
           ));
         }
       } else if (stLower == 'final check') {
         if (writingUrl.isNotEmpty) {
           items.add(_PreviousDocItem(
-            label: 'Writing Doc',
-            shortLabel: 'Writing Doc',
-            url: writingUrl,
-            isViewMode: false,
+            label: 'Writing Doc (View Mode)',
+            shortLabel: 'Writing (View)',
+            url: _toViewModeUrl(writingUrl),
+            isViewMode: true,
             color: const Color(0xFF8E44AD),
-            icon: Icons.draw_outlined,
+            icon: Icons.visibility_outlined,
           ));
         }
         if (proofreadingUrl.isNotEmpty) {
           items.add(_PreviousDocItem(
-            label: 'Proofreading Doc',
-            shortLabel: 'Proofreading Doc',
-            url: proofreadingUrl,
-            isViewMode: false,
+            label: 'Proofreading Doc (View Mode)',
+            shortLabel: 'Proofreading (View)',
+            url: _toViewModeUrl(proofreadingUrl),
+            isViewMode: true,
             color: const Color(0xFF00897B),
-            icon: Icons.spellcheck_rounded,
+            icon: Icons.visibility_outlined,
           ));
         }
         if (editingUrl.isNotEmpty) {
           items.add(_PreviousDocItem(
-            label: 'Editing Doc',
-            shortLabel: 'Editing Doc',
-            url: editingUrl,
-            isViewMode: false,
+            label: 'Editing Doc (View Mode)',
+            shortLabel: 'Editing (View)',
+            url: _toViewModeUrl(editingUrl),
+            isViewMode: true,
             color: const Color(0xFF3F51B5),
-            icon: Icons.auto_fix_high_rounded,
+            icon: Icons.visibility_outlined,
           ));
         }
       }
     } else {
       final isSubsequent = !isWriting && !isEditing && !isProofreading && !isCrosscheck;
 
-      // 1. Writing Doc
+      // 1. Writing Doc (Always View Mode for any subsequent stage)
       if (!isWriting && writingUrl.isNotEmpty) {
-        final viewOnly = isCrosscheck;
         items.add(_PreviousDocItem(
-          label: viewOnly ? 'Writing Doc (View Mode)' : 'Writing Doc',
-          shortLabel: viewOnly ? 'Writing (View)' : 'Writing Doc',
-          url: viewOnly ? _toViewModeUrl(writingUrl) : writingUrl,
-          isViewMode: viewOnly,
+          label: 'Writing Doc (View Mode)',
+          shortLabel: 'Writing (View)',
+          url: _toViewModeUrl(writingUrl),
+          isViewMode: true,
           color: const Color(0xFF8E44AD),
-          icon: viewOnly ? Icons.visibility_outlined : Icons.draw_outlined,
+          icon: Icons.visibility_outlined,
         ));
       }
 
-      // 2. Editing Doc
+      // 2. Editing Doc (Always View Mode for any subsequent stage)
       if (!isWriting && !isEditing && editingUrl.isNotEmpty) {
-        final viewOnly = isCrosscheck;
         items.add(_PreviousDocItem(
-          label: viewOnly ? 'Editing Doc (View Mode)' : 'Editing Doc',
-          shortLabel: viewOnly ? 'Editing (View)' : 'Editing Doc',
-          url: viewOnly ? _toViewModeUrl(editingUrl) : editingUrl,
-          isViewMode: viewOnly,
+          label: 'Editing Doc (View Mode)',
+          shortLabel: 'Editing (View)',
+          url: _toViewModeUrl(editingUrl),
+          isViewMode: true,
           color: const Color(0xFF3F51B5),
-          icon: viewOnly ? Icons.visibility_outlined : Icons.auto_fix_high_rounded,
+          icon: Icons.visibility_outlined,
         ));
       }
 
-      // 3. Proofreading Doc
+      // 3. Proofreading Doc (Always View Mode for any subsequent stage)
       if (!isWriting && !isEditing && !isProofreading && proofreadingUrl.isNotEmpty) {
-        final viewOnly = isCrosscheck;
         items.add(_PreviousDocItem(
-          label: viewOnly ? 'Proofreading Doc (View Mode)' : 'Proofreading Doc',
-          shortLabel: viewOnly ? 'Proofreading (View)' : 'Proofreading Doc',
-          url: viewOnly ? _toViewModeUrl(proofreadingUrl) : proofreadingUrl,
-          isViewMode: viewOnly,
+          label: 'Proofreading Doc (View Mode)',
+          shortLabel: 'Proofreading (View)',
+          url: _toViewModeUrl(proofreadingUrl),
+          isViewMode: true,
           color: const Color(0xFF00897B),
-          icon: viewOnly ? Icons.visibility_outlined : Icons.spellcheck_rounded,
+          icon: Icons.visibility_outlined,
         ));
       }
 
-      // 4. Text Crosscheck Doc (for subsequent stages)
+      // 4. Text Crosscheck Doc (Always View Mode for subsequent stages)
       if (isSubsequent && crosscheckUrl.isNotEmpty) {
         items.add(_PreviousDocItem(
-          label: 'Crosscheck Doc',
-          shortLabel: 'Crosscheck Doc',
-          url: crosscheckUrl,
-          isViewMode: false,
+          label: 'Crosscheck Doc (View Mode)',
+          shortLabel: 'Crosscheck (View)',
+          url: _toViewModeUrl(crosscheckUrl),
+          isViewMode: true,
           color: const Color(0xFF27AE60),
-          icon: Icons.verified_outlined,
+          icon: Icons.visibility_outlined,
         ));
       }
     }
@@ -3119,28 +3118,26 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
                                 children: [
                                   Row(
                                     children: [
-                                      Icon(
-                                        isCross ? Icons.visibility_rounded : Icons.history_edu_rounded,
-                                        color: isCross ? const Color(0xFF15803D) : const Color(0xFF1A237E),
+                                      const Icon(
+                                        Icons.visibility_rounded,
+                                        color: Color(0xFF15803D),
                                         size: 20,
                                       ),
                                       const SizedBox(width: 8),
-                                      Text(
-                                        isCross ? 'Previous Stage Documents (View Mode Only)' : 'Previous Stage Documents',
+                                      const Text(
+                                        'Previous Stage Documents (View Mode Only)',
                                         style: TextStyle(
                                           fontWeight: FontWeight.bold,
                                           fontSize: 14,
-                                          color: isCross ? const Color(0xFF15803D) : const Color(0xFF1A237E),
+                                          color: Color(0xFF15803D),
                                         ),
                                       ),
                                     ],
                                   ),
                                   const SizedBox(height: 5),
                                   Text(
-                                    isCross
-                                        ? 'For Text Crosscheck, all previous documents open in read-only View Mode to prevent unintended modifications.'
-                                        : 'Access documents completed and forwarded from preceding stages for reference.',
-                                    style: TextStyle(fontSize: 11, color: isCross ? Colors.black87 : Colors.grey.shade700),
+                                    'All previous stage documents open in read-only View Mode (/preview) for reference to protect prior stage work.',
+                                    style: TextStyle(fontSize: 11, color: Colors.grey.shade800),
                                   ),
                                   const SizedBox(height: 12),
                                   ...prevDocs.map((docItem) {
