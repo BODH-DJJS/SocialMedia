@@ -7,6 +7,7 @@ import '../providers/auth_provider.dart';
 import '../providers/dev_pipeline_provider.dart';
 import '../providers/event_provider.dart';
 import '../models/dev_pipeline_models.dart';
+import '../widgets/searchable_user_picker.dart';
 import '../utils/due_date_utils.dart';
 
 class _PreviousDocItem {
@@ -4385,54 +4386,36 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
                                 ),
                               ),
                               Expanded(
-                                child: DropdownButtonFormField<String>(
-                                  isExpanded: true,
-                                  decoration: InputDecoration(
-                                    contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                                    isDense: true,
-                                  ),
-                                  hint: Text('Select $expectedRole', style: const TextStyle(fontSize: 12)),
+                                child: SearchableUserPicker(
+                                  title: expectedRole,
                                   value: assignees[st]?['email']?.isNotEmpty == true ? assignees[st]!['email'] : null,
-                                  items: [
-                                    ...displayUsers.map((u) {
-                                      final uEmail = u['Email']?.toString() ?? u['email']?.toString() ?? '';
-                                      final uName = u['Name']?.toString() ?? u['name']?.toString() ?? uEmail;
-                                      final uRole = u['Role']?.toString() ?? u['role']?.toString() ?? '';
-                                      return DropdownMenuItem<String>(
-                                        value: uEmail,
-                                        child: Text('$uName ($uRole)', style: const TextStyle(fontSize: 12)),
-                                      );
-                                    }),
-                                    const DropdownMenuItem<String>(
-                                      value: '__add_new__',
-                                      child: Text('+ Add New Assignee...', style: TextStyle(fontSize: 12, color: Colors.blue, fontWeight: FontWeight.bold)),
-                                    ),
-                                  ],
-                                  onChanged: (val) {
-                                    if (val == '__add_new__') {
-                                      _promptAddNewAssignee(ctx, st, 'Campaign Development', (name, email) {
-                                        final newUser = {
-                                          'Email': email,
-                                          'Name': name,
-                                          'Role': st,
-                                          'Category': 'Campaign Development'
+                                  users: displayUsers,
+                                  valueField: 'email',
+                                  isDense: true,
+                                  contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                  allowOther: true,
+                                  otherLabel: '+ Add New Assignee...',
+                                  onOtherSelected: () {
+                                    _promptAddNewAssignee(ctx, st, 'Campaign Development', (name, email) {
+                                      final newUser = {
+                                        'Email': email,
+                                        'Name': name,
+                                        'Role': st,
+                                        'Category': 'Campaign Development'
+                                      };
+                                      setDialogState(() {
+                                        users.add(newUser);
+                                        assignees[st] = {
+                                          'name': name,
+                                          'email': email,
                                         };
-                                        setDialogState(() {
-                                          users.add(newUser);
-                                          assignees[st] = {
-                                            'name': name,
-                                            'email': email,
-                                          };
-                                        });
                                       });
-                                    } else if (val != null) {
-                                      final matched = users.firstWhere(
-                                        (u) => (u['Email']?.toString() ?? u['email']?.toString()) == val,
-                                        orElse: () => users.first,
-                                      );
-                                      final mName = matched['Name']?.toString() ?? matched['name']?.toString() ?? val;
-                                      final mEmail = matched['Email']?.toString() ?? matched['email']?.toString() ?? val;
+                                    });
+                                  },
+                                  onUserChanged: (val, user) {
+                                    if (val != null) {
+                                      final mName = user?['Name']?.toString() ?? user?['name']?.toString() ?? val;
+                                      final mEmail = user?['Email']?.toString() ?? user?['email']?.toString() ?? val;
                                       setDialogState(() {
                                         assignees[st] = {
                                           'name': mName,
@@ -4725,54 +4708,36 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
                                 ),
                               ),
                               Expanded(
-                                child: DropdownButtonFormField<String>(
-                                  isExpanded: true,
-                                  decoration: InputDecoration(
-                                    contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                                    isDense: true,
-                                  ),
-                                  hint: Text('Select $roleName', style: const TextStyle(fontSize: 12)),
+                                child: SearchableUserPicker(
+                                  title: roleName,
                                   value: smAssignees[roleName]?['email']?.isNotEmpty == true ? smAssignees[roleName]!['email'] : null,
-                                  items: [
-                                    ...displayUsers.map((u) {
-                                      final uEmail = u['Email']?.toString() ?? u['email']?.toString() ?? '';
-                                      final uName = u['Name']?.toString() ?? u['name']?.toString() ?? uEmail;
-                                      final uRole = u['Role']?.toString() ?? u['role']?.toString() ?? '';
-                                      return DropdownMenuItem<String>(
-                                        value: uEmail,
-                                        child: Text('$uName ($uRole)', style: const TextStyle(fontSize: 12)),
-                                      );
-                                    }),
-                                    const DropdownMenuItem<String>(
-                                      value: '__add_new__',
-                                      child: Text('+ Add New Assignee...', style: TextStyle(fontSize: 12, color: Colors.blue, fontWeight: FontWeight.bold)),
-                                    ),
-                                  ],
-                                  onChanged: (val) {
-                                    if (val == '__add_new__') {
-                                      _promptAddNewAssignee(ctx, roleName, 'SM Development', (name, email) {
-                                        final newUser = {
-                                          'Email': email,
-                                          'Name': name,
-                                          'Role': roleName,
-                                          'Category': 'SM Development'
+                                  users: displayUsers,
+                                  valueField: 'email',
+                                  isDense: true,
+                                  contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                  allowOther: true,
+                                  otherLabel: '+ Add New Assignee...',
+                                  onOtherSelected: () {
+                                    _promptAddNewAssignee(ctx, roleName, 'SM Development', (name, email) {
+                                      final newUser = {
+                                        'Email': email,
+                                        'Name': name,
+                                        'Role': roleName,
+                                        'Category': 'SM Development'
+                                      };
+                                      setDialogState(() {
+                                        users.add(newUser);
+                                        smAssignees[roleName] = {
+                                          'name': name,
+                                          'email': email,
                                         };
-                                        setDialogState(() {
-                                          users.add(newUser);
-                                          smAssignees[roleName] = {
-                                            'name': name,
-                                            'email': email,
-                                          };
-                                        });
                                       });
-                                    } else if (val != null) {
-                                      final matched = users.firstWhere(
-                                        (u) => (u['Email']?.toString() ?? u['email']?.toString()) == val,
-                                        orElse: () => users.first,
-                                      );
-                                      final mName = matched['Name']?.toString() ?? matched['name']?.toString() ?? val;
-                                      final mEmail = matched['Email']?.toString() ?? matched['email']?.toString() ?? val;
+                                    });
+                                  },
+                                  onUserChanged: (val, user) {
+                                    if (val != null) {
+                                      final mName = user?['Name']?.toString() ?? user?['name']?.toString() ?? val;
+                                      final mEmail = user?['Email']?.toString() ?? user?['email']?.toString() ?? val;
                                       setDialogState(() {
                                         smAssignees[roleName] = {
                                           'name': mName,
@@ -5069,54 +5034,36 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
                                 ),
                               ),
                               Expanded(
-                                child: DropdownButtonFormField<String>(
-                                  isExpanded: true,
-                                  decoration: InputDecoration(
-                                    contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                                    isDense: true,
-                                  ),
-                                  hint: Text('Select $roleName', style: const TextStyle(fontSize: 12)),
+                                child: SearchableUserPicker(
+                                  title: roleName,
                                   value: webAssignees[roleName]?['email']?.isNotEmpty == true ? webAssignees[roleName]!['email'] : null,
-                                  items: [
-                                    ...displayUsers.map((u) {
-                                      final uEmail = u['Email']?.toString() ?? u['email']?.toString() ?? '';
-                                      final uName = u['Name']?.toString() ?? u['name']?.toString() ?? uEmail;
-                                      final uRole = u['Role']?.toString() ?? u['role']?.toString() ?? '';
-                                      return DropdownMenuItem<String>(
-                                        value: uEmail,
-                                        child: Text('$uName ($uRole)', style: const TextStyle(fontSize: 12)),
-                                      );
-                                    }),
-                                    const DropdownMenuItem<String>(
-                                      value: '__add_new__',
-                                      child: Text('+ Add New Assignee...', style: TextStyle(fontSize: 12, color: Colors.blue, fontWeight: FontWeight.bold)),
-                                    ),
-                                  ],
-                                  onChanged: (val) {
-                                    if (val == '__add_new__') {
-                                      _promptAddNewAssignee(ctx, roleName, 'Website Reporting', (name, email) {
-                                        final newUser = {
-                                          'Email': email,
-                                          'Name': name,
-                                          'Role': roleName,
-                                          'Category': 'Website Reporting'
+                                  users: displayUsers,
+                                  valueField: 'email',
+                                  isDense: true,
+                                  contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                  allowOther: true,
+                                  otherLabel: '+ Add New Assignee...',
+                                  onOtherSelected: () {
+                                    _promptAddNewAssignee(ctx, roleName, 'Website Reporting', (name, email) {
+                                      final newUser = {
+                                        'Email': email,
+                                        'Name': name,
+                                        'Role': roleName,
+                                        'Category': 'Website Reporting'
+                                      };
+                                      setDialogState(() {
+                                        users.add(newUser);
+                                        webAssignees[roleName] = {
+                                          'name': name,
+                                          'email': email,
                                         };
-                                        setDialogState(() {
-                                          users.add(newUser);
-                                          webAssignees[roleName] = {
-                                            'name': name,
-                                            'email': email,
-                                          };
-                                        });
                                       });
-                                    } else if (val != null) {
-                                      final matched = users.firstWhere(
-                                        (u) => (u['Email']?.toString() ?? u['email']?.toString()) == val,
-                                        orElse: () => users.first,
-                                      );
-                                      final mName = matched['Name']?.toString() ?? matched['name']?.toString() ?? val;
-                                      final mEmail = matched['Email']?.toString() ?? matched['email']?.toString() ?? val;
+                                    });
+                                  },
+                                  onUserChanged: (val, user) {
+                                    if (val != null) {
+                                      final mName = user?['Name']?.toString() ?? user?['name']?.toString() ?? val;
+                                      final mEmail = user?['Email']?.toString() ?? user?['email']?.toString() ?? val;
                                       setDialogState(() {
                                         webAssignees[roleName] = {
                                           'name': mName,
@@ -5404,54 +5351,36 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
                                 ),
                               ),
                               Expanded(
-                                child: DropdownButtonFormField<String>(
-                                  isExpanded: true,
-                                  decoration: InputDecoration(
-                                    contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                                    isDense: true,
-                                  ),
-                                  hint: Text('Select $roleName', style: const TextStyle(fontSize: 12)),
+                                child: SearchableUserPicker(
+                                  title: roleName,
                                   value: blogAssignees[roleName]?['email']?.isNotEmpty == true ? blogAssignees[roleName]!['email'] : null,
-                                  items: [
-                                    ...displayUsers.map((u) {
-                                      final uEmail = u['Email']?.toString() ?? u['email']?.toString() ?? '';
-                                      final uName = u['Name']?.toString() ?? u['name']?.toString() ?? uEmail;
-                                      final uRole = u['Role']?.toString() ?? u['role']?.toString() ?? '';
-                                      return DropdownMenuItem<String>(
-                                        value: uEmail,
-                                        child: Text('$uName ($uRole)', style: const TextStyle(fontSize: 12)),
-                                      );
-                                    }),
-                                    const DropdownMenuItem<String>(
-                                      value: '__add_new__',
-                                      child: Text('+ Add New Assignee...', style: TextStyle(fontSize: 12, color: Colors.blue, fontWeight: FontWeight.bold)),
-                                    ),
-                                  ],
-                                  onChanged: (val) {
-                                    if (val == '__add_new__') {
-                                      _promptAddNewAssignee(ctx, roleName, 'Blogs / Articles', (name, email) {
-                                        final newUser = {
-                                          'Email': email,
-                                          'Name': name,
-                                          'Role': roleName,
-                                          'Category': 'Blogs / Articles'
+                                  users: displayUsers,
+                                  valueField: 'email',
+                                  isDense: true,
+                                  contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                  allowOther: true,
+                                  otherLabel: '+ Add New Assignee...',
+                                  onOtherSelected: () {
+                                    _promptAddNewAssignee(ctx, roleName, 'Blogs / Articles', (name, email) {
+                                      final newUser = {
+                                        'Email': email,
+                                        'Name': name,
+                                        'Role': roleName,
+                                        'Category': 'Blogs / Articles'
+                                      };
+                                      setDialogState(() {
+                                        users.add(newUser);
+                                        blogAssignees[roleName] = {
+                                          'name': name,
+                                          'email': email,
                                         };
-                                        setDialogState(() {
-                                          users.add(newUser);
-                                          blogAssignees[roleName] = {
-                                            'name': name,
-                                            'email': email,
-                                          };
-                                        });
                                       });
-                                    } else if (val != null) {
-                                      final matched = users.firstWhere(
-                                        (u) => (u['Email']?.toString() ?? u['email']?.toString()) == val,
-                                        orElse: () => users.first,
-                                      );
-                                      final mName = matched['Name']?.toString() ?? matched['name']?.toString() ?? val;
-                                      final mEmail = matched['Email']?.toString() ?? matched['email']?.toString() ?? val;
+                                    });
+                                  },
+                                  onUserChanged: (val, user) {
+                                    if (val != null) {
+                                      final mName = user?['Name']?.toString() ?? user?['name']?.toString() ?? val;
+                                      final mEmail = user?['Email']?.toString() ?? user?['email']?.toString() ?? val;
                                       setDialogState(() {
                                         blogAssignees[roleName] = {
                                           'name': mName,
@@ -5658,28 +5587,19 @@ class _ReassignDevTaskDialogState extends State<_ReassignDevTaskDialog> {
                 ),
               ),
               const SizedBox(height: 16),
-              DropdownButtonFormField<String>(
-                decoration: InputDecoration(
-                  labelText: 'Select $expectedRole',
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                ),
+              SearchableUserPicker(
+                title: expectedRole,
                 value: _selectedEmail,
-                items: [
-                  ...displayUsers.map((u) {
-                    final email = u['Email']?.toString() ?? u['email']?.toString() ?? '';
-                    final name = u['Name']?.toString() ?? u['name']?.toString() ?? email;
-                    final role = u['Role']?.toString() ?? u['role']?.toString() ?? '';
-                    return DropdownMenuItem<String>(
-                      value: email,
-                      child: Text('$name ($role)', style: const TextStyle(fontSize: 13), overflow: TextOverflow.ellipsis),
-                    );
-                  }),
-                  const DropdownMenuItem<String>(
-                    value: '__other__',
-                    child: Text('+ Other (Add New User)', style: TextStyle(fontSize: 13, color: Colors.blue, fontWeight: FontWeight.bold)),
-                  ),
-                ],
+                users: displayUsers,
+                valueField: 'email',
+                allowOther: true,
+                otherLabel: '+ Other (Add New User)',
+                onOtherSelected: () {
+                  setState(() {
+                    _selectedEmail = '__other__';
+                    _isOther = true;
+                  });
+                },
                 onChanged: (val) {
                   setState(() {
                     _selectedEmail = val;

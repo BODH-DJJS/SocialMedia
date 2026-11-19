@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../models/event.dart';
 import '../providers/event_provider.dart';
 import '../providers/auth_provider.dart';
+import '../widgets/searchable_user_picker.dart';
 
 class GroupMediaLink {
   final String postNo;
@@ -1814,25 +1815,23 @@ class _ReassignDialogState extends State<_ReassignDialog> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            DropdownButtonFormField<String>(
-              decoration: const InputDecoration(labelText: 'Select User'),
+            SearchableUserPicker(
+              title: expectedRole,
               value: _selectedEmail,
-              items: [
-                ...roleUsers.map((u) {
-                  return DropdownMenuItem(
-                    value: u['username'],
-                    child: Text('${u['name']} (${u['username']})'),
-                  );
-                }),
-                const DropdownMenuItem(
-                  value: 'other',
-                  child: Text('Other (Add New User)'),
-                ),
-              ],
+              users: roleUsers,
+              valueField: 'username',
+              allowOther: true,
+              otherLabel: '+ Other (Add New User)',
+              onOtherSelected: () {
+                setState(() {
+                  _selectedEmail = 'other';
+                  _isOther = true;
+                });
+              },
               onChanged: (val) {
                 setState(() {
                   _selectedEmail = val;
-                  _isOther = val == 'other';
+                  _isOther = (val == 'other' || val == '__other__');
                 });
               },
             ),

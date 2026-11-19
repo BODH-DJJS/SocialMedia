@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../providers/event_provider.dart';
 import '../providers/auth_provider.dart';
 import '../models/event.dart';
+import '../widgets/searchable_user_picker.dart';
 import 'package:intl/intl.dart';
 
 class GroupMediaLink {
@@ -485,55 +486,13 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
       children: [
         Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
         const SizedBox(height: 6),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            border: Border.all(color: Colors.grey.shade300),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: DropdownButtonHideUnderline(
-            child: DropdownButton<String>(
-              isExpanded: true,
-              hint: const Text('Auto-assign (least loaded)'),
-              value: effectiveValue,
-              items: [
-                const DropdownMenuItem(value: null, child: Text('Auto-assign (least loaded)')),
-                ...uniqueUsers.values.map((u) {
-                  final email = u['email']?.toString() ?? '';
-                  final name = u['name']?.toString() ?? '';
-                  final status = u['status'];
-                  final active = u['activeTasks'];
-                  
-                  final displayName = name.isNotEmpty && name.toLowerCase() != email.toLowerCase() ? name : email;
-                  
-                  return DropdownMenuItem<String>(
-                    value: email,
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 8, height: 8,
-                          decoration: BoxDecoration(
-                            color: status == 'Available' ? Colors.green : Colors.orange,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            displayName,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        Text('($active active)', style: TextStyle(color: Colors.grey.shade500, fontSize: 12)),
-                      ],
-                    ),
-                  );
-                }).toList(),
-              ],
-              onChanged: onChanged,
-            ),
-          ),
+        SearchableUserPicker(
+          title: title,
+          value: effectiveValue,
+          users: uniqueUsers.values.toList(),
+          allowAutoAssign: true,
+          autoAssignLabel: 'Auto-assign (least loaded)',
+          onChanged: onChanged,
         ),
       ],
     );
