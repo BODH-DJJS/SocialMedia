@@ -4678,4 +4678,87 @@ function onEdit(e) {
   }
 }
 
+/**
+ * Reconcile / Pull Database Updates to Google Sheets:
+ * Reads tasks modified in Supabase in the last 24 hours (or all recently updated tasks)
+ * and writes their status, canva_link, doc_link, etc. directly into Google Sheets!
+ * You can also set a 5-minute time-driven trigger for this function in Apps Script.
+ */
+function syncSupabaseUpdatesToSheet() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(TASKS_SHEET);
+  if (!sheet || sheet.getLastRow() < 2) return;
+
+  var data = sheet.getDataRange().getValues();
+  var headers = data[0];
+  var taskIdCol = headers.indexOf('TaskID');
+  var statusCol = headers.indexOf('Status');
+  var canvaCol = headers.indexOf('CanvaLink');
+  var docCol = headers.indexOf('DocLink');
+  var compCol = headers.indexOf('CompletedAt');
+
+  if (taskIdCol === -1 || statusCol === -1) return;
+
+  // Build row lookup by TaskID
+  var rowMap = {};
+  for (var r = 1; r < data.length; r++) {
+    var tid = String(data[r][taskIdCol] || '').trim();
+    if (tid) rowMap[tid] = r + 1; // 1-based row index
+  }
+
+  // Fetch recently updated tasks from Supabase (last 200 tasks updated)
+  var options = {
+    method: "get",
+    headers: {
+      "apikey": SUPABASE_SYNC_CONFIG.secretKey,
+      "Authorization": "Bearer " + SUPABASE_SYNC_CONFIG.secretKey,
+      "User-Agent": "Google-Apps-Script"
+    },
+    muteHttpExceptions: true
+  };
+
+  try {
+    var resp = UrlFetchApp.fetch(SUPABASE_SYNC_CONFIG.url + "/rest/v1/tasks?select=task_id,status,canva_link,doc_link,completed_at&order=updated_at.desc&limit=200", options);
+    if (resp.getResponseCode() !== 200) {
+      Logger.log("Failed to fetch from Supabase: " + resp.getContentText());
+      return;
+    }
+
+    var supaTasks = JSON.parse(resp.getContentText());
+    var updatedCount = 0;
+
+    for (var i = 0; i < supaTasks.length; i++) {
+      var st = supaTasks[i];
+      var tid = String(st.task_id || '').trim();
+      var rIdx = rowMap[tid];
+      if (!rIdx) continue;
+
+      var currentSheetStatus = String(data[rIdx - 1][statusCol] || '');
+      var newStatus = String(st.status || '');
+
+      if (newStatus && currentSheetStatus !== newStatus) {
+        sheet.getRange(rIdx, statusCol + 1).setValue(newStatus);
+        if (newStatus === 'Done' && compCol !== -1) {
+          sheet.getRange(rIdx, compCol + 1).setValue(st.completed_at || new Date().toLocaleString());
+        }
+        updatedCount++;
+      }
+
+      if (st.canva_link && canvaCol !== -1 && String(data[rIdx - 1][canvaCol] || '') !== st.canva_link) {
+        sheet.getRange(rIdx, canvaCol + 1).setValue(st.canva_link);
+      }
+      if (st.doc_link && docCol !== -1 && String(data[rIdx - 1][docCol] || '') !== st.doc_link) {
+        sheet.getRange(rIdx, docCol + 1).setValue(st.doc_link);
+      }
+    }
+
+    Logger.log("✅ Synced " + updatedCount + " task updates from Supabase to Google Sheets.");
+    return { success: true, updated: updatedCount };
+  } catch (err) {
+    Logger.log("❌ Sync error: " + err.toString());
+    return { success: false, error: err.toString() };
+  }
+}
+
+
 
