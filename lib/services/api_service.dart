@@ -247,6 +247,37 @@ class ApiService {
     }
   }
 
+  /// Updates post metadata (e.g. clearing 'Skip' or 'Inactive' post_status) in Supabase instantly
+  Future<bool> updatePostInSupabase(String postNo, Map<String, dynamic> updates) async {
+    final uri = Uri.parse('$supabaseUrl/rest/v1/posts?post_no=eq.${Uri.encodeComponent(postNo)}');
+    final payload = <String, dynamic>{
+      'updated_at': DateTime.now().toIso8601String(),
+    };
+    if (updates.containsKey('postStatus')) payload['post_status'] = updates['postStatus'];
+    if (updates.containsKey('activityType')) payload['activity_type'] = updates['activityType'];
+    if (updates.containsKey('publishPlatform')) payload['publish_platform'] = updates['publishPlatform'];
+    if (updates.containsKey('postType')) payload['post_type'] = updates['postType'];
+    if (updates.containsKey('mediaMode')) payload['media_mode'] = updates['mediaMode'];
+    if (updates.containsKey('description')) payload['description'] = updates['description'];
+
+    try {
+      final response = await http.patch(
+        uri,
+        headers: {
+          'apikey': supabaseAnonKey,
+          'Authorization': 'Bearer $supabaseAnonKey',
+          'Content-Type': 'application/json',
+          'Prefer': 'return=minimal',
+        },
+        body: json.encode(payload),
+      );
+      return response.statusCode == 200 || response.statusCode == 204;
+    } catch (e) {
+      debugPrint('⚠️ [Supabase Post Update Error]: $e');
+      return false;
+    }
+  }
+
   /// Test method: Fetches test_events directly from Supabase in milliseconds
   Future<List<Map<String, dynamic>>> fetchTestEventsFromSupabase() async {
     final uri = Uri.parse('$supabaseUrl/rest/v1/test_events?select=*');

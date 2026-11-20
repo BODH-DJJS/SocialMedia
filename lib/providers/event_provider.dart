@@ -703,6 +703,29 @@ class EventProvider with ChangeNotifier {
     required String postType,
     required String mediaMode,
   }) async {
+    // ── Instant in-memory and Supabase update: Clear 'Skip' / 'Inactive' tag when assigned ──
+    for (var p in _rawPosts) {
+      if (p['PostNo']?.toString() == postNo || (p['GroupID']?.toString().isNotEmpty == true && p['GroupID']?.toString() == postNo)) {
+        p['PostStatus'] = '';
+        p['post_status'] = '';
+        p['Description'] = description;
+        p['PublishPlatform'] = publishPlatform;
+        p['PostType'] = postType;
+        p['MediaMode'] = mediaMode;
+      }
+    }
+    notifyListeners();
+
+    try {
+      _apiService.updatePostInSupabase(postNo, {
+        'postStatus': '',
+        'description': description,
+        'publishPlatform': publishPlatform,
+        'postType': postType,
+        'mediaMode': mediaMode,
+      });
+    } catch (_) {}
+
     try {
       final res = await _apiService.postData({
         'action': 'createTasksForPostV2',

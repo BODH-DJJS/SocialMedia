@@ -2351,6 +2351,11 @@ function createTasksForPostV2(payload) {
         if (postType) postsSheet.getRange(rIdx, 37).setValue(postType);
         if (mediaMode) postsSheet.getRange(rIdx, 39).setValue(mediaMode);
         if (description) postsSheet.getRange(rIdx, 40).setValue(description);
+        // If post was previously 'Skip', 'Later', or 'Data Unavailable', reset PostStatus when activated/assigned!
+        var existingStatus = (postsData[i][40] || '').toString().trim().toLowerCase();
+        if (existingStatus === 'skip' || existingStatus === 'later' || existingStatus === 'data unavailable' || existingStatus === 'dataunavailable') {
+          postsSheet.getRange(rIdx, 41).setValue('');
+        }
         break;
       }
     }
