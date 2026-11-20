@@ -974,9 +974,28 @@ function handleReassignTasks(payload) {
 function handleUpdateTask(payload) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sheet = ss.getSheetByName(TASKS_SHEET);
-  var headers = sheet.getDataRange().getValues()[0];
+  var data = sheet.getDataRange().getValues();
+  var headers = data[0];
   var rowIndex = payload.rowIndex;
+  var taskId = payload.taskId;
   var updates = payload.updates;
+
+  // Resilient Row Lookup: If taskId is provided, verify or find the exact row index!
+  var taskIdCol = headers.indexOf('TaskID');
+  if (taskId && taskIdCol !== -1) {
+    if (!rowIndex || rowIndex < 2 || rowIndex > data.length || String(data[rowIndex - 1][taskIdCol]).trim() !== String(taskId).trim()) {
+      for (var r = 1; r < data.length; r++) {
+        if (String(data[r][taskIdCol]).trim() === String(taskId).trim()) {
+          rowIndex = r + 1;
+          break;
+        }
+      }
+    }
+  }
+
+  if (!rowIndex || rowIndex < 2 || rowIndex > data.length) {
+    return { success: false, message: 'Invalid row index for task: ' + (taskId || rowIndex) };
+  }
   
   if (updates['Status'] === 'Done') {
     updates['CompletedAt'] = new Date().toLocaleString();

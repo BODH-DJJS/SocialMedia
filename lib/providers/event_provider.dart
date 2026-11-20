@@ -306,6 +306,7 @@ class EventProvider with ChangeNotifier {
     try {
       final response = await _apiService.postData({
         'action': 'updateTask',
+        'taskId': event.taskId,
         'rowIndex': event.rowIndex,
         'updates': updates,
       });
