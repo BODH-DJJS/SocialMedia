@@ -26,7 +26,7 @@ class _DashboardScreenState extends State<DashboardScreen>
   int _activePipelineIndex = 0; // 0: Social Media, 1: Development
   int _currentIndex = 0;
   String _postFilter = 'All';
-  String _postTab = 'Individual'; // 'Individual' or 'Combined'
+  String _postTab = 'Overall'; // 'Overall', 'Individual' or 'Combined'
   Timer? _refreshTimer;
   final Set<String> _selectedPosts = {};
   bool _isSelectionMode = false;
@@ -36,7 +36,7 @@ class _DashboardScreenState extends State<DashboardScreen>
 
   static const String _colWidthsPrefPrefix = 'dashboard_col_width_';
   static const Map<String, double> _defaultColWidths = {
-    'postNo': 130.0,
+    'postNo': 160.0,
     'activityType': 130.0,
     'branch': 150.0,
     'venue': 200.0,
@@ -1397,18 +1397,26 @@ class _DashboardScreenState extends State<DashboardScreen>
         provider.rawPosts.where((post) {
           final postNo = post['PostNo']?.toString().toLowerCase() ?? '';
           final branch = post['Branch']?.toString().toLowerCase() ?? '';
+          final groupId = post['GroupID']?.toString().toLowerCase() ?? '';
+          final theme = post['Theme']?.toString().toLowerCase() ?? '';
+          final venue = post['Venue']?.toString().toLowerCase() ?? '';
 
-          // Search text filter by Post No OR Branch
-          if (searchQuery.isNotEmpty && !postNo.contains(searchQuery) && !branch.contains(searchQuery)) {
+          // Search text filter by Post No, Branch, GroupID, Theme, or Venue
+          if (searchQuery.isNotEmpty && 
+              !postNo.contains(searchQuery) && 
+              !branch.contains(searchQuery) &&
+              !groupId.contains(searchQuery) &&
+              !theme.contains(searchQuery) &&
+              !venue.contains(searchQuery)) {
             return false;
           }
 
           final rawPostNo = post['PostNo']?.toString() ?? '';
-          final groupId = post['GroupID']?.toString() ?? '';
+          final rawGroupId = post['GroupID']?.toString() ?? '';
 
           List<Event> postTasks = tasksByPostNo[rawPostNo] ?? [];
-          if (postTasks.isEmpty && groupId.isNotEmpty) {
-            postTasks = tasksByPostNo[groupId] ?? [];
+          if (postTasks.isEmpty && rawGroupId.isNotEmpty) {
+            postTasks = tasksByPostNo[rawGroupId] ?? [];
           }
 
           final customPostStatus = post['PostStatus']?.toString().trim() ?? '';
@@ -1465,7 +1473,7 @@ class _DashboardScreenState extends State<DashboardScreen>
           rawFiltered
               .where((p) => (p['GroupID']?.toString() ?? '').isEmpty)
               .toList();
-    } else {
+    } else if (_postTab == 'Combined') {
       final groups = <String, List<Map<String, dynamic>>>{};
       for (var p in rawFiltered) {
         final g = p['GroupID']?.toString() ?? '';
@@ -1476,6 +1484,9 @@ class _DashboardScreenState extends State<DashboardScreen>
       for (var entry in groups.entries) {
         combinedGroups.add({'GroupID': entry.key, 'Posts': entry.value});
       }
+    } else {
+      // 'Overall' shows all individual posts AND all posts belonging to combined groups
+      tabFiltered = rawFiltered;
     }
 
     return Scaffold(
@@ -1498,6 +1509,7 @@ class _DashboardScreenState extends State<DashboardScreen>
             color: Colors.white,
             child: SegmentedButton<String>(
               segments: const [
+                ButtonSegment(value: 'Overall', label: Text('Overall')),
                 ButtonSegment(value: 'Individual', label: Text('Individual')),
                 ButtonSegment(value: 'Combined', label: Text('Combined')),
               ],
@@ -1518,7 +1530,7 @@ class _DashboardScreenState extends State<DashboardScreen>
             child: TextField(
               controller: _searchController,
               decoration: InputDecoration(
-                hintText: 'Search by Post No or Branch...',
+                hintText: 'Search by Post No, Branch, Group ID, or Theme...',
                 prefixIcon: const Icon(Icons.search),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
@@ -1594,16 +1606,16 @@ class _DashboardScreenState extends State<DashboardScreen>
             child: Row(
               children: [
                 Text(
-                  _postTab == 'Individual'
-                      ? '${tabFiltered.length} posts'
-                      : '${combinedGroups.length} combined groups',
+                  _postTab == 'Combined'
+                      ? '${combinedGroups.length} combined groups'
+                      : '${tabFiltered.length} posts',
                   style: const TextStyle(
                     fontWeight: FontWeight.bold,
                     color: Colors.grey,
                   ),
                 ),
                 const Spacer(),
-                if (_postTab == 'Individual') ...[
+                if (_postTab == 'Individual' || _postTab == 'Overall') ...[
                   Tooltip(
                     message: 'Reset column widths to default',
                     child: InkWell(
@@ -1634,24 +1646,8 @@ class _DashboardScreenState extends State<DashboardScreen>
           // List
           Expanded(
             child:
-                _postTab == 'Individual'
-                    ? (tabFiltered.isEmpty
-                        ? const Center(
-                          child: Text('No individual posts found.'),
-                        )
-                        : LayoutBuilder(
-                            builder: (context, constraints) {
-                              if (constraints.maxWidth < 800) {
-                                return ListView.builder(
-                                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                                  itemCount: tabFiltered.length,
-                                  itemBuilder: (context, index) => _buildPostCard(tabFiltered[index], provider, auth, tasksByPostNo: tasksByPostNo),
-                                );
-                              }
-                              return _buildPostsTable(tabFiltered, provider, tasksByPostNo: tasksByPostNo);
-                            },
-                          ))
-                    : (combinedGroups.isEmpty
+                _postTab == 'Combined'
+                    ? (combinedGroups.isEmpty
                         ? const Center(child: Text('No combined posts found.'))
                         : LayoutBuilder(
                             builder: (context, constraints) {
@@ -1669,6 +1665,22 @@ class _DashboardScreenState extends State<DashboardScreen>
                                 );
                               }
                               return _buildCombinedPostsTable(combinedGroups, provider, tasksByPostNo: tasksByPostNo);
+                            },
+                          ))
+                    : (tabFiltered.isEmpty
+                        ? Center(
+                          child: Text(_postTab == 'Overall' ? 'No posts found.' : 'No individual posts found.'),
+                        )
+                        : LayoutBuilder(
+                            builder: (context, constraints) {
+                              if (constraints.maxWidth < 800) {
+                                return ListView.builder(
+                                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                                  itemCount: tabFiltered.length,
+                                  itemBuilder: (context, index) => _buildPostCard(tabFiltered[index], provider, auth, tasksByPostNo: tasksByPostNo),
+                                );
+                              }
+                              return _buildPostsTable(tabFiltered, provider, tasksByPostNo: tasksByPostNo);
                             },
                           )),
           ),
@@ -2216,7 +2228,11 @@ class _DashboardScreenState extends State<DashboardScreen>
 
   void _showPostLifecycle(Map<String, dynamic> post, EventProvider provider) {
     final postNo = post['PostNo']?.toString() ?? '';
-    final postTasks = provider.events.where((t) => t.postNo == postNo).toList();
+    final groupId = post['GroupID']?.toString() ?? '';
+    var postTasks = provider.events.where((t) => t.postNo == postNo).toList();
+    if (postTasks.isEmpty && groupId.isNotEmpty) {
+      postTasks = provider.events.where((t) => t.postNo == groupId).toList();
+    }
     final isInitialized = postTasks.isNotEmpty;
     final folderLink = post['FolderLink']?.toString() ?? '';
     final eventDate = post['Date']?.toString() ?? '';
@@ -2234,8 +2250,13 @@ class _DashboardScreenState extends State<DashboardScreen>
         return AlertDialog(
           title: Row(
             children: [
-              Text('Post #${postNo}'),
-              const Spacer(),
+              Expanded(
+                child: Text(
+                  groupId.isNotEmpty ? 'Post #$postNo ($groupId)' : 'Post #$postNo',
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: 8),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
@@ -3356,6 +3377,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                       final auth = context.read<AuthProvider>();
                       final isAdmin = auth.role.toLowerCase() == 'admin';
                       final postNo = post['PostNo']?.toString() ?? '';
+                      final groupId = post['GroupID']?.toString().trim() ?? '';
                       final activityType = post['ActivityType']?.toString() ?? '';
                       final branch = post['Branch']?.toString() ?? '';
                       final venue = post['Venue']?.toString() ?? '';
@@ -3364,7 +3386,13 @@ class _DashboardScreenState extends State<DashboardScreen>
                       final totalBen = post['TotalBeneficiary']?.toString() ?? '0';
 
                       final isSelected = _isSelectionMode && _selectedPosts.contains(postNo);
-                      final postTasks = tasksByPostNo?[postNo] ?? provider.events.where((t) => t.postNo == postNo).toList();
+                      List<Event> postTasks = tasksByPostNo?[postNo] ?? [];
+                      if (postTasks.isEmpty && groupId.isNotEmpty) {
+                        postTasks = tasksByPostNo?[groupId] ?? [];
+                      }
+                      if (postTasks.isEmpty) {
+                        postTasks = provider.events.where((t) => t.postNo == postNo || (groupId.isNotEmpty && t.postNo == groupId)).toList();
+                      }
                       final isInitialized = postTasks.isNotEmpty;
 
                       return DataRow(
@@ -3381,42 +3409,84 @@ class _DashboardScreenState extends State<DashboardScreen>
                           DataCell(
                             SizedBox(
                               width: _colWidths['postNo'] ?? _defaultColWidths['postNo']!,
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  InkWell(
-                                    onTap: () => _showPostLifecycle(post, provider),
-                                    onSecondaryTapDown: (details) => _showPostContextMenu(
-                                      context, 
-                                      details, 
-                                      postNo, 
-                                      post: post,
-                                    ),
-                                    child: Text(
-                                      '#$postNo', 
-                                      style: const TextStyle(
-                                        color: Colors.blue, 
-                                        decoration: TextDecoration.underline, 
-                                        fontWeight: FontWeight.bold,
+                                  Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      InkWell(
+                                        onTap: () => _showPostLifecycle(post, provider),
+                                        onSecondaryTapDown: (details) => _showPostContextMenu(
+                                          context, 
+                                          details, 
+                                          postNo, 
+                                          post: post,
+                                        ),
+                                        child: Text(
+                                          '#$postNo', 
+                                          style: const TextStyle(
+                                            color: Colors.blue, 
+                                            decoration: TextDecoration.underline, 
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Tooltip(
+                                        message: 'Open in new tab',
+                                        child: InkWell(
+                                          onTap: () => _openInNewTab('/admin-assign?postNo=${groupId.isNotEmpty ? groupId : postNo}'),
+                                          child: Padding(
+                                            padding: const EdgeInsets.all(2),
+                                            child: Icon(Icons.open_in_new, size: 13, color: Colors.blue.shade700),
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      InkWell(
+                                        onTap: () => _showPostLifecycle(post, provider),
+                                        child: _buildWorkflowStatusBadge(_getPostWorkflowStatus(postTasks, postStatus: post['PostStatus']?.toString() ?? '')),
+                                      ),
+                                    ],
+                                  ),
+                                  if (groupId.isNotEmpty) ...[
+                                    const SizedBox(height: 2),
+                                    Tooltip(
+                                      message: 'Group: $groupId',
+                                      child: InkWell(
+                                        onTap: () => _openInNewTab('/admin-assign?postNo=$groupId'),
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                                          decoration: BoxDecoration(
+                                            color: Colors.indigo.shade50,
+                                            borderRadius: BorderRadius.circular(4),
+                                            border: Border.all(color: Colors.indigo.shade200, width: 0.8),
+                                          ),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Icon(Icons.link, size: 10, color: Colors.indigo.shade700),
+                                              const SizedBox(width: 3),
+                                              ConstrainedBox(
+                                                constraints: BoxConstraints(maxWidth: (_colWidths['postNo'] ?? 160.0) - 25),
+                                                child: Text(
+                                                  groupId,
+                                                  style: TextStyle(
+                                                    fontSize: 10,
+                                                    fontWeight: FontWeight.bold,
+                                                    color: Colors.indigo.shade800,
+                                                  ),
+                                                  overflow: TextOverflow.ellipsis,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
                                       ),
                                     ),
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Tooltip(
-                                    message: 'Open in new tab',
-                                    child: InkWell(
-                                      onTap: () => _openInNewTab('/admin-assign?postNo=$postNo'),
-                                      child: Padding(
-                                        padding: const EdgeInsets.all(2),
-                                        child: Icon(Icons.open_in_new, size: 13, color: Colors.blue.shade700),
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 6),
-                                  InkWell(
-                                    onTap: () => _showPostLifecycle(post, provider),
-                                    child: _buildWorkflowStatusBadge(_getPostWorkflowStatus(postTasks, postStatus: post['PostStatus']?.toString() ?? '')),
-                                  ),
+                                  ],
                                 ],
                               ),
                             ),
@@ -3507,7 +3577,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                                     tooltip: 'Open in new tab',
                                     padding: EdgeInsets.zero,
                                     constraints: const BoxConstraints(minWidth: 26, minHeight: 26),
-                                    onPressed: () => _openInNewTab('/admin-assign?postNo=$postNo'),
+                                    onPressed: () => _openInNewTab('/admin-assign?postNo=${groupId.isNotEmpty ? groupId : postNo}'),
                                   ),
                                   const SizedBox(width: 4),
                                   IconButton(
@@ -3516,7 +3586,8 @@ class _DashboardScreenState extends State<DashboardScreen>
                                     padding: EdgeInsets.zero,
                                     constraints: const BoxConstraints(minWidth: 26, minHeight: 26),
                                     onPressed: () {
-                                      final adminUrl = '/admin-assign?postNo=${Uri.encodeComponent(postNo)}';
+                                      final targetPostNo = groupId.isNotEmpty ? groupId : postNo;
+                                      final adminUrl = '/admin-assign?postNo=${Uri.encodeComponent(targetPostNo)}';
                                       context.push(adminUrl, extra: {
                                         ...post,
                                         'isInitialized': isInitialized,
