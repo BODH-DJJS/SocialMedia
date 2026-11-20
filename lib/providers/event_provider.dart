@@ -81,14 +81,14 @@ class EventProvider with ChangeNotifier {
     // --- STEP 2: Fetch fresh data in background ---
     // Try fetching from Supabase first for lightning-fast loads (<100ms)
     try {
+      final supaPosts = await _apiService.fetchPostsFromSupabase();
       final supaTasks = await _apiService.fetchTasksFromSupabase(role: role, username: username);
-      final supaPosts = isAdmin ? await _apiService.fetchPostsFromSupabase() : <Map<String, dynamic>>[];
 
-      if (supaTasks.isNotEmpty) {
+      if (supaTasks.isNotEmpty || supaPosts.isNotEmpty) {
         // Map tasks and join with posts metadata
         final postsMap = <String, Map<String, dynamic>>{};
         for (final p in supaPosts) {
-          final pNo = p['post_no']?.toString() ?? '';
+          final pNo = p['PostNo']?.toString() ?? p['post_no']?.toString() ?? '';
           if (pNo.isNotEmpty) postsMap[pNo] = p;
         }
 
@@ -103,9 +103,7 @@ class EventProvider with ChangeNotifier {
         }
 
         _events = supaEvents;
-        if (isAdmin && supaPosts.isNotEmpty) {
-          _rawPosts = supaPosts;
-        }
+        _rawPosts = supaPosts;
 
         _isLoading = false;
         _isSyncing = false;
@@ -114,11 +112,11 @@ class EventProvider with ChangeNotifier {
         // Save fresh data to local cache
         prefs.setString(_cacheKeyEvents, json.encode(supaTasks));
         prefs.setInt(_cacheKeyTsEvents, now);
-        if (isAdmin && supaPosts.isNotEmpty) {
-          prefs.setString(_cacheKeyPosts, json.encode(supaPosts));
+        if (_rawPosts.isNotEmpty) {
+          prefs.setString(_cacheKeyPosts, json.encode(_rawPosts));
           prefs.setInt(_cacheKeyTsPosts, now);
         }
-        debugPrint('🚀 [Supabase Fast-Path] Loaded ${_events.length} events seamlessly!');
+        debugPrint('🚀 [Supabase Fast-Path] Loaded ${_events.length} events and ${_rawPosts.length} posts seamlessly!');
         return;
       }
     } catch (supaErr) {
