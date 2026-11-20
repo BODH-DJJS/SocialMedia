@@ -85,6 +85,7 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
 
   static const List<String> _postStatusOptions = [
     'Active',
+    'Inactive',
     'Posted',
     'Later',
     'Skip',
@@ -241,7 +242,7 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
           ? _postData['MediaMode'] 
           : 'Photos';
       final rawStatus = _postData['PostStatus']?.toString().trim() ?? '';
-      _postStatus = rawStatus.isNotEmpty ? rawStatus : 'Active';
+      _postStatus = rawStatus.isNotEmpty ? rawStatus : (_postData['isInitialized'] == true ? 'Active' : 'Inactive');
       _activityType = _postData['ActivityType']?.toString().trim() ?? '';
       _descController.text = _postData['Description']?.toString() ?? '';
       
@@ -707,7 +708,7 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
                               ),
                               child: DropdownButtonHideUnderline(
                                 child: DropdownButton<String>(
-                                  value: _postStatusOptions.contains(_postStatus) ? _postStatus : 'Active',
+                                  value: _postStatusOptions.contains(_postStatus) ? _postStatus : (_postData['isInitialized'] == true ? 'Active' : 'Inactive'),
                                   icon: Icon(Icons.arrow_drop_down, color: _getStatusBadgeText(_postStatus), size: 20),
                                   isDense: true,
                                   style: TextStyle(
@@ -730,6 +731,73 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
                                   }).toList(),
                                   onChanged: (newVal) async {
                                     if (newVal == null || newVal == _postStatus) return;
+
+                                    if (newVal == 'Inactive' && isInitialized) {
+                                      final confirm = await showDialog<bool>(
+                                        context: context,
+                                        builder: (ctx) => AlertDialog(
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                          title: Row(
+                                            children: const [
+                                              Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 28),
+                                              SizedBox(width: 8),
+                                              Text('Mark as Inactive?'),
+                                            ],
+                                          ),
+                                          content: const Text(
+                                            'This post currently has active workflow tasks.\n\n'
+                                            'Setting status to Inactive will remove its workflow tasks and convert this post back to Inactive.\n\n'
+                                            'Do you want to proceed?',
+                                            style: TextStyle(fontSize: 14, height: 1.4),
+                                          ),
+                                          actions: [
+                                            TextButton(
+                                              onPressed: () => Navigator.pop(ctx, false),
+                                              child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+                                            ),
+                                            ElevatedButton(
+                                              style: ElevatedButton.styleFrom(
+                                                backgroundColor: Colors.red,
+                                                foregroundColor: Colors.white,
+                                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                              ),
+                                              onPressed: () => Navigator.pop(ctx, true),
+                                              child: const Text('Yes, Make Inactive'),
+                                            ),
+                                          ],
+                                        ),
+                                      );
+                                      if (confirm != true) return;
+
+                                      final auth = context.read<AuthProvider>();
+                                      final ok = await provider.deleteWorkflow(
+                                        postNo: postNo.toString(),
+                                        isCombined: isCombined,
+                                        username: auth.username,
+                                        role: auth.role,
+                                      );
+                                      if (mounted) {
+                                        if (ok) {
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            const SnackBar(
+                                              content: Text('Workflow deleted and post marked Inactive.'),
+                                              backgroundColor: Colors.green,
+                                              duration: Duration(seconds: 2),
+                                            ),
+                                          );
+                                          context.pop();
+                                        } else {
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            const SnackBar(
+                                              content: Text('Failed to make post Inactive.'),
+                                              backgroundColor: Colors.red,
+                                            ),
+                                          );
+                                        }
+                                      }
+                                      return;
+                                    }
+
                                     setState(() {
                                       _postStatus = newVal;
                                       _postData['PostStatus'] = newVal;
@@ -1434,6 +1502,8 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
 
   Color _getStatusBadgeBg(String status) {
     switch (status) {
+      case 'Inactive':
+        return Colors.grey.shade200;
       case 'Posted':
         return Colors.teal.shade50;
       case 'Later':
@@ -1450,6 +1520,8 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
 
   Color _getStatusBadgeBorder(String status) {
     switch (status) {
+      case 'Inactive':
+        return Colors.grey.shade400;
       case 'Posted':
         return Colors.teal.shade400;
       case 'Later':
@@ -1466,6 +1538,8 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
 
   Color _getStatusBadgeText(String status) {
     switch (status) {
+      case 'Inactive':
+        return Colors.grey.shade800;
       case 'Posted':
         return Colors.teal.shade800;
       case 'Later':
