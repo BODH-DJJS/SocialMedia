@@ -244,6 +244,15 @@ function doPost(e) {
       } finally {
         lock.releaseLock();
       }
+    } else if (action === 'revertMediaFinalToProofreading') {
+      var lock = LockService.getScriptLock();
+      lock.waitLock(15000);
+      try {
+        var res = revertActiveFinalMediaToProofreading();
+        return respond(res);
+      } finally {
+        lock.releaseLock();
+      }
     } else if (action === 'getDevProjects') {
       return respond(handleGetDevProjects(payload));
     } else if (action === 'getDevTasks') {
@@ -1145,6 +1154,61 @@ function fixStuckTasks(ss) {
       }
     }
   }
+}
+
+function revertActiveFinalMediaToProofreading() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var taskSheet = ss.getSheetByName(TASKS_SHEET);
+  if (!taskSheet) return { success: false, message: 'Tasks sheet not found' };
+
+  var data = taskSheet.getDataRange().getValues();
+  if (data.length < 2) return { success: false, message: 'No tasks found' };
+
+  var headers = data[0];
+  var postNoCol = headers.indexOf('PostNo');
+  var stageCol = headers.indexOf('Stage');
+  var statusCol = headers.indexOf('Status');
+  var completedAtCol = headers.indexOf('CompletedAt');
+
+  // Find all posts that currently have Media Final Cross check in Ready / In Progress (not Done)
+  var targetPosts = {};
+  for (var i = 1; i < data.length; i++) {
+    var sNorm = normalizeStageName(data[i][stageCol]);
+    var status = data[i][statusCol];
+    var pNo = (data[i][postNoCol] || '').toString().trim();
+    if ((sNorm === 'mediafinalcrosscheck' || sNorm === 'mediafinalcrosschecking') && status !== 'Done' && status !== 'Waiting') {
+      targetPosts[pNo] = true;
+    }
+  }
+
+  var modifiedCount = 0;
+  // For each target post:
+  // 1. Set Proofreading to 'Ready' (clear CompletedAt if it was marked Done)
+  // 2. Set Media Final Cross check to 'Waiting'
+  // 3. Set Text Crosscheck to 'Waiting' if not Done
+  for (var i = 1; i < data.length; i++) {
+    var pNo = (data[i][postNoCol] || '').toString().trim();
+    if (!targetPosts[pNo]) continue;
+
+    var sNorm = normalizeStageName(data[i][stageCol]);
+    if (sNorm === 'proofreading') {
+      taskSheet.getRange(i + 1, statusCol + 1).setValue('Ready');
+      if (completedAtCol !== -1) taskSheet.getRange(i + 1, completedAtCol + 1).setValue('');
+      modifiedCount++;
+    } else if (sNorm === 'mediafinalcrosscheck' || sNorm === 'mediafinalcrosschecking') {
+      taskSheet.getRange(i + 1, statusCol + 1).setValue('Waiting');
+    } else if (sNorm === 'textcrosscheck' || sNorm === 'crosscheck') {
+      if (data[i][statusCol] !== 'Done') {
+        taskSheet.getRange(i + 1, statusCol + 1).setValue('Waiting');
+      }
+    }
+  }
+
+  try {
+    CacheService.getScriptCache().remove('all_posts');
+  } catch(e) {}
+
+  return { success: true, message: 'Successfully reverted ' + Object.keys(targetPosts).length + ' posts back to Proofreading.' };
 }
 
 function unlockDependentTasks(rowIndex, headers, taskSheet) {
