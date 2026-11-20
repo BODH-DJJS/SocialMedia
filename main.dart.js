@@ -46185,7 +46185,7 @@ for(k=B.c.gan(n.a),j=new A.j5(k,new A.a8t(a));j.u();)k.gM(0).w=a.w
 n.a3()}n.jU()
 try{n.x.EW(a.a,b)}catch(e){}p=4
 s=7
-return A.A(n.x.cU(A.L(["action","updateTask","rowIndex",a.bf,"updates",b],t.N,t.z)),$async$yL)
+return A.A(n.x.cU(A.L(["action","updateTask","taskId",a.a,"rowIndex",a.bf,"updates",b],t.N,t.z)),$async$yL)
 case 7:m=d
 if(J.d(J.w(m,"success"),!0)){q=null
 s=1
