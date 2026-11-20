@@ -79,7 +79,7 @@ function ensureSheets() {
   var requiredStages = [
     {stage: 'Writing', role: 'Writer', dep: ''},
     {stage: 'Editing', role: 'Editor', dep: 'Writing'},
-    {stage: 'Proofreading', role: 'Proofreader', dep: 'Editing'},
+    {stage: 'Proofreading', role: 'Proofreader', dep: 'Editing, Media Cross Check'},
     {stage: 'Text Crosscheck', role: 'CrossChecker', dep: 'Proofreading'},
     {stage: 'Thumbnail Selection', role: 'Thumbnail Designer', dep: ''},
     {stage: 'Thumbnail Processing', role: 'Thumbnail Designer', dep: 'Thumbnail Selection'},
@@ -87,7 +87,7 @@ function ensureSheets() {
     {stage: 'Photo Editing', role: 'Photo Editor', dep: ''},
     {stage: 'Video Editing', role: 'Video Editor', dep: ''},
     {stage: 'Media Cross Check', role: 'Media CrossChecker', dep: 'Photo Editing, Video Editing'},
-    {stage: 'Media Final Cross check', role: 'Media CrossChecker', dep: 'Media Cross Check, Proofreading'},
+    {stage: 'Media Final Cross check', role: 'Media CrossChecker', dep: 'Proofreading'},
     {stage: 'Ready to Post', role: 'Uploader', dep: 'Text Crosscheck, Media Final Cross check'},
     {stage: 'Photos Clean', role: 'Photo Selector', dep: 'Ready to Post'}
   ];
@@ -1041,7 +1041,6 @@ function handleUpdateTask(payload) {
         else if (stage === 'Editing') postsSheet.getRange(postRowIdx, 29).setValue('Yes'); // EditingDone
         else if (stage === 'Proofreading') {
           postsSheet.getRange(postRowIdx, 30).setValue('Yes'); // ProofReadingDone
-          postsSheet.getRange(postRowIdx, 32).setValue('Ready'); // ReadyToBePosted
         }
         else if (stage === 'Thumbnail Cross checking' || stage === 'Media Cross Check') postsSheet.getRange(postRowIdx, 31).setValue('Yes'); // ThumbnailDone
         else if (stage === 'Ready to Post') {
@@ -1110,24 +1109,9 @@ function fixStuckTasks(ss) {
     for (var t = 0; t < pTasks.length; t++) {
       var task = pTasks[t];
       if (task.stage === 'photosselection' || task.stage === 'photoselection') continue;
-      
-      // Fix: Photos Clean should NEVER be Ready if Ready to Post is not Done
-      if (task.stage === 'photosclean' && task.status === 'Ready') {
-        var rtpDone = false;
-        for (var pt = 0; pt < pTasks.length; pt++) {
-          if (pTasks[pt].stage === 'readytopost' && pTasks[pt].status === 'Done') {
-            rtpDone = true;
-            break;
-          }
-        }
-        if (!rtpDone) {
-          taskSheet.getRange(task.rowIdx, statusCol + 1).setValue('Waiting');
-          task.status = 'Waiting';
-        }
-      }
 
-      if (task.status === 'Waiting' || !task.status) {
-        var reqs = reqMap[task.stage] || [];
+      var reqs = reqMap[task.stage] || [];
+      if (reqs.length > 0) {
         var allDone = true;
         for (var r = 0; r < reqs.length; r++) {
           var reqTaskExists = false;
@@ -1144,8 +1128,19 @@ function fixStuckTasks(ss) {
             break;
           }
         }
-        if (allDone && reqs.length > 0) {
-          taskSheet.getRange(task.rowIdx, statusCol + 1).setValue('Ready');
+
+        if (task.status === 'Waiting' || !task.status) {
+          if (allDone) {
+            taskSheet.getRange(task.rowIdx, statusCol + 1).setValue('Ready');
+            task.status = 'Ready';
+          }
+        } else if (task.status === 'Ready') {
+          // Revert premature Ready status back to Waiting if any prerequisite dependency is not yet Done
+          // This applies to old posts and ensures Proofreading waits for Media Cross Check, and Ready to Post waits for both Text & Media Cross Check
+          if (!allDone) {
+            taskSheet.getRange(task.rowIdx, statusCol + 1).setValue('Waiting');
+            task.status = 'Waiting';
+          }
         }
       }
     }
@@ -1609,7 +1604,7 @@ function handleGetMediaFolders(payload) {
     } catch(e) {}
   }
 
-  var result = { raw: '', selected: '', edited: '', editedThumbnail: '' };
+  var result = { raw: '', selected: '', edited: '', editedThumbnail: '', proofreadDoc: '', crosscheckDoc: '' };
 
   if (!monthLink || monthLink.indexOf('drive.google.com') === -1) {
     return { success: true, folders: result };
@@ -1669,6 +1664,31 @@ function handleGetMediaFolders(payload) {
       }
     }
 
+    // Look up proofreading and text crosscheck docs for this post
+    if (postNo) {
+      try {
+        var ss = SpreadsheetApp.getActiveSpreadsheet();
+        var tSheet = ss.getSheetByName(TASKS_SHEET);
+        if (tSheet) {
+          var tData = tSheet.getDataRange().getValues();
+          var tHeaders = tData[0];
+          var pNoCol = tHeaders.indexOf('PostNo');
+          var stgCol = tHeaders.indexOf('Stage');
+          var docCol = tHeaders.indexOf('DocLink');
+          for (var i = 1; i < tData.length; i++) {
+            if (tData[i][pNoCol] == postNo) {
+              var stgNorm = normalizeStageName(tData[i][stgCol]);
+              if (stgNorm === 'proofreading') {
+                result.proofreadDoc = tData[i][docCol] || '';
+              } else if (stgNorm === 'textcrosscheck' || stgNorm === 'crosscheck') {
+                result.crosscheckDoc = tData[i][docCol] || '';
+              }
+            }
+          }
+        }
+      } catch (docErr) {}
+    }
+
     // Cache the result for 6 hours (21600 sec)
     if (result.raw || result.selected || result.edited) {
       try { cache.put(cacheKey, JSON.stringify(result), 21600); } catch(cErr) {}
@@ -1707,58 +1727,6 @@ function handleGetPhotos(payload) {
     }
   } catch (e) {}
   return { success: true, photos: photos };
-}
-
-function handleGetMediaFolders(payload) {
-  var monthLink = payload.monthLink;
-  var dateStr = payload.dateStr;
-  var venue = payload.venue || '';
-  var postNo = payload.postNo || '';
-
-  // ── Layer 1: GAS server cache (6 hours) ──
-  // Folder links are fixed — Raw/Selected/Edited paths never change for a post.
-  var cache = CacheService.getScriptCache();
-  var cacheKey = 'mf_' + (postNo || monthLink.slice(-20)) + '_' + dateStr.replace(/[^a-zA-Z0-9]/g, '') + (venue ? '_' + venue.replace(/[^a-zA-Z0-9]/g, '').slice(0, 10) : '');
-  var cached = cache.get(cacheKey);
-  if (cached) {
-    return { success: true, folders: JSON.parse(cached), fromCache: true };
-  }
-
-  var result = { raw: '', selected: '', edited: '' };
-
-  if (!monthLink || monthLink.indexOf('drive.google.com') === -1) {
-    return { success: true, folders: result };
-  }
-
-  var match = monthLink.match(/[-\w]{25,}/);
-  if (!match) return { success: true, folders: result };
-
-  var monthFolderId = match[0];
-  try {
-    var dateFolder = DriveApp.getFolderById(monthFolderId);
-
-    if (dateFolder) {
-      var sfs = dateFolder.getFolders();
-      while (sfs.hasNext()) {
-        var sub = sfs.next();
-        var subName = sub.getName().toLowerCase();
-        if (subName === 'raw') {
-          result.raw = sub.getUrl();
-        } else if (subName === 'selected') {
-          result.selected = sub.getUrl();
-        } else if (subName.indexOf('edited') !== -1 || subName === 'selected (edited)') {
-          result.edited = sub.getUrl();
-        }
-      }
-    }
-
-    // Cache the result for 6 hours (21600 sec) — folder links are static
-    if (result.raw || result.selected || result.edited) {
-      try { cache.put(cacheKey, JSON.stringify(result), 21600); } catch(cErr) {}
-    }
-  } catch (e) {}
-
-  return { success: true, folders: result };
 }
 
 // ───── NEW API HANDLERS (Phase 2) ─────

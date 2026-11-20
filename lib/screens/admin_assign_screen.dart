@@ -312,26 +312,6 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
     final today = DateTime(now.year, now.month, now.day);
 
     setState(() {
-      // Content Timeline: Writing (+3d) -> Editing (+3d) -> Proofreading (+2d) -> Text Crosscheck (+1d) -> Ready to Post (+1d) -> Photos Clean (+5d)
-      if (force || _writingDue == null) {
-        _writingDue = today.add(const Duration(days: 3));
-      }
-      if (force || _editingDue == null) {
-        _editingDue = (_writingDue ?? today).add(const Duration(days: 3));
-      }
-      if (force || _proofreadingDue == null) {
-        _proofreadingDue = (_editingDue ?? today).add(const Duration(days: 2));
-      }
-      if (force || _crosscheckDue == null) {
-        _crosscheckDue = (_proofreadingDue ?? today).add(const Duration(days: 1));
-      }
-      if (force || _uploaderDue == null) {
-        _uploaderDue = (_crosscheckDue ?? today).add(const Duration(days: 1));
-      }
-      if (force || _photosCleanDue == null) {
-        _photosCleanDue = (_uploaderDue ?? today).add(const Duration(days: 5));
-      }
-
       // Thumbnail Timeline: Selection (+2d) -> Processing (+2d) -> Cross checking (+2d)
       if (force || _thumbnailSelectDue == null) {
         _thumbnailSelectDue = today.add(const Duration(days: 2));
@@ -343,7 +323,7 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
         _thumbnailCrosscheckDue = (_thumbnailProcessDue ?? today).add(const Duration(days: 2));
       }
 
-      // Media Timeline: Video / Photo Editing (+5d) -> Media Cross Check (+1d) -> Media Final Cross check (+1d aligned with Text Crosscheck)
+      // Media Timeline: Video / Photo Editing (+5d) -> Media Cross Check (+1d)
       if (force || _photoEditDue == null) {
         _photoEditDue = today.add(const Duration(days: 5));
       }
@@ -354,8 +334,36 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
       if (force || _mediaCheckDue == null) {
         _mediaCheckDue = mediaBase.add(const Duration(days: 1));
       }
+
+      // Content Timeline: Writing (+3d) -> Editing (+3d)
+      if (force || _writingDue == null) {
+        _writingDue = today.add(const Duration(days: 3));
+      }
+      if (force || _editingDue == null) {
+        _editingDue = (_writingDue ?? today).add(const Duration(days: 3));
+      }
+
+      // Proofreading depends on BOTH Editing AND Media Cross Check
+      final contentPrior = _editingDue ?? today;
+      final mediaPrior = _mediaMode.toLowerCase().contains('none') ? contentPrior : (_mediaCheckDue ?? contentPrior);
+      final proofPrior = contentPrior.isAfter(mediaPrior) ? contentPrior : mediaPrior;
+      if (force || _proofreadingDue == null) {
+        _proofreadingDue = proofPrior.add(const Duration(days: 2));
+      }
+      if (force || _crosscheckDue == null) {
+        _crosscheckDue = (_proofreadingDue ?? today).add(const Duration(days: 1));
+      }
       if (force || _mediaFinalCheckDue == null) {
         _mediaFinalCheckDue = (_proofreadingDue ?? today).add(const Duration(days: 1));
+      }
+      if (force || _uploaderDue == null) {
+        final crossDue = _crosscheckDue ?? today;
+        final finalCheckDue = _mediaFinalCheckDue ?? today;
+        final rtpPrior = crossDue.isAfter(finalCheckDue) ? crossDue : finalCheckDue;
+        _uploaderDue = rtpPrior.add(const Duration(days: 1));
+      }
+      if (force || _photosCleanDue == null) {
+        _photosCleanDue = (_uploaderDue ?? today).add(const Duration(days: 5));
       }
     });
   }

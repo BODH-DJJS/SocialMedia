@@ -50,6 +50,8 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   String _editedFolderLink = '';
   String _editedThumbnailFolderLink = '';
   String _writingDocLink = '';
+  String _proofreadDocLink = '';
+  String _crosscheckDocLink = '';
   String _canvaLink = '';
   bool _isSavingCanva = false;
   List<Map<String, dynamic>> _photos = [];
@@ -168,6 +170,8 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       String firstEdited = '';
       String firstEditedThumb = '';
       String firstWriting = '';
+      String firstProofread = '';
+      String firstCrosscheck = '';
       
       for (int i = 0; i < event.combinedPosts.length; i++) {
         final p = event.combinedPosts[i];
@@ -185,6 +189,8 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
              firstEdited = links['edited'] ?? '';
              firstEditedThumb = links['editedThumbnail'] ?? '';
              firstWriting = links['writingDoc'] ?? '';
+             firstProofread = links['proofreadDoc'] ?? '';
+             firstCrosscheck = links['crosscheckDoc'] ?? '';
            }
         }
       }
@@ -195,6 +201,8 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
           _editedFolderLink = firstEdited;
           _editedThumbnailFolderLink = firstEditedThumb;
           _writingDocLink = firstWriting;
+          _proofreadDocLink = firstProofread;
+          _crosscheckDocLink = firstCrosscheck;
           _isLoadingMedia = false;
         });
       }
@@ -213,11 +221,61 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
           _editedFolderLink = links['edited'] ?? '';
           _editedThumbnailFolderLink = links['editedThumbnail'] ?? '';
           _writingDocLink = links['writingDoc'] ?? '';
+          _proofreadDocLink = links['proofreadDoc'] ?? '';
+          _crosscheckDocLink = links['crosscheckDoc'] ?? '';
           _photos = fetchedPhotos;
           _isLoadingMedia = false;
         });
       }
     }
+
+    // Silently enrich sibling tasks cache for this post
+    try {
+      provider.fetchSinglePostDetails(event.postNo, isCombined: event.isCombined);
+    } catch (_) {}
+  }
+
+  String _toViewModeUrl(String url) {
+    if (url.isEmpty) return url;
+    var u = url.trim();
+    if (u.contains('docs.google.com')) {
+      if (u.contains('/edit')) {
+        u = u.replaceAll(RegExp(r'/edit.*'), '/preview');
+      } else if (!u.contains('/preview')) {
+        u = u.endsWith('/') ? '${u}preview' : '$u/preview';
+      }
+    }
+    return u;
+  }
+
+  String get _proofreadingDocLink {
+    if (_proofreadDocLink.isNotEmpty && _proofreadDocLink.startsWith('http')) return _proofreadDocLink;
+    try {
+      final provider = context.read<EventProvider>();
+      final postTasks = provider.events.where((t) => t.postNo == event.postNo).toList();
+      final match = postTasks.firstWhere(
+        (t) => t.stage.trim().toLowerCase().replaceAll(' ', '') == 'proofreading' && t.docLink.isNotEmpty && t.docLink.startsWith('http'),
+        orElse: () => Event.fromJson({}),
+      );
+      if (match.docLink.isNotEmpty && match.docLink.startsWith('http')) return match.docLink;
+    } catch (_) {}
+    return '';
+  }
+
+  String get _textCrosscheckDocLink {
+    if (_crosscheckDocLink.isNotEmpty && _crosscheckDocLink.startsWith('http')) return _crosscheckDocLink;
+    try {
+      final provider = context.read<EventProvider>();
+      final postTasks = provider.events.where((t) => t.postNo == event.postNo).toList();
+      for (final targetStage in ['textcrosscheck', 'crosscheck', 'text crosscheck', 'cross check']) {
+        final match = postTasks.firstWhere(
+          (t) => t.stage.trim().toLowerCase().replaceAll(' ', '') == targetStage.replaceAll(' ', '') && t.docLink.isNotEmpty && t.docLink.startsWith('http'),
+          orElse: () => Event.fromJson({}),
+        );
+        if (match.docLink.isNotEmpty && match.docLink.startsWith('http')) return match.docLink;
+      }
+    } catch (_) {}
+    return '';
   }
 
   /// Get the best available doc link (prefer backend-found over stored)
@@ -586,7 +644,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     if (s == 'thumbnailcrosschecking' || s == 'thumbnailcrosscheck') return ['Thumbnail Processing'];
     if (s == 'thumbnailprocessing') return ['Thumbnail Selection'];
     if (s == 'mediacrosscheck') return ['Photo Editing', 'Video Editing'];
-    if (s == 'mediafinalcrosscheck' || s == 'mediafinalcrosschecking') return ['Media Cross Check', 'Proofreading'];
+    if (s == 'mediafinalcrosscheck' || s == 'mediafinalcrosschecking') return ['Proofreading', 'Media Cross Check'];
     if (s == 'photosclean') return ['Ready to Post'];
     if (s == 'editing') return ['Writing'];
     if (s == 'proofreading') return ['Editing', 'Media Cross Check', 'Thumbnail Cross checking'];
@@ -1387,6 +1445,86 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                                   }
                                 },
                               ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+
+                  // Approved Text Content Review for Media Final Cross check
+                  if (['mediafinalcrosscheck', 'mediafinalcrosschecking'].contains(e.stage.trim().toLowerCase().replaceAll(' ', ''))) ...[
+                    Card(
+                      child: Container(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: Colors.teal.withOpacity(0.4), width: 2),
+                        ),
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: const [
+                                Icon(Icons.rate_review_outlined, color: Colors.teal),
+                                SizedBox(width: 8),
+                                Text(
+                                  'Approved Text Content Review',
+                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.teal),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            const Text(
+                              'Review the approved text documents in view mode to ensure finalized media matches the post details before approval.',
+                              style: TextStyle(color: Colors.grey, fontSize: 12),
+                            ),
+                            const SizedBox(height: 14),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: ElevatedButton.icon(
+                                    icon: const Icon(Icons.visibility_outlined, size: 18),
+                                    label: const Text('Proofreading Doc', style: TextStyle(fontWeight: FontWeight.bold)),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(0xFF00897B),
+                                      foregroundColor: Colors.white,
+                                      padding: const EdgeInsets.symmetric(vertical: 14),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                    ),
+                                    onPressed: () {
+                                      final docUrl = _proofreadingDocLink;
+                                      if (docUrl.isNotEmpty) {
+                                        _openLink(_toViewModeUrl(docUrl));
+                                      } else {
+                                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No Proofreading document available.')));
+                                      }
+                                    },
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: ElevatedButton.icon(
+                                    icon: const Icon(Icons.visibility_outlined, size: 18),
+                                    label: const Text('Crosscheck Doc', style: TextStyle(fontWeight: FontWeight.bold)),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(0xFF27AE60),
+                                      foregroundColor: Colors.white,
+                                      padding: const EdgeInsets.symmetric(vertical: 14),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                    ),
+                                    onPressed: () {
+                                      final docUrl = _textCrosscheckDocLink;
+                                      if (docUrl.isNotEmpty) {
+                                        _openLink(_toViewModeUrl(docUrl));
+                                      } else {
+                                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No Text Crosscheck document available.')));
+                                      }
+                                    },
+                                  ),
+                                ),
+                              ],
                             ),
                           ],
                         ),
