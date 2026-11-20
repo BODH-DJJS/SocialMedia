@@ -2699,7 +2699,7 @@ function handleReverseTask(payload) {
       }
       targetStage = hasVideoEdit ? 'Video Editing' : 'Photo Editing';
     } else if (currentNorm === 'mediafinalcrosscheck' || currentNorm === 'mediafinalcrosschecking') {
-      targetStage = 'Media Cross Check';
+      targetStage = 'Proofreading';
     } else if (currentNorm === 'photosclean') {
       targetStage = 'Ready to Post';
     } else if (currentNorm === 'editing') {
@@ -2740,6 +2740,11 @@ function handleReverseTask(payload) {
       
       // Reset current stage task back to Waiting
       if (rStage === currentNorm) {
+        taskSheet.getRange(r + 1, statusCol + 1).setValue('Waiting');
+      }
+
+      // If reverting to Proofreading, also pause Text Crosscheck if it was Ready until Proofreading is re-approved
+      if (targetNorm === 'proofreading' && (rStage === 'textcrosscheck' || rStage === 'crosscheck') && data[r][statusCol] !== 'Done') {
         taskSheet.getRange(r + 1, statusCol + 1).setValue('Waiting');
       }
     }
