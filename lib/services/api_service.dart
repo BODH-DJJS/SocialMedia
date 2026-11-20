@@ -95,35 +95,46 @@ class ApiService {
   static const String supabaseUrl = 'https://tbyltpojvcxvqupaimhc.supabase.co';
   static const String supabaseAnonKey = 'sb_publishable_SIhd8itf5N1Dlg0D1YYf7A_g0bTkp0T';
 
-  /// Fetches tasks from Supabase in ~100ms with optional user filtering
+  /// Fetches tasks from Supabase in ~100ms with optional user filtering (fetches all pages if > 1000)
   Future<List<Map<String, dynamic>>> fetchTasksFromSupabase({String? role, String? username}) async {
     final stopwatch = Stopwatch()..start();
-    var query = '$supabaseUrl/rest/v1/tasks?select=*&order=row_index.desc';
+    var baseQuery = '$supabaseUrl/rest/v1/tasks?select=*&order=row_index.desc';
     
     // Non-admin can only see their assigned tasks
     if (role != null && role.toLowerCase() != 'admin' && username != null && username.isNotEmpty) {
-      query += '&assignee=eq.${Uri.encodeComponent(username)}';
+      baseQuery += '&assignee=eq.${Uri.encodeComponent(username)}';
     }
 
     try {
-      final response = await http.get(
-        Uri.parse(query),
-        headers: {
-          'apikey': supabaseAnonKey,
-          'Authorization': 'Bearer $supabaseAnonKey',
-          'Accept': 'application/json',
-        },
-      );
-      stopwatch.stop();
+      final List<Map<String, dynamic>> allTasks = [];
+      int offset = 0;
+      const int pageSize = 1000;
 
-      if (response.statusCode == 200) {
-        final List<dynamic> list = json.decode(response.body);
-        debugPrint('⚡ [Supabase] Loaded ${list.length} tasks in ${stopwatch.elapsedMilliseconds} ms!');
-        return list.map((e) => e as Map<String, dynamic>).toList();
-      } else {
-        debugPrint('⚠️ [Supabase Tasks Error]: ${response.statusCode} - ${response.body}');
-        return [];
+      while (true) {
+        final uri = Uri.parse('$baseQuery&limit=$pageSize&offset=$offset');
+        final response = await http.get(
+          uri,
+          headers: {
+            'apikey': supabaseAnonKey,
+            'Authorization': 'Bearer $supabaseAnonKey',
+            'Accept': 'application/json',
+          },
+        );
+
+        if (response.statusCode == 200) {
+          final List<dynamic> list = json.decode(response.body);
+          allTasks.addAll(list.map((e) => e as Map<String, dynamic>));
+          if (list.length < pageSize) break; // Reached the end
+          offset += pageSize;
+        } else {
+          debugPrint('⚠️ [Supabase Tasks Error]: ${response.statusCode} - ${response.body}');
+          break;
+        }
       }
+
+      stopwatch.stop();
+      debugPrint('⚡ [Supabase] Loaded ${allTasks.length} tasks in ${stopwatch.elapsedMilliseconds} ms!');
+      return allTasks;
     } catch (e) {
       debugPrint('⚠️ [Supabase Tasks Exception]: $e');
       return [];
