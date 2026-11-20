@@ -85,20 +85,48 @@ class EventProvider with ChangeNotifier {
       final supaTasks = await _apiService.fetchTasksFromSupabase(role: role, username: username);
 
       if (supaTasks.isNotEmpty || supaPosts.isNotEmpty) {
-        // Map tasks and join with posts metadata
-        final postsMap = <String, Map<String, dynamic>>{};
+        // Map tasks and join with posts metadata (supporting both individual PostNo and GroupID)
+        final postsMap = <String, List<Map<String, dynamic>>>{};
         for (final p in supaPosts) {
           final pNo = p['PostNo']?.toString() ?? p['post_no']?.toString() ?? '';
-          if (pNo.isNotEmpty) postsMap[pNo] = p;
+          final gId = p['GroupID']?.toString() ?? p['group_id']?.toString() ?? '';
+          if (pNo.isNotEmpty) {
+            postsMap.putIfAbsent(pNo, () => []).add(p);
+          }
+          if (gId.isNotEmpty && gId != pNo) {
+            postsMap.putIfAbsent(gId, () => []).add(p);
+          }
         }
 
         final List<Event> supaEvents = [];
         for (final t in supaTasks) {
           final merged = Map<String, dynamic>.from(t);
-          final pNo = t['post_no']?.toString() ?? '';
-          if (postsMap.containsKey(pNo)) {
-            merged.addAll(postsMap[pNo]!);
+          final tPostNo = t['post_no']?.toString() ?? '';
+          final matched = postsMap[tPostNo] ?? [];
+
+          if (matched.length == 1) {
+            merged.addAll(matched.first);
+          } else if (matched.length > 1) {
+            int totalM = 0, totalF = 0, totalC = 0;
+            for (final m in matched) {
+              totalM += (m['Male'] ?? m['male'] ?? 0) as int;
+              totalF += (m['Female'] ?? m['female'] ?? 0) as int;
+              totalC += (m['Children'] ?? m['children'] ?? 0) as int;
+            }
+            final firstP = matched.first;
+            merged.addAll(firstP);
+            merged['theme'] = tPostNo;
+            merged['Theme'] = tPostNo;
+            merged['male'] = totalM;
+            merged['female'] = totalF;
+            merged['children'] = totalC;
+            merged['total_beneficiary'] = totalM + totalF + totalC;
+            merged['is_combined'] = true;
+            merged['isCombined'] = true;
+            merged['combined_posts'] = matched;
+            merged['CombinedPosts'] = matched;
           }
+
           supaEvents.add(Event.fromJson(merged));
         }
 
