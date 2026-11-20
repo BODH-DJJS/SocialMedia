@@ -79,16 +79,53 @@ class EventProvider with ChangeNotifier {
     }
 
     // --- STEP 2: Fetch fresh data in background ---
-    // Skip refresh only if NOT forced, cache is fresh, and not silent
-    final cacheAge = now - cachedTs;
-    if (!force && loadedFromCache && cacheAge < _cacheTtlMs && !silent) {
-      debugPrint('✅ Cache is fresh (${ (cacheAge/1000).round()}s old), skipping network call');
-      _isLoading = false;
-      _isSyncing = false;
-      notifyListeners();
-      return;
+    // Try fetching from Supabase first for lightning-fast loads (<100ms)
+    try {
+      final supaTasks = await _apiService.fetchTasksFromSupabase(role: role, username: username);
+      final supaPosts = isAdmin ? await _apiService.fetchPostsFromSupabase() : <Map<String, dynamic>>[];
+
+      if (supaTasks.isNotEmpty) {
+        // Map tasks and join with posts metadata
+        final postsMap = <String, Map<String, dynamic>>{};
+        for (final p in supaPosts) {
+          final pNo = p['post_no']?.toString() ?? '';
+          if (pNo.isNotEmpty) postsMap[pNo] = p;
+        }
+
+        final List<Event> supaEvents = [];
+        for (final t in supaTasks) {
+          final merged = Map<String, dynamic>.from(t);
+          final pNo = t['post_no']?.toString() ?? '';
+          if (postsMap.containsKey(pNo)) {
+            merged.addAll(postsMap[pNo]!);
+          }
+          supaEvents.add(Event.fromJson(merged));
+        }
+
+        _events = supaEvents;
+        if (isAdmin && supaPosts.isNotEmpty) {
+          _rawPosts = supaPosts;
+        }
+
+        _isLoading = false;
+        _isSyncing = false;
+        notifyListeners();
+
+        // Save fresh data to local cache
+        prefs.setString(_cacheKeyEvents, json.encode(supaTasks));
+        prefs.setInt(_cacheKeyTsEvents, now);
+        if (isAdmin && supaPosts.isNotEmpty) {
+          prefs.setString(_cacheKeyPosts, json.encode(supaPosts));
+          prefs.setInt(_cacheKeyTsPosts, now);
+        }
+        debugPrint('🚀 [Supabase Fast-Path] Loaded ${_events.length} events seamlessly!');
+        return;
+      }
+    } catch (supaErr) {
+      debugPrint('⚠️ Supabase fetch fallback to GAS: $supaErr');
     }
 
+    // --- STEP 3: Fallback to Google Apps Script if Supabase is offline ---
     try {
       final taskPayload = <String, dynamic>{'action': 'getTasks', 'role': role, 'username': username};
       final postPayload = <String, dynamic>{'action': 'getPosts'};
@@ -220,6 +257,11 @@ class EventProvider with ChangeNotifier {
     }
 
     invalidateCache();
+
+    // ── Instant Supabase Write (takes ~50ms) ──
+    try {
+      _apiService.updateTaskInSupabase(event.taskId, updates);
+    } catch (_) {}
 
     try {
       final response = await _apiService.postData({

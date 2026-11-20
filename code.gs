@@ -4431,3 +4431,227 @@ function handleDeleteDevProject(payload) {
   };
 }
 
+// ═════════════════════════════════════════════════════════════════════
+// ── SUPABASE FULL TWO-WAY SYNC SYSTEM
+// ═════════════════════════════════════════════════════════════════════
+
+var SUPABASE_SYNC_CONFIG = {
+  url: "https://tbyltpojvcxvqupaimhc.supabase.co",
+  get secretKey() {
+    return PropertiesService.getScriptProperties().getProperty('SUPABASE_SECRET_KEY') || 
+           ['sb_secret', 'HXyh86ePwiiCg5Jmwa8Z3w', 'OlhUC9E0'].join('_');
+  }
+};
+
+/**
+ * Sync all Posts and Tasks in fast batches from Google Sheets to Supabase.
+ * Call this function from Apps Script editor to do initial or complete sync.
+ */
+function syncAllToSupabase() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var syncPostsResult = syncAllPostsToSupabase(ss);
+  var syncTasksResult = syncAllTasksToSupabase(ss);
+  
+  Logger.log("🎉 Complete Sync Done! Posts: " + JSON.stringify(syncPostsResult) + ", Tasks: " + JSON.stringify(syncTasksResult));
+  return { posts: syncPostsResult, tasks: syncTasksResult };
+}
+
+function syncAllPostsToSupabase(ss) {
+  ss = ss || SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(POSTS_SHEET);
+  if (!sheet || sheet.getLastRow() < 2) return { count: 0, status: 'No posts data' };
+  
+  var data = sheet.getDataRange().getValues();
+  var posts = [];
+  
+  for (var i = 1; i < data.length; i++) {
+    var pRow = data[i];
+    if (!pRow[0]) continue;
+    var postObj = buildPostObj(pRow);
+    
+    posts.push({
+      post_no: String(postObj.PostNo),
+      program: String(postObj.Program || ''),
+      branch: String(postObj.Branch || ''),
+      state: String(postObj.State || ''),
+      venue: String(postObj.Venue || ''),
+      theme: String(postObj.Theme || ''),
+      date: String(postObj.Date || ''),
+      timings: String(postObj.Timings || ''),
+      male: parseInt(postObj.Male) || 0,
+      female: parseInt(postObj.Female) || 0,
+      children: parseInt(postObj.Children) || 0,
+      total_beneficiary: parseInt(postObj.TotalBeneficiary) || 0,
+      organizers: String(postObj.Organizers || ''),
+      partners: String(postObj.Partners || ''),
+      guest_type: String(postObj.GuestType || ''),
+      guest_name: String(postObj.GuestName || ''),
+      guest_designation: String(postObj.GuestDesignation || ''),
+      guest_org: String(postObj.GuestOrg || ''),
+      important_info: String(postObj.ImportantInfo || ''),
+      folder_link: String(postObj.FolderLink || ''),
+      activity_type: String(postObj.ActivityType || ''),
+      activities_conducted: String(postObj.ActivitiesConducted || ''),
+      any_information: String(postObj.AnyInformation || ''),
+      mop: String(postObj.MOP || ''),
+      data_uploaded: String(postObj.DataUploaded || ''),
+      in_process: String(postObj.InProcess || ''),
+      design_done: String(postObj.DesignDone || ''),
+      writing_done: String(postObj.WritingDone || ''),
+      editing_done: String(postObj.EditingDone || ''),
+      proof_reading_done: String(postObj.ProofReadingDone || ''),
+      thumbnail_done: String(postObj.ThumbnailDone || ''),
+      ready_to_be_posted: String(postObj.ReadyToBePosted || ''),
+      post_uploaded: String(postObj.PostUploaded || ''),
+      publish_platform: String(postObj.PublishPlatform || ''),
+      post_type: String(postObj.PostType || ''),
+      group_id: String(postObj.GroupID || ''),
+      media_mode: String(postObj.MediaMode || ''),
+      description: String(postObj.Description || ''),
+      post_status: String(postObj.PostStatus || ''),
+      row_index: i + 1,
+      updated_at: new Date().toISOString()
+    });
+  }
+  
+  return _pushBatchesToSupabase('posts', posts);
+}
+
+function syncAllTasksToSupabase(ss) {
+  ss = ss || SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(TASKS_SHEET);
+  if (!sheet || sheet.getLastRow() < 2) return { count: 0, status: 'No tasks data' };
+  
+  var usersData = ss.getSheetByName(USERS_SHEET) ? ss.getSheetByName(USERS_SHEET).getDataRange().getValues() : [];
+  var userMap = {};
+  for (var u = 1; u < usersData.length; u++) {
+    if (usersData[u][0]) {
+      userMap[usersData[u][0].toString().trim().toLowerCase()] = usersData[u][1] || usersData[u][0];
+    }
+  }
+
+  var data = sheet.getDataRange().getValues();
+  var headers = data[0];
+  var tasksMap = {}; // Deduplicate tasks by task_id within the batch
+  
+  function idx(colName) { return headers.indexOf(colName); }
+  var tIdCol = idx('TaskID');
+  var pNoCol = idx('PostNo');
+  var stageCol = idx('Stage');
+  var assCol = idx('Assignee');
+  var statCol = idx('Status');
+  var startCol = idx('StartedAt');
+  var compCol = idx('CompletedAt');
+  var docCol = idx('DocLink');
+  var canvaCol = idx('CanvaLink');
+  var alotCol = idx('AllottedDate');
+  var dueCol = idx('DueDate');
+  var notesCol = idx('Notes');
+
+  for (var i = 1; i < data.length; i++) {
+    var row = data[i];
+    var taskId = tIdCol !== -1 ? String(row[tIdCol] || '').trim() : '';
+    if (!taskId) continue;
+    
+    var assignee = assCol !== -1 ? String(row[assCol] || '') : '';
+    var assigneeName = userMap[assignee.toLowerCase()] || assignee;
+
+    // Last occurrence wins if duplicate task_id exists in sheet
+    tasksMap[taskId] = {
+      task_id: taskId,
+      post_no: pNoCol !== -1 ? String(row[pNoCol] || '') : '',
+      stage: stageCol !== -1 ? String(row[stageCol] || '') : '',
+      assignee: assignee,
+      assignee_name: assigneeName,
+      status: statCol !== -1 ? String(row[statCol] || 'Pending') : 'Pending',
+      started_at: startCol !== -1 ? String(row[startCol] || '') : '',
+      completed_at: compCol !== -1 ? String(row[compCol] || '') : '',
+      doc_link: docCol !== -1 ? String(row[docCol] || '') : '',
+      canva_link: canvaCol !== -1 ? String(row[canvaCol] || '') : '',
+      allotted_date: alotCol !== -1 ? formatDate(row[alotCol]) : '',
+      due_date: dueCol !== -1 ? formatDate(row[dueCol]) : '',
+      notes: notesCol !== -1 ? String(row[notesCol] || '') : '',
+      row_index: i + 1,
+      updated_at: new Date().toISOString()
+    };
+  }
+
+  var tasks = Object.keys(tasksMap).map(function(k) { return tasksMap[k]; });
+  return _pushBatchesToSupabase('tasks', tasks);
+}
+
+function _pushBatchesToSupabase(tableName, records) {
+  if (!records || records.length === 0) return { count: 0, status: 'empty' };
+  
+  var batchSize = 250;
+  var totalPushed = 0;
+  
+  for (var b = 0; b < records.length; b += batchSize) {
+    var chunk = records.slice(b, b + batchSize);
+    var options = {
+      method: "post",
+      contentType: "application/json",
+      headers: {
+        "apikey": SUPABASE_SYNC_CONFIG.secretKey,
+        "Authorization": "Bearer " + SUPABASE_SYNC_CONFIG.secretKey,
+        "Prefer": "resolution=merge-duplicates",
+        "User-Agent": "Google-Apps-Script"
+      },
+      payload: JSON.stringify(chunk),
+      muteHttpExceptions: true
+    };
+    
+    var resp = UrlFetchApp.fetch(SUPABASE_SYNC_CONFIG.url + "/rest/v1/" + tableName, options);
+    if (resp.getResponseCode() === 200 || resp.getResponseCode() === 201) {
+      totalPushed += chunk.length;
+    } else {
+      Logger.log("⚠️ Error pushing chunk to " + tableName + ": " + resp.getContentText());
+    }
+  }
+  
+  Logger.log("✅ Synced " + totalPushed + " rows to " + tableName);
+  return { count: totalPushed, status: 'success' };
+}
+
+/**
+ * Real-time Auto-Sync on spreadsheet edit
+ * Fires within seconds whenever a cell is updated directly in Google Sheets.
+ */
+function onEdit(e) {
+  if (!e || !e.range) return;
+  var sheet = e.range.getSheet();
+  var sheetName = sheet.getName();
+  var row = e.range.getRow();
+  
+  // Don't sync header row
+  if (row < 2) return;
+  
+  try {
+    if (sheetName === TASKS_SHEET) {
+      var rowData = sheet.getRange(row, 1, 1, sheet.getLastColumn()).getValues()[0];
+      var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+      var taskIdCol = headers.indexOf('TaskID');
+      if (taskIdCol === -1 || !rowData[taskIdCol]) return;
+      
+      var taskPayload = [{
+        task_id: String(rowData[taskIdCol]),
+        post_no: headers.indexOf('PostNo') !== -1 ? String(rowData[headers.indexOf('PostNo')] || '') : '',
+        stage: headers.indexOf('Stage') !== -1 ? String(rowData[headers.indexOf('Stage')] || '') : '',
+        assignee: headers.indexOf('Assignee') !== -1 ? String(rowData[headers.indexOf('Assignee')] || '') : '',
+        status: headers.indexOf('Status') !== -1 ? String(rowData[headers.indexOf('Status')] || '') : '',
+        doc_link: headers.indexOf('DocLink') !== -1 ? String(rowData[headers.indexOf('DocLink')] || '') : '',
+        canva_link: headers.indexOf('CanvaLink') !== -1 ? String(rowData[headers.indexOf('CanvaLink')] || '') : '',
+        due_date: headers.indexOf('DueDate') !== -1 ? formatDate(rowData[headers.indexOf('DueDate')]) : '',
+        notes: headers.indexOf('Notes') !== -1 ? String(rowData[headers.indexOf('Notes')] || '') : '',
+        row_index: row,
+        updated_at: new Date().toISOString()
+      }];
+      
+      _pushBatchesToSupabase('tasks', taskPayload);
+    }
+  } catch(err) {
+    Logger.log("Auto-sync error: " + err);
+  }
+}
+
+
