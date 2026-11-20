@@ -106,6 +106,9 @@ class EventProvider with ChangeNotifier {
 
           if (matched.length == 1) {
             merged.addAll(matched.first);
+            // Ensure original task post_no isn't overwritten by post's post_no if task is a combined group!
+            merged['post_no'] = tPostNo;
+            merged['PostNo'] = tPostNo;
           } else if (matched.length > 1) {
             int totalM = 0, totalF = 0, totalC = 0;
             for (final m in matched) {
@@ -115,6 +118,9 @@ class EventProvider with ChangeNotifier {
             }
             final firstP = matched.first;
             merged.addAll(firstP);
+            // Crucial: keep the combined task postNo / Title as the task's PostNo and Theme!
+            merged['post_no'] = tPostNo;
+            merged['PostNo'] = tPostNo;
             merged['theme'] = tPostNo;
             merged['Theme'] = tPostNo;
             merged['male'] = totalM;
@@ -125,6 +131,14 @@ class EventProvider with ChangeNotifier {
             merged['isCombined'] = true;
             merged['combined_posts'] = matched;
             merged['CombinedPosts'] = matched;
+          } else {
+            // No direct post matched, but check if task itself is marked combined
+            if (tPostNo.toLowerCase().contains('combined')) {
+              merged['is_combined'] = true;
+              merged['isCombined'] = true;
+              merged['theme'] = tPostNo;
+              merged['Theme'] = tPostNo;
+            }
           }
 
           supaEvents.add(Event.fromJson(merged));
