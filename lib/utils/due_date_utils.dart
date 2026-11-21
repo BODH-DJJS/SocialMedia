@@ -5,20 +5,9 @@ DateTime? parseDueDate(String? raw) {
   var s = raw.trim();
   if (s.isEmpty) return null;
 
-  // Remove trailing time after comma, e.g. "22/07/2026, 18:08:01"
-  if (s.contains(',')) {
-    s = s.split(',')[0].trim();
-  }
-  // Try ISO-8601 directly
-  if (s.contains('T')) {
-    final parsedIso = DateTime.tryParse(s);
-    if (parsedIso != null) return parsedIso;
-    s = s.split('T')[0].trim();
-  }
-
-  // Try standard parse (YYYY-MM-DD)
-  final dt = DateTime.tryParse(s);
-  if (dt != null) return dt;
+  // Try direct parse first (ISO 8601 or YYYY-MM-DD)
+  final directDt = DateTime.tryParse(s);
+  if (directDt != null) return directDt;
 
   final months = {
     'jan': 1, 'feb': 2, 'mar': 3, 'apr': 4, 'may': 5, 'jun': 6,
@@ -27,9 +16,32 @@ DateTime? parseDueDate(String? raw) {
     'july': 7, 'august': 8, 'september': 9, 'october': 10, 'november': 11, 'december': 12,
   };
 
+  // JS Date toString() format: e.g. "Mon Nov 09 2026 00:00:00 GMT..." or "Nov 09 2026"
+  final jsMatch = RegExp(r'(?:[A-Za-z]{3}\s+)?([A-Za-z]{3,9})\s+(\d{1,2})\s+(\d{4})').firstMatch(s);
+  if (jsMatch != null) {
+    final mStr = jsMatch.group(1)!.toLowerCase();
+    final d = int.tryParse(jsMatch.group(2)!);
+    final y = int.tryParse(jsMatch.group(3)!);
+    if (months.containsKey(mStr) && d != null && y != null) {
+      return DateTime(y, months[mStr]!, d);
+    }
+  }
+
+  // Remove trailing time after comma, e.g. "22/07/2026, 18:08:01"
+  if (s.contains(',')) {
+    s = s.split(',')[0].trim();
+  }
+  // Remove ISO time part if starts with YYYY-MM-DD
+  if (s.contains('T') && RegExp(r'^\d{4}-\d{2}-\d{2}').hasMatch(s)) {
+    s = s.split('T')[0].trim();
+  }
+
+  final dt = DateTime.tryParse(s);
+  if (dt != null) return dt;
+
   final parts = s.split(RegExp(r'[\s\-/]+')).where((p) => p.isNotEmpty).toList();
   if (parts.length >= 3) {
-    // Check Day-MonthName-Year (e.g. 27-Jul-2026)
+    // Check Day-MonthName-Year (e.g. 27-Jul-2026 or 09-Nov-2026)
     final d1 = int.tryParse(parts[0]);
     final mStr1 = parts[1].toLowerCase();
     final y1 = int.tryParse(parts[2]);
@@ -38,7 +50,7 @@ DateTime? parseDueDate(String? raw) {
       return DateTime(y, months[mStr1]!, d1);
     }
 
-    // Check MonthName-Day-Year (e.g. Jul-27-2026)
+    // Check MonthName-Day-Year (e.g. Jul-27-2026 or Nov-09-2026)
     final d2 = int.tryParse(parts[1]);
     final mStr2 = parts[0].toLowerCase();
     final y2 = int.tryParse(parts[2]);
@@ -73,6 +85,8 @@ DateTime? parseDueDate(String? raw) {
     'dd-MMM-yyyy',
     'd MMM yyyy',
     'dd MMM yyyy',
+    'EEE MMM dd yyyy',
+    'EEE MMM d yyyy',
     'd/M/yyyy',
     'dd/MM/yyyy',
     'yyyy-MM-dd',
@@ -115,8 +129,21 @@ int compareDueDates(String? dateA, String? dateB, {int Function()? secondaryComp
 
 String formatDueDateDisplay(String? raw) {
   if (raw == null || raw.trim().isEmpty) return '';
+  final dt = parseDueDate(raw);
+  if (dt != null) {
+    return DateFormat('dd-MMM-yyyy').format(dt);
+  }
+
+  // Fallback pattern matching if parser couldn't create DateTime
   var s = raw.trim();
-  if (s.contains('T')) {
+  final jsMatch = RegExp(r'(?:[A-Za-z]{3}\s+)?([A-Za-z]{3,9})\s+(\d{1,2})\s+(\d{4})').firstMatch(s);
+  if (jsMatch != null) {
+    final m = jsMatch.group(1)!;
+    final d = jsMatch.group(2)!.padLeft(2, '0');
+    final y = jsMatch.group(3)!;
+    return '$d-$m-$y';
+  }
+  if (s.contains('T') && RegExp(r'^\d{4}-\d{2}-\d{2}').hasMatch(s)) {
     s = s.split('T')[0].trim();
   }
   if (s.contains(',')) {

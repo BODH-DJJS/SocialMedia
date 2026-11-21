@@ -1,3 +1,5 @@
+import '../utils/due_date_utils.dart';
+
 class DevProject {
   final String projectId;
   final String stream;
@@ -191,8 +193,8 @@ class DevTask {
       assignee: json['Assignee']?.toString() ?? '',
       assigneeEmail: json['AssigneeEmail']?.toString() ?? '',
       status: json['Status']?.toString() ?? 'Waiting',
-      dueDate: json['DueDate']?.toString() ?? '',
-      allottedDate: json['AllottedDate']?.toString() ?? '',
+      dueDate: formatDueDateDisplay(json['DueDate']?.toString()),
+      allottedDate: formatDueDateDisplay(json['AllottedDate']?.toString()),
       completedAt: json['CompletedAt']?.toString() ?? '',
       docLink: json['DocLink']?.toString() ?? '',
       notes: json['Notes']?.toString() ?? '',

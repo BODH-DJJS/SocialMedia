@@ -1,3 +1,5 @@
+import '../utils/due_date_utils.dart';
+
 class Event {
   final String taskId;
   final String postNo;
@@ -123,8 +125,8 @@ class Event {
       status: (json['Status'] ?? json['status'])?.toString() ?? '',
       docLink: (json['DocLink'] ?? json['doc_link'])?.toString() ?? '',
       canvaLink: (json['CanvaLink'] ?? json['canva_link'])?.toString() ?? '',
-      allottedDate: (json['AllottedDate'] ?? json['allotted_date'])?.toString() ?? '',
-      dueDate: (json['DueDate'] ?? json['due_date'])?.toString() ?? '',
+      allottedDate: formatDueDateDisplay((json['AllottedDate'] ?? json['allotted_date'])?.toString()),
+      dueDate: formatDueDateDisplay((json['DueDate'] ?? json['due_date'])?.toString()),
       notes: (json['Notes'] ?? json['notes'])?.toString() ?? '',
       program: (json['Program'] ?? json['program'])?.toString() ?? '',
       branch: (json['Branch'] ?? json['branch'])?.toString() ?? '',
