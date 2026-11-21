@@ -228,6 +228,8 @@ class ApiService {
     if (updates.containsKey('DocLink')) payload['doc_link'] = updates['DocLink'];
     if (updates.containsKey('DueDate')) payload['due_date'] = updates['DueDate'];
     if (updates.containsKey('Notes')) payload['notes'] = updates['Notes'];
+    if (updates.containsKey('Assignee')) payload['assignee'] = updates['Assignee'];
+    if (updates.containsKey('AssigneeName')) payload['assignee_name'] = updates['AssigneeName'];
 
     try {
       final response = await http.patch(

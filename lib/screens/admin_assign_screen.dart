@@ -458,7 +458,13 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
 
   Widget _buildUserDropdown(String title, String role, String? value, Function(String?) onChanged) {
     final allUsers = context.watch<EventProvider>().users;
-    final users = allUsers.where((u) => u['role'] == role).toList();
+    final users = allUsers.where((u) {
+      final r = u['role']?.toString() ?? '';
+      if (role == 'Thumbnail Selector') return r == 'Thumbnail Selector' || r == 'Thumbnail Designer' || r == 'Admin';
+      if (role == 'Thumbnail Processor') return r == 'Thumbnail Processor' || r == 'Thumbnail Designer' || r == 'Admin';
+      if (role == 'Thumbnail CrossChecker') return r == 'Thumbnail CrossChecker' || r == 'Thumbnail Designer' || r == 'Admin';
+      return r == role || r == 'Admin';
+    }).toList();
     final uniqueUsers = <String, Map<String, dynamic>>{};
     for (var u in users) {
       final email = u['email']?.toString() ?? '';
@@ -1319,7 +1325,7 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
                             Row(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Expanded(flex: 2, child: _buildUserDropdown('1. Thumbnail Selection', 'Thumbnail Designer', _selectedThumbnailSelect, (v) => setState(() => _selectedThumbnailSelect = v))),
+                                Expanded(flex: 2, child: _buildUserDropdown('1. Thumbnail Selection', 'Thumbnail Selector', _selectedThumbnailSelect, (v) => setState(() => _selectedThumbnailSelect = v))),
                                 const SizedBox(width: 12),
                                 Expanded(flex: 1, child: _buildDateField('Due Date', _thumbnailSelectDue, (d) => setState(() => _thumbnailSelectDue = d))),
                               ],
@@ -1328,7 +1334,7 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
                             Row(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Expanded(flex: 2, child: _buildUserDropdown('2. Thumbnail Processing', 'Thumbnail Designer', _selectedThumbnailProcess, (v) => setState(() => _selectedThumbnailProcess = v))),
+                                Expanded(flex: 2, child: _buildUserDropdown('2. Thumbnail Processing', 'Thumbnail Processor', _selectedThumbnailProcess, (v) => setState(() => _selectedThumbnailProcess = v))),
                                 const SizedBox(width: 12),
                                 Expanded(flex: 1, child: _buildDateField('Due Date', _thumbnailProcessDue, (d) => setState(() => _thumbnailProcessDue = d))),
                               ],
@@ -1337,7 +1343,7 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
                             Row(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Expanded(flex: 2, child: _buildUserDropdown('3. Thumbnail Cross checking', 'Thumbnail Designer', _selectedThumbnailCrosscheck, (v) => setState(() => _selectedThumbnailCrosscheck = v))),
+                                Expanded(flex: 2, child: _buildUserDropdown('3. Thumbnail Cross checking', 'Thumbnail CrossChecker', _selectedThumbnailCrosscheck, (v) => setState(() => _selectedThumbnailCrosscheck = v))),
                                 const SizedBox(width: 12),
                                 Expanded(flex: 1, child: _buildDateField('Due Date', _thumbnailCrosscheckDue, (d) => setState(() => _thumbnailCrosscheckDue = d))),
                               ],

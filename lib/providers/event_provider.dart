@@ -370,12 +370,20 @@ class EventProvider with ChangeNotifier {
       event.assigneeName = newName;
     } else {
       // Find name from users list if possible
-      final u = users.firstWhere((u) => u['username'] == newEmail, orElse: () => {});
+      final u = users.firstWhere((u) => u['username'] == newEmail || u['email'] == newEmail, orElse: () => {});
       if (u.isNotEmpty) {
         event.assigneeName = u['name'] ?? newEmail;
       }
     }
     notifyListeners();
+
+    // ── Instant write to Supabase (takes ~50ms so refresh sees new name immediately) ──
+    try {
+      _apiService.updateTaskInSupabase(event.taskId, {
+        'Assignee': event.assignee,
+        'AssigneeName': event.assigneeName,
+      });
+    } catch (_) {}
 
     try {
       final response = await _apiService.postData({

@@ -1975,7 +1975,10 @@ class _ReassignDialogState extends State<_ReassignDialog> {
     if (stage.contains('writ')) expectedRole = 'Writer';
     else if (stage.contains('edit') && !stage.contains('photo') && !stage.contains('video')) expectedRole = 'Editor';
     else if (stage.contains('proof')) expectedRole = 'Proofreader';
-    else if (stage.contains('cross check')) expectedRole = 'CrossChecker';
+    else if (stage.contains('cross check') && !stage.contains('thumb') && !stage.contains('media')) expectedRole = 'CrossChecker';
+    else if (stage.contains('thumbnail selection') || stage == 'thumbnail selection') expectedRole = 'Thumbnail Selector';
+    else if (stage.contains('thumbnail processing') || stage == 'thumbnail processing') expectedRole = 'Thumbnail Processor';
+    else if (stage.contains('thumbnail cross') || stage.contains('thumbnail cross checking')) expectedRole = 'Thumbnail CrossChecker';
     else if (stage.contains('thumb')) expectedRole = 'Thumbnail Designer';
     else if (stage.contains('photo select')) expectedRole = 'Photo Selector';
     else if (stage.contains('photo edit')) expectedRole = 'Photo Editor';
@@ -1983,7 +1986,14 @@ class _ReassignDialogState extends State<_ReassignDialog> {
     else if (stage.contains('media cross')) expectedRole = 'Media CrossChecker';
     else if (stage.contains('ready')) expectedRole = 'Uploader';
 
-    final roleUsers = users.where((u) => u['role'] == expectedRole || u['role'] == 'Admin').toList();
+    final roleUsers = users.where((u) {
+      final r = u['role']?.toString() ?? '';
+      // Support specific thumbnail roles as well as generic 'Thumbnail Designer'
+      if (expectedRole.startsWith('Thumbnail')) {
+        return r == expectedRole || r == 'Thumbnail Designer' || r == 'Admin';
+      }
+      return r == expectedRole || r == 'Admin';
+    }).toList();
 
     return AlertDialog(
       title: const Text('Reassign Task'),
