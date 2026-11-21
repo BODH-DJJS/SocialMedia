@@ -37,6 +37,9 @@ function ensureSheets() {
     {role: 'Proofreader', prefix: 'proofreader'},
     {role: 'CrossChecker', prefix: 'crosscheck'},
     {role: 'Thumbnail Designer', prefix: 'thumbnail'},
+    {role: 'Thumbnail Selector', prefix: 'thumbnailselect'},
+    {role: 'Thumbnail Processor', prefix: 'thumbnailprocess'},
+    {role: 'Thumbnail CrossChecker', prefix: 'thumbnailcrosscheck'},
     {role: 'Photo Selector', prefix: 'photoselect'},
     {role: 'Photo Editor', prefix: 'photoedit'},
     {role: 'Video Editor', prefix: 'videoedit'},
@@ -81,9 +84,9 @@ function ensureSheets() {
     {stage: 'Editing', role: 'Editor', dep: 'Writing'},
     {stage: 'Proofreading', role: 'Proofreader', dep: 'Editing, Media Cross Check'},
     {stage: 'Text Crosscheck', role: 'CrossChecker', dep: 'Proofreading'},
-    {stage: 'Thumbnail Selection', role: 'Thumbnail Designer', dep: ''},
-    {stage: 'Thumbnail Processing', role: 'Thumbnail Designer', dep: 'Thumbnail Selection'},
-    {stage: 'Thumbnail Cross checking', role: 'Thumbnail Designer', dep: 'Thumbnail Processing'},
+    {stage: 'Thumbnail Selection', role: 'Thumbnail Selector', dep: ''},
+    {stage: 'Thumbnail Processing', role: 'Thumbnail Processor', dep: 'Thumbnail Selection'},
+    {stage: 'Thumbnail Cross checking', role: 'Thumbnail CrossChecker', dep: 'Thumbnail Processing'},
     {stage: 'Photo Editing', role: 'Photo Editor', dep: ''},
     {stage: 'Video Editing', role: 'Video Editor', dep: ''},
     {stage: 'Media Cross Check', role: 'Media CrossChecker', dep: 'Photo Editing, Video Editing'},
@@ -135,6 +138,7 @@ function ensureSheets() {
   if (taskHeaders.indexOf('DueDate') === -1) tasksSheet.getRange(1, taskHeaders.length + 2).setValue('DueDate');
   if (taskHeaders.indexOf('Notes') === -1) tasksSheet.getRange(1, taskHeaders.length + 3).setValue('Notes');
   if (taskHeaders.indexOf('CanvaLink') === -1) tasksSheet.getRange(1, taskHeaders.length + 4).setValue('CanvaLink');
+  installSupabaseSyncTrigger();
 }
 
 function formatDate(dateVal) {
@@ -313,6 +317,10 @@ function doPost(e) {
       } finally {
         lock.releaseLock();
       }
+    } else if (action === 'syncSupabaseUpdatesToSheet') {
+      return respond(syncSupabaseUpdatesToSheet());
+    } else if (action === 'syncAllToSupabase') {
+      return respond(syncAllToSupabase());
     } else {
       return respond({success: false, message: 'Unknown action'});
     }
@@ -962,6 +970,9 @@ function handleReassignTasks(payload) {
     var tStage = normalizeStageName(tasks[i][stageCol]);
     if (postNosToUpdate.indexOf(tPostNo) !== -1 && tStage === targetStage) {
       taskSheet.getRange(i+1, assigneeCol+1).setValue(payload.newAssigneeEmail);
+      try {
+        _syncTaskToSupabase(taskSheet, i + 1, headers);
+      } catch(syncErr) {}
       updated++;
     }
   }
@@ -969,6 +980,72 @@ function handleReassignTasks(payload) {
     return {success: false, message: 'No matching task found for stage: ' + payload.stage + ' postNo: ' + payload.postNo};
   }
   return {success: true, message: 'Reassigned ' + updated + ' tasks'};
+}
+
+
+function _syncTaskToSupabase(sheet, rowIndex, headers) {
+  try {
+    if (!sheet || !SUPABASE_SYNC_CONFIG || !SUPABASE_SYNC_CONFIG.url) return;
+    if (!headers) headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    var rowValues = sheet.getRange(rowIndex, 1, 1, headers.length).getValues()[0];
+    var rowMap = {};
+    for (var i = 0; i < headers.length; i++) {
+      rowMap[headers[i]] = rowValues[i];
+    }
+    var taskId = String(rowMap['TaskID'] || '').trim();
+    if (!taskId) return;
+
+    var assigneeEmail = String(rowMap['Assignee'] || '').trim();
+    var assigneeName = assigneeEmail;
+    try {
+      var ss = SpreadsheetApp.getActiveSpreadsheet();
+      var uSheet = ss.getSheetByName(USERS_SHEET);
+      if (uSheet && assigneeEmail) {
+        var uData = uSheet.getDataRange().getValues();
+        for (var u = 1; u < uData.length; u++) {
+          if (String(uData[u][0] || '').trim().toLowerCase() === assigneeEmail.toLowerCase()) {
+            assigneeName = String(uData[u][1] || '').trim() || assigneeEmail;
+            break;
+          }
+        }
+      }
+    } catch(ue) {}
+
+    var supaPayload = {
+      task_id: taskId,
+      post_no: String(rowMap['PostNo'] || ''),
+      stage: String(rowMap['Stage'] || ''),
+      assignee: assigneeEmail,
+      assignee_name: assigneeName,
+      status: String(rowMap['Status'] || ''),
+      started_at: String(rowMap['StartedAt'] || ''),
+      completed_at: String(rowMap['CompletedAt'] || ''),
+      doc_link: String(rowMap['DocLink'] || ''),
+      canva_link: String(rowMap['CanvaLink'] || ''),
+      allotted_date: String(rowMap['AllottedDate'] || ''),
+      due_date: String(rowMap['DueDate'] || ''),
+      notes: String(rowMap['Notes'] || ''),
+      row_index: rowIndex,
+      updated_at: new Date().toISOString()
+    };
+
+    var options = {
+      method: "post",
+      contentType: "application/json",
+      headers: {
+        "apikey": SUPABASE_SYNC_CONFIG.secretKey,
+        "Authorization": "Bearer " + SUPABASE_SYNC_CONFIG.secretKey,
+        "Prefer": "resolution=merge-duplicates",
+        "User-Agent": "Google-Apps-Script"
+      },
+      payload: JSON.stringify(supaPayload),
+      muteHttpExceptions: true
+    };
+
+    UrlFetchApp.fetch(SUPABASE_SYNC_CONFIG.url + "/rest/v1/tasks?on_conflict=task_id", options);
+  } catch (err) {
+    Logger.log("Failed to sync task " + (taskId || rowIndex) + " to Supabase: " + err);
+  }
 }
 
 function handleUpdateTask(payload) {
@@ -1026,6 +1103,12 @@ function handleUpdateTask(payload) {
     if (colIndex !== -1) {
       sheet.getRange(rowIndex, colIndex + 1).setValue(updates[key]);
     }
+  }
+
+  try {
+    _syncTaskToSupabase(sheet, rowIndex, headers);
+  } catch(syncErr) {
+    Logger.log('Supabase single task sync err: ' + syncErr);
   }
 
   // If CanvaLink was updated or if task is marked Done with CanvaLink present, forward it to downstream media stages
@@ -1322,6 +1405,9 @@ function unlockDependentTasks(rowIndex, headers, taskSheet) {
       
       if (allDone) {
         taskSheet.getRange(targetTask.rowIdx, statusCol + 1).setValue('Ready');
+        try {
+          _syncTaskToSupabase(taskSheet, targetTask.rowIdx, headers);
+        } catch(syncErr) {}
       }
     }
   }
@@ -2786,7 +2872,19 @@ function handleReverseTask(payload) {
 }
 
 function doGet(e) {
-  return ContentService.createTextOutput('GET requests not supported, use POST.').setMimeType(ContentService.MimeType.TEXT);
+  try {
+    if (e && e.parameter && e.parameter.action) {
+      var action = e.parameter.action;
+      if (action === 'syncSupabaseUpdatesToSheet') {
+        return ContentService.createTextOutput(JSON.stringify(syncSupabaseUpdatesToSheet())).setMimeType(ContentService.MimeType.JSON);
+      } else if (action === 'syncAllToSupabase') {
+        return ContentService.createTextOutput(JSON.stringify(syncAllToSupabase())).setMimeType(ContentService.MimeType.JSON);
+      }
+    }
+  } catch(err) {
+    return ContentService.createTextOutput(JSON.stringify({error: err.toString()})).setMimeType(ContentService.MimeType.JSON);
+  }
+  return ContentService.createTextOutput('Bodh Social Media API Active. Supported GET actions: ?action=syncSupabaseUpdatesToSheet, ?action=syncAllToSupabase').setMimeType(ContentService.MimeType.TEXT);
 }
 
 // Keep-Alive: set a time-based trigger on this function every 5 minutes
@@ -3030,9 +3128,9 @@ function ensureDevSheets(ss) {
     ['SM Development', 'Editing', 'Editor', 4, 'Writing'],
     ['SM Development', 'Proofreading', 'Proofreader', 6, 'Editing'],
     ['SM Development', 'Text Crosscheck', 'CrossChecker', 8, 'Proofreading'],
-    ['SM Development', 'Thumbnail Selection', 'Thumbnail Designer', 2, ''],
-    ['SM Development', 'Thumbnail Processing', 'Thumbnail Designer', 4, 'Thumbnail Selection'],
-    ['SM Development', 'Thumbnail Cross checking', 'Thumbnail Designer', 6, 'Thumbnail Processing'],
+    ['SM Development', 'Thumbnail Selection', 'Thumbnail Selector', 2, ''],
+    ['SM Development', 'Thumbnail Processing', 'Thumbnail Processor', 4, 'Thumbnail Selection'],
+    ['SM Development', 'Thumbnail Cross checking', 'Thumbnail CrossChecker', 6, 'Thumbnail Processing'],
     ['SM Development', 'Photo Editing', 'Photo Editor', 4, ''],
     ['SM Development', 'Video Editing', 'Video Editor', 4, ''],
     ['SM Development', 'Media Cross Check', 'Media CrossChecker', 6, 'Photo Editing, Video Editing'],
@@ -3548,7 +3646,9 @@ function handleCreateDevProject(payload) {
       else if (stName === 'Text Crosscheck') assignedObj = assignees['CrossChecker'] || {};
       else if (stName === 'Raw Photos') assignedObj = assignees['Photo Selector'] || assignees['Photographer'] || {};
       else if (stName === 'Selected Photos') assignedObj = assignees['Photo Editor'] || {};
-      else if (stName === 'Thumbnail Selection') assignedObj = assignees['Thumbnail Designer'] || {};
+      else if (stName === 'Thumbnail Selection') assignedObj = assignees['Thumbnail Selector'] || assignees['Thumbnail Designer'] || {};
+      else if (stName === 'Thumbnail Processing') assignedObj = assignees['Thumbnail Processor'] || assignees['Thumbnail Designer'] || {};
+      else if (stName === 'Thumbnail Cross checking') assignedObj = assignees['Thumbnail CrossChecker'] || assignees['Thumbnail Designer'] || {};
     }
     var sEmail = (typeof assignedObj === 'object' && assignedObj ? assignedObj.email : '') || '';
 
@@ -4684,15 +4784,34 @@ function onEdit(e) {
  * and writes their status, canva_link, doc_link, etc. directly into Google Sheets!
  * You can also set a 5-minute time-driven trigger for this function in Apps Script.
  */
+function installSupabaseSyncTrigger() {
+  try {
+    var triggers = ScriptApp.getProjectTriggers();
+    for (var i = 0; i < triggers.length; i++) {
+      if (triggers[i].getHandlerFunction() === 'syncSupabaseUpdatesToSheet') {
+        return;
+      }
+    }
+    ScriptApp.newTrigger('syncSupabaseUpdatesToSheet')
+      .timeBased()
+      .everyMinutes(5)
+      .create();
+    Logger.log("Installed 5-minute Supabase sync trigger");
+  } catch(e) {
+    Logger.log("Could not install trigger: " + e);
+  }
+}
+
 function syncSupabaseUpdatesToSheet() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sheet = ss.getSheetByName(TASKS_SHEET);
-  if (!sheet || sheet.getLastRow() < 2) return;
+  if (!sheet || sheet.getLastRow() < 2) return { success: false, message: 'Sheet empty' };
 
   var data = sheet.getDataRange().getValues();
   var headers = data[0];
   var taskIdCol = headers.indexOf('TaskID');
   var statusCol = headers.indexOf('Status');
+  var assigneeCol = headers.indexOf('Assignee');
   var canvaCol = headers.indexOf('CanvaLink');
   var docCol = headers.indexOf('DocLink');
   var compCol = headers.indexOf('CompletedAt');
@@ -4718,7 +4837,7 @@ function syncSupabaseUpdatesToSheet() {
   };
 
   try {
-    var resp = UrlFetchApp.fetch(SUPABASE_SYNC_CONFIG.url + "/rest/v1/tasks?select=task_id,status,canva_link,doc_link,completed_at&order=updated_at.desc&limit=200", options);
+    var resp = UrlFetchApp.fetch(SUPABASE_SYNC_CONFIG.url + "/rest/v1/tasks?select=task_id,status,assignee,canva_link,doc_link,completed_at&order=updated_at.desc&limit=200", options);
     if (resp.getResponseCode() !== 200) {
       Logger.log("Failed to fetch from Supabase: " + resp.getContentText());
       return;
@@ -4749,6 +4868,9 @@ function syncSupabaseUpdatesToSheet() {
       }
       if (st.doc_link && docCol !== -1 && String(data[rIdx - 1][docCol] || '') !== st.doc_link) {
         sheet.getRange(rIdx, docCol + 1).setValue(st.doc_link);
+      }
+      if (st.assignee && assigneeCol !== -1 && String(data[rIdx - 1][assigneeCol] || '').trim().toLowerCase() !== String(st.assignee).trim().toLowerCase()) {
+        sheet.getRange(rIdx, assigneeCol + 1).setValue(st.assignee);
       }
     }
 
