@@ -1017,6 +1017,29 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
     return u.contains(t) || t.contains(u);
   }
 
+  static List<Map<String, dynamic>> _sortUsersForRole(List<Map<String, dynamic>> users, String targetRole) {
+    final list = List<Map<String, dynamic>>.from(users);
+    list.sort((a, b) {
+      final roleA = (a['Role'] ?? a['role'] ?? '').toString().toLowerCase();
+      final roleB = (b['Role'] ?? b['role'] ?? '').toString().toLowerCase();
+      final isAdminA = roleA == 'admin' || roleA == 'lead' || roleA == 'coordinator';
+      final isAdminB = roleB == 'admin' || roleB == 'lead' || roleB == 'coordinator';
+      if (isAdminA && !isAdminB) return 1;
+      if (!isAdminA && isAdminB) return -1;
+
+      final targetLower = targetRole.toLowerCase();
+      final isExactA = roleA == targetLower;
+      final isExactB = roleB == targetLower;
+      if (isExactA && !isExactB) return -1;
+      if (!isExactA && isExactB) return 1;
+
+      final nameA = (a['name'] ?? a['Name'] ?? a['email'] ?? '').toString().toLowerCase();
+      final nameB = (b['name'] ?? b['Name'] ?? b['email'] ?? '').toString().toLowerCase();
+      return nameA.compareTo(nameB);
+    });
+    return list;
+  }
+
   Widget _buildCampaignPipelineView(DevPipelineProvider provider) {
     final streamProjects = provider.projects.where(_isCampaignProject).toList();
     final streamTasks = provider.tasks.where(_isCampaignTask).toList();
@@ -4384,8 +4407,8 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
                         final st = entry.value;
                         final offset = (idx + 1) * 4;
                         final expectedRole = _mapStageToRole(st, 'Campaign Development');
-                        final stageUsers = users.where((u) => _matchesRole(u['Role']?.toString() ?? u['role']?.toString() ?? '', expectedRole)).toList();
-                        final displayUsers = stageUsers.isNotEmpty ? stageUsers : users;
+                        final rawStageUsers = users.where((u) => _matchesRole(u['Role']?.toString() ?? u['role']?.toString() ?? '', expectedRole)).toList();
+                        final displayUsers = _sortUsersForRole(rawStageUsers.isNotEmpty ? rawStageUsers : users, expectedRole);
 
                         return Padding(
                           padding: const EdgeInsets.only(bottom: 8),
@@ -4697,8 +4720,8 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
                         final roleName = r['role']!;
                         final stageName = r['stage']!;
                         final groupName = r['group']!;
-                        final stageUsers = users.where((u) => _matchesRole(u['Role']?.toString() ?? u['role']?.toString() ?? '', roleName)).toList();
-                        final displayUsers = stageUsers.isNotEmpty ? stageUsers : users;
+                        final rawStageUsers = users.where((u) => _matchesRole(u['Role']?.toString() ?? u['role']?.toString() ?? '', roleName)).toList();
+                        final displayUsers = _sortUsersForRole(rawStageUsers.isNotEmpty ? rawStageUsers : users, roleName);
 
                         return Padding(
                           padding: const EdgeInsets.only(bottom: 8),
@@ -5023,8 +5046,8 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
                         final roleName = r['role']!;
                         final stageName = r['stage']!;
                         final groupName = r['group']!;
-                        final stageUsers = users.where((u) => _matchesRole(u['Role']?.toString() ?? u['role']?.toString() ?? '', roleName)).toList();
-                        final displayUsers = stageUsers.isNotEmpty ? stageUsers : users;
+                        final rawStageUsers = users.where((u) => _matchesRole(u['Role']?.toString() ?? u['role']?.toString() ?? '', roleName)).toList();
+                        final displayUsers = _sortUsersForRole(rawStageUsers.isNotEmpty ? rawStageUsers : users, roleName);
 
                         return Padding(
                           padding: const EdgeInsets.only(bottom: 8),
@@ -5340,8 +5363,8 @@ class _DevPipelineScreenState extends State<DevPipelineScreen> with SingleTicker
                         final roleName = r['role']!;
                         final stageName = r['stage']!;
                         final groupName = r['group']!;
-                        final stageUsers = users.where((u) => _matchesRole(u['Role']?.toString() ?? u['role']?.toString() ?? '', roleName)).toList();
-                        final displayUsers = stageUsers.isNotEmpty ? stageUsers : users;
+                        final rawStageUsers = users.where((u) => _matchesRole(u['Role']?.toString() ?? u['role']?.toString() ?? '', roleName)).toList();
+                        final displayUsers = _sortUsersForRole(rawStageUsers.isNotEmpty ? rawStageUsers : users, roleName);
 
                         return Padding(
                           padding: const EdgeInsets.only(bottom: 8),

@@ -1995,6 +1995,26 @@ class _ReassignDialogState extends State<_ReassignDialog> {
       return r == expectedRole || r == 'Admin';
     }).toList();
 
+    // Sort: Users of that role first, then fallbacks, then Admin strictly at the END!
+    roleUsers.sort((a, b) {
+      final roleA = (a['role'] ?? '').toString().toLowerCase();
+      final roleB = (b['role'] ?? '').toString().toLowerCase();
+      final isAdminA = roleA == 'admin';
+      final isAdminB = roleB == 'admin';
+      if (isAdminA && !isAdminB) return 1;
+      if (!isAdminA && isAdminB) return -1;
+
+      final targetLower = expectedRole.toLowerCase();
+      final isExactA = roleA == targetLower;
+      final isExactB = roleB == targetLower;
+      if (isExactA && !isExactB) return -1;
+      if (!isExactA && isExactB) return 1;
+
+      final nameA = (a['name'] ?? a['email'] ?? '').toString().toLowerCase();
+      final nameB = (b['name'] ?? b['email'] ?? '').toString().toLowerCase();
+      return nameA.compareTo(nameB);
+    });
+
     return AlertDialog(
       title: const Text('Reassign Task'),
       content: SingleChildScrollView(

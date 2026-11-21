@@ -40,30 +40,36 @@ class EventProvider with ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     final now = DateTime.now().millisecondsSinceEpoch;
 
-    // --- STEP 1: Serve from localStorage cache instantly ---
-    bool loadedFromCache = false;
-    final cachedEventsJson = prefs.getString(_cacheKeyEvents);
-    final cachedTs = prefs.getInt(_cacheKeyTsEvents) ?? 0;
-    if (cachedEventsJson != null && cachedEventsJson.isNotEmpty) {
-      try {
-        final List<dynamic> cachedList = json.decode(cachedEventsJson);
-        _events = cachedList.map((j) => Event.fromJson(j as Map<String, dynamic>)).toList();
-        loadedFromCache = true;
-        debugPrint('⚡ Events loaded from cache instantly (${_events.length} items)');
-      } catch (e) {
-        debugPrint('Cache parse error: $e');
-      }
+    // If force refresh is requested, wipe cached data so stale data is never shown
+    if (force) {
+      await invalidateCache();
     }
 
-    if (isAdmin) {
-      final cachedPostsJson = prefs.getString(_cacheKeyPosts);
-      if (cachedPostsJson != null && cachedPostsJson.isNotEmpty) {
+    // --- STEP 1: Serve from localStorage cache instantly (only if NOT force) ---
+    bool loadedFromCache = false;
+    if (!force) {
+      final cachedEventsJson = prefs.getString(_cacheKeyEvents);
+      if (cachedEventsJson != null && cachedEventsJson.isNotEmpty) {
         try {
-          final List<dynamic> cachedList = json.decode(cachedPostsJson);
-          _rawPosts = cachedList.map((e) => e as Map<String, dynamic>).toList();
-          debugPrint('⚡ Posts loaded from cache instantly (${_rawPosts.length} items)');
+          final List<dynamic> cachedList = json.decode(cachedEventsJson);
+          _events = cachedList.map((j) => Event.fromJson(j as Map<String, dynamic>)).toList();
+          loadedFromCache = true;
+          debugPrint('⚡ Events loaded from cache instantly (${_events.length} items)');
         } catch (e) {
-          debugPrint('Posts cache parse error: $e');
+          debugPrint('Cache parse error: $e');
+        }
+      }
+
+      if (isAdmin) {
+        final cachedPostsJson = prefs.getString(_cacheKeyPosts);
+        if (cachedPostsJson != null && cachedPostsJson.isNotEmpty) {
+          try {
+            final List<dynamic> cachedList = json.decode(cachedPostsJson);
+            _rawPosts = cachedList.map((e) => e as Map<String, dynamic>).toList();
+            debugPrint('⚡ Posts loaded from cache instantly (${_rawPosts.length} items)');
+          } catch (e) {
+            debugPrint('Posts cache parse error: $e');
+          }
         }
       }
     }
@@ -152,7 +158,7 @@ class EventProvider with ChangeNotifier {
         notifyListeners();
 
         // Save fresh data to local cache
-        prefs.setString(_cacheKeyEvents, json.encode(supaTasks));
+        prefs.setString(_cacheKeyEvents, json.encode(_events.map((e) => e.toJson()).toList()));
         prefs.setInt(_cacheKeyTsEvents, now);
         if (_rawPosts.isNotEmpty) {
           prefs.setString(_cacheKeyPosts, json.encode(_rawPosts));
@@ -223,9 +229,11 @@ class EventProvider with ChangeNotifier {
   // ── Force clear localStorage cache (call after mark done/reassign) ──
   Future<void> invalidateCache() async {
     final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_cacheKeyEvents);
+    await prefs.remove(_cacheKeyPosts);
     await prefs.remove(_cacheKeyTsEvents);
     await prefs.remove(_cacheKeyTsPosts);
-    debugPrint('🗑️ Cache invalidated — next fetch will go to network');
+    debugPrint('🗑️ Cache completely invalidated — next fetch will go to network');
   }
 
   Future<void> fetchAllPosts() async {
@@ -364,20 +372,42 @@ class EventProvider with ChangeNotifier {
     final originalAssignee = event.assignee;
     final originalAssigneeName = event.assigneeName;
     
-    // Optimistic UI update
-    event.assignee = newEmail;
-    if (newName != null) {
-      event.assigneeName = newName;
-    } else {
-      // Find name from users list if possible
-      final u = users.firstWhere((u) => u['username'] == newEmail || u['email'] == newEmail, orElse: () => {});
+    // Resolve name
+    String resolvedName = newName ?? '';
+    if (resolvedName.isEmpty) {
+      final u = users.firstWhere(
+        (u) => (u['username'] ?? u['email'] ?? '').toString().toLowerCase() == newEmail.toLowerCase(), 
+        orElse: () => {}
+      );
       if (u.isNotEmpty) {
-        event.assigneeName = u['name'] ?? newEmail;
+        resolvedName = u['name'] ?? newEmail;
+      } else {
+        resolvedName = newEmail;
+      }
+    }
+
+    // 1. Optimistic UI update on the event object
+    event.assignee = newEmail;
+    event.assigneeName = resolvedName;
+
+    // 2. CRUCIAL: Also update all matching tasks in provider's _events list!
+    final normTargetStage = event.stage.toLowerCase().replaceAll(' ', '');
+    for (final ev in _events) {
+      final evStage = ev.stage.toLowerCase().replaceAll(' ', '');
+      if (ev.taskId == event.taskId || (ev.postNo == event.postNo && evStage == normTargetStage)) {
+        ev.assignee = newEmail;
+        ev.assigneeName = resolvedName;
       }
     }
     notifyListeners();
 
-    // ── Instant write to Supabase (takes ~50ms so refresh sees new name immediately) ──
+    // 3. Update local cache immediately so internal refresh or re-render has the new assignee
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_cacheKeyEvents, json.encode(_events.map((e) => e.toJson()).toList()));
+    } catch (_) {}
+
+    // 4. Instant write to Supabase (takes ~50ms so refresh sees new name immediately)
     try {
       _apiService.updateTaskInSupabase(event.taskId, {
         'Assignee': event.assignee,
@@ -389,10 +419,11 @@ class EventProvider with ChangeNotifier {
       final response = await _apiService.postData({
         'action': 'reassignTasks',
         'postNo': event.postNo,
+        'taskId': event.taskId,
         'isCombined': event.isCombined,
         'stage': event.stage,
         'newAssigneeEmail': newEmail,
-        'newAssigneeName': newName,
+        'newAssigneeName': resolvedName,
         'role': role,
       });
 
@@ -408,6 +439,13 @@ class EventProvider with ChangeNotifier {
     // Revert only if we get a clean `{success: false}` from the backend
     event.assignee = originalAssignee;
     event.assigneeName = originalAssigneeName;
+    for (final ev in _events) {
+      final evStage = ev.stage.toLowerCase().replaceAll(' ', '');
+      if (ev.taskId == event.taskId || (ev.postNo == event.postNo && evStage == normTargetStage)) {
+        ev.assignee = originalAssignee;
+        ev.assigneeName = originalAssigneeName;
+      }
+    }
     notifyListeners();
     return false;
   }

@@ -465,6 +465,27 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
       if (role == 'Thumbnail CrossChecker') return r == 'Thumbnail CrossChecker' || r == 'Thumbnail Designer' || r == 'Admin';
       return r == role || r == 'Admin';
     }).toList();
+
+    // Sort: Specific role users first, then fallback designers, and Admin strictly at the END!
+    users.sort((a, b) {
+      final roleA = (a['role'] ?? '').toString().toLowerCase();
+      final roleB = (b['role'] ?? '').toString().toLowerCase();
+      final isAdminA = roleA == 'admin';
+      final isAdminB = roleB == 'admin';
+      if (isAdminA && !isAdminB) return 1;
+      if (!isAdminA && isAdminB) return -1;
+
+      final targetLower = role.toLowerCase();
+      final isExactA = roleA == targetLower;
+      final isExactB = roleB == targetLower;
+      if (isExactA && !isExactB) return -1;
+      if (!isExactA && isExactB) return 1;
+
+      final nameA = (a['name'] ?? a['email'] ?? '').toString().toLowerCase();
+      final nameB = (b['name'] ?? b['email'] ?? '').toString().toLowerCase();
+      return nameA.compareTo(nameB);
+    });
+
     final uniqueUsers = <String, Map<String, dynamic>>{};
     for (var u in users) {
       final email = u['email']?.toString() ?? '';

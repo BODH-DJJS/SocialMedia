@@ -327,8 +327,13 @@ class _DashboardScreenState extends State<DashboardScreen>
               : IconButton(
                 icon: const Icon(Icons.refresh_rounded),
                 tooltip: 'Refresh',
-                onPressed:
-                    () => eventProvider.fetchEvents(auth.role, auth.username, force: true),
+                onPressed: () async {
+                  await eventProvider.invalidateCache();
+                  await Future.wait([
+                    eventProvider.fetchEvents(auth.role, auth.username, force: true),
+                    eventProvider.fetchUsers(),
+                  ]);
+                },
               ),
           IconButton(
             icon: const Icon(Icons.logout_rounded),
