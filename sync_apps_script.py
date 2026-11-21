@@ -24,7 +24,7 @@ def main():
 
     # 3. Clasp push
     print("3. Pushing files with clasp (Code.js, Date wise Combine Report.js, appsscript.json)...")
-    res = subprocess.run(["npx.cmd", "@google/clasp", "push"], cwd=APPS_SCRIPT_DIR, capture_output=True, text=True, shell=True)
+    res = subprocess.run(["npx.cmd", "@google/clasp", "push", "-f"], cwd=APPS_SCRIPT_DIR, capture_output=True, text=True, shell=True)
     print(res.stdout)
     if res.returncode != 0:
         print("Clasp push error:", res.stderr)

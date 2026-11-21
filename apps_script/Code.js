@@ -261,6 +261,8 @@ function doPost(e) {
       return respond(handleGetDevProjects(payload));
     } else if (action === 'getDevTasks') {
       return respond(handleGetDevTasks(payload));
+    } else if (action === 'getDevPipelineData') {
+      return respond(handleGetDevPipelineData(payload));
     } else if (action === 'createDevProject') {
       var lock = LockService.getScriptLock();
       lock.waitLock(20000);
@@ -2829,12 +2831,17 @@ function handleReverseTask(payload) {
   
   var targetNorm = normalizeStageName(targetStage);
   var reversed = false;
+  var targetPNo = String(postNo || '').trim().toLowerCase();
   
   for (var r = 1; r < data.length; r++) {
-    if (data[r][postNoCol] == postNo) {
+    var rPNo = String(data[r][postNoCol] || '').trim().toLowerCase();
+    var matchPNo = (rPNo === targetPNo) || 
+                   (rPNo && targetPNo && (rPNo.indexOf(targetPNo) !== -1 || targetPNo.indexOf(rPNo) !== -1));
+
+    if (matchPNo) {
       var rStage = normalizeStageName(data[r][stageCol]);
       
-      // Revert previous stage task to In Progress
+      // Revert previous stage task to Ready
       if (rStage === targetNorm) {
         taskSheet.getRange(r + 1, statusCol + 1).setValue('Ready');
         if (completedAtCol !== -1) {
@@ -2846,16 +2853,31 @@ function handleReverseTask(payload) {
           taskSheet.getRange(r + 1, notesCol + 1).setValue(newNote);
         }
         reversed = true;
+        try {
+          _syncTaskToSupabase(taskSheet, r + 1, headers);
+        } catch(se) {
+          Logger.log('Supabase sync error on reverse: ' + se);
+        }
       }
       
       // Reset current stage task back to Waiting
       if (rStage === currentNorm) {
         taskSheet.getRange(r + 1, statusCol + 1).setValue('Waiting');
+        try {
+          _syncTaskToSupabase(taskSheet, r + 1, headers);
+        } catch(se) {
+          Logger.log('Supabase sync error on reverse current: ' + se);
+        }
       }
 
-      // If reverting to Proofreading, also pause Text Crosscheck if it was Ready until Proofreading is re-approved
-      if (targetNorm === 'proofreading' && (rStage === 'textcrosscheck' || rStage === 'crosscheck') && data[r][statusCol] !== 'Done') {
-        taskSheet.getRange(r + 1, statusCol + 1).setValue('Waiting');
+      // If reverting to Proofreading, also pause Text Crosscheck and Media Final Crosscheck if they were Ready until Proofreading is re-approved
+      if (targetNorm === 'proofreading') {
+        if ((rStage === 'textcrosscheck' || rStage === 'crosscheck' || rStage === 'mediafinalcrosscheck' || rStage === 'mediafinalcrosschecking') && data[r][statusCol] !== 'Done') {
+          taskSheet.getRange(r + 1, statusCol + 1).setValue('Waiting');
+          try {
+            _syncTaskToSupabase(taskSheet, r + 1, headers);
+          } catch(se) {}
+        }
       }
     }
   }
@@ -3364,6 +3386,46 @@ function handleGetDevTasks(payload) {
   var username = payload && payload.username ? payload.username.toString().trim().toLowerCase() : '';
   var projectId = payload && payload.projectId ? payload.projectId.toString().trim() : '';
 
+  // Build name <-> email alias map from both Dev_Users and Users sheets
+  var userAliases = username ? [username] : [];
+  var nameToEmail = {};
+  var emailToName = {};
+
+  function registerUserAlias(e, n) {
+    var email = (e || '').toString().trim().toLowerCase();
+    var name = (n || '').toString().trim().toLowerCase();
+    if (email) {
+      if (name) {
+        emailToName[email] = name;
+        nameToEmail[name] = email;
+      }
+    }
+  }
+
+  var devUsersSheet = ss.getSheetByName(DEV_USERS_SHEET);
+  if (devUsersSheet && devUsersSheet.getLastRow() >= 2) {
+    var devUData = devUsersSheet.getDataRange().getValues();
+    for (var du = 1; du < devUData.length; du++) {
+      registerUserAlias(devUData[du][0], devUData[du][1]);
+    }
+  }
+  var smUsersSheet = ss.getSheetByName(USERS_SHEET);
+  if (smUsersSheet && smUsersSheet.getLastRow() >= 2) {
+    var smUData = smUsersSheet.getDataRange().getValues();
+    for (var su = 1; su < smUData.length; su++) {
+      registerUserAlias(smUData[su][0], smUData[su][1]);
+    }
+  }
+
+  if (username) {
+    if (emailToName[username] && userAliases.indexOf(emailToName[username]) === -1) {
+      userAliases.push(emailToName[username]);
+    }
+    if (nameToEmail[username] && userAliases.indexOf(nameToEmail[username]) === -1) {
+      userAliases.push(nameToEmail[username]);
+    }
+  }
+
   // Get project map for enriching task details
   var pSheet = ss.getSheetByName(DEV_PROJECTS_SHEET);
   var pData = pSheet.getDataRange().getValues();
@@ -3452,15 +3514,47 @@ function handleGetDevTasks(payload) {
 
     if (projectId && t.ProjectID !== projectId) continue;
 
-    var assigneeLower = (t.Assignee || '').toLowerCase();
-    var emailLower = (t.AssigneeEmail || '').toLowerCase();
+    var assigneeLower = (t.Assignee || '').toString().trim().toLowerCase();
+    var emailLower = (t.AssigneeEmail || '').toString().trim().toLowerCase();
 
-    if (role === 'Admin' || assigneeLower === username || emailLower === username) {
+    // If AssigneeEmail is empty, try to resolve from nameToEmail
+    if (!emailLower && assigneeLower && nameToEmail[assigneeLower]) {
+      emailLower = nameToEmail[assigneeLower];
+      t.AssigneeEmail = emailLower;
+    }
+    // If Assignee is an email and AssigneeEmail is empty
+    if (!t.AssigneeEmail && assigneeLower.indexOf('@') !== -1) {
+      t.AssigneeEmail = t.Assignee;
+      emailLower = assigneeLower;
+    }
+
+    var isAssignedToUser = false;
+    if (role === 'Admin') {
+      isAssignedToUser = true;
+    } else if (username) {
+      if (assigneeLower === username || emailLower === username) {
+        isAssignedToUser = true;
+      } else if (userAliases.indexOf(assigneeLower) !== -1 || userAliases.indexOf(emailLower) !== -1) {
+        isAssignedToUser = true;
+      }
+    }
+
+    if (isAssignedToUser) {
       tasks.push(t);
     }
   }
 
   return { success: true, tasks: tasks.reverse() };
+}
+
+function handleGetDevPipelineData(payload) {
+  var projRes = handleGetDevProjects(payload);
+  var taskRes = handleGetDevTasks(payload);
+  return {
+    success: true,
+    projects: (projRes && projRes.projects) || [],
+    tasks: (taskRes && taskRes.tasks) || []
+  };
 }
 
 function handleCreateDevProject(payload) {
@@ -4772,6 +4866,28 @@ function onEdit(e) {
       }];
       
       _pushBatchesToSupabase('tasks', taskPayload);
+    } else if (sheetName === USERS_SHEET || sheetName === DEV_USERS_SHEET) {
+      var rowData = sheet.getRange(row, 1, 1, sheet.getLastColumn()).getValues()[0];
+      var userEmail = String(rowData[0] || '').trim();
+      var userName = String(rowData[1] || '').trim();
+      if (userEmail && userName && SUPABASE_SYNC_CONFIG && SUPABASE_SYNC_CONFIG.url) {
+        var supaPatch = {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            "apikey": SUPABASE_SYNC_CONFIG.secretKey,
+            "Authorization": "Bearer " + SUPABASE_SYNC_CONFIG.secretKey,
+            "Prefer": "return=minimal",
+            "User-Agent": "Google-Apps-Script"
+          },
+          payload: JSON.stringify({
+            assignee_name: userName,
+            updated_at: new Date().toISOString()
+          }),
+          muteHttpExceptions: true
+        };
+        UrlFetchApp.fetch(SUPABASE_SYNC_CONFIG.url + "/rest/v1/tasks?assignee=ilike." + encodeURIComponent(userEmail), supaPatch);
+      }
     }
   } catch(err) {
     Logger.log("Auto-sync error: " + err);

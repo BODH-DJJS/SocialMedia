@@ -350,6 +350,38 @@ class EventProvider with ChangeNotifier {
     String reason = '',
   }) async {
     invalidateCache();
+
+    final targetNorm = targetStage.toLowerCase().replaceAll(' ', '');
+    final currentNorm = currentStage.toLowerCase().replaceAll(' ', '');
+
+    // 1. Optimistically update in-memory tasks & Supabase directly
+    for (final e in _events) {
+      final ePostNo = e.postNo.trim().toLowerCase();
+      final pNo = postNo.trim().toLowerCase();
+      final matchPost = (ePostNo == pNo || ePostNo.contains(pNo) || pNo.contains(ePostNo));
+      if (matchPost) {
+        final s = e.stage.toLowerCase().replaceAll(' ', '');
+        if (s == targetNorm) {
+          e.status = 'Ready';
+          _apiService.updateTaskInSupabase(e.taskId, {'Status': 'Ready'});
+        } else if (s == currentNorm) {
+          e.status = 'Waiting';
+          _apiService.updateTaskInSupabase(e.taskId, {'Status': 'Waiting'});
+        } else if (targetNorm == 'proofreading' && (s == 'textcrosscheck' || s == 'crosscheck' || s == 'mediafinalcrosscheck' || s == 'mediafinalcrosschecking') && e.status != 'Done') {
+          e.status = 'Waiting';
+          _apiService.updateTaskInSupabase(e.taskId, {'Status': 'Waiting'});
+        }
+      }
+    }
+    notifyListeners();
+
+    // 2. Update local cache immediately
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_cacheKeyEvents, json.encode(_events.map((e) => e.toJson()).toList()));
+    } catch (_) {}
+
+    // 3. Forward to Google Apps Script backend to update Google Sheets
     try {
       final response = await _apiService.postData({
         'action': 'reverseTask',
@@ -362,10 +394,10 @@ class EventProvider with ChangeNotifier {
         return true;
       }
     } catch (e) {
-      debugPrint('Error reversing task: $e');
+      debugPrint('Error reversing task in GAS: $e');
       return true;
     }
-    return false;
+    return true;
   }
 
   Future<bool> reassignTask(Event event, String newEmail, {String? newName, String? role}) async {
@@ -480,6 +512,7 @@ class EventProvider with ChangeNotifier {
       if (response['success'] == true) {
         final List<dynamic> usersData = response['users'];
         _users = usersData.map((e) => e as Map<String, dynamic>).toList();
+        _updateEventAssigneeNames();
         notifyListeners();
       }
       await fetchDevUsers();
@@ -494,10 +527,43 @@ class EventProvider with ChangeNotifier {
       if (response['success'] == true && response['users'] is List) {
         final List<dynamic> devUsersData = response['users'];
         _devUsers = devUsersData.map((e) => e as Map<String, dynamic>).toList();
+        _updateEventAssigneeNames();
         notifyListeners();
       }
     } catch (e) {
       debugPrint('Error fetching dev users: $e');
+    }
+  }
+
+  void _updateEventAssigneeNames() {
+    if ((_users.isEmpty && _devUsers.isEmpty) || _events.isEmpty) return;
+    final map = <String, String>{};
+    for (final u in _users) {
+      final email = (u['email'] ?? u['Email'] ?? u['username'])?.toString().trim().toLowerCase();
+      final name = (u['name'] ?? u['Name'])?.toString().trim();
+      if (email != null && name != null && name.isNotEmpty) {
+        map[email] = name;
+      }
+    }
+    for (final devU in _devUsers) {
+      final email = (devU['email'] ?? devU['Email'] ?? devU['username'])?.toString().trim().toLowerCase();
+      final name = (devU['name'] ?? devU['Name'])?.toString().trim();
+      if (email != null && name != null && name.isNotEmpty) {
+        map[email] = name;
+      }
+    }
+    bool changed = false;
+    for (final event in _events) {
+      final email = event.assignee.toLowerCase().trim();
+      if (map.containsKey(email) && map[email]!.isNotEmpty && event.assigneeName != map[email]) {
+        event.assigneeName = map[email]!;
+        changed = true;
+      }
+    }
+    if (changed) {
+      SharedPreferences.getInstance().then((prefs) {
+        prefs.setString(_cacheKeyEvents, json.encode(_events.map((e) => e.toJson()).toList()));
+      });
     }
   }
 

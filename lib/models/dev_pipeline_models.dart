@@ -82,6 +82,36 @@ class DevProject {
       thumbnailFolderLink: json['ThumbnailFolderLink']?.toString() ?? '',
     );
   }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'ProjectID': projectId,
+      'Stream': stream,
+      'CampaignName': campaignName,
+      'SessionName': sessionName,
+      'Duration': duration,
+      'FestivalsIncluded': festivalsIncluded,
+      'StartDate': startDate,
+      'CompletionDate': completionDate,
+      'IECContent': iecContent ? 'Yes' : 'No',
+      'IECDesigning': iecDesigning ? 'Yes' : 'No',
+      'IECProofread': iecProofread ? 'Yes' : 'No',
+      'IECFinalCheck': iecFinalCheck ? 'Yes' : 'No',
+      'FolderLink': folderLink,
+      'DocLink': docLink,
+      'Status': status,
+      'CreatedAt': createdAt,
+      'PptFolderLink': pptFolderLink,
+      'IecFolderLink': iecFolderLink,
+      'IecWritingDocLink': iecWritingDocLink,
+      'IecDesigningFolderLink': iecDesigningFolderLink,
+      'IecProofreadDocLink': iecProofreadDocLink,
+      'IecFinalCheckDocLink': iecFinalCheckDocLink,
+      'ResearchedDataLink': researchedDataLink,
+      'ResearchedDocLink': researchedDocLink,
+      'ThumbnailFolderLink': thumbnailFolderLink,
+    };
+  }
 }
 
 class DevTask {
@@ -187,5 +217,41 @@ class DevTask {
       researchedDocLink: json['ResearchedDocLink']?.toString() ?? '',
       thumbnailFolderLink: json['ThumbnailFolderLink']?.toString() ?? '',
     );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'TaskID': taskId,
+      'ProjectID': projectId,
+      'Stage': stage,
+      'Assignee': assignee,
+      'AssigneeEmail': assigneeEmail,
+      'Status': status,
+      'DueDate': dueDate,
+      'AllottedDate': allottedDate,
+      'CompletedAt': completedAt,
+      'DocLink': docLink,
+      'Notes': notes,
+      'rowIndex': rowIndex,
+      'CampaignName': campaignName,
+      'SessionName': sessionName,
+      'Stream': stream,
+      'FolderLink': folderLink,
+      'PptFolderLink': pptFolderLink,
+      'PrevDocLink': prevDocLink,
+      'WritingDocLink': writingDocLink,
+      'EditingDocLink': editingDocLink,
+      'ProofreadingDocLink': proofreadingDocLink,
+      'CrosscheckDocLink': crosscheckDocLink,
+      'IecFolderLink': iecFolderLink,
+      'IecWritingDocLink': iecWritingDocLink,
+      'IecDesigningFolderLink': iecDesigningFolderLink,
+      'IecProofreadDocLink': iecProofreadDocLink,
+      'IecFinalCheckDocLink': iecFinalCheckDocLink,
+      'FestivalsIncluded': festivalsIncluded,
+      'ResearchedDataLink': researchedDataLink,
+      'ResearchedDocLink': researchedDocLink,
+      'ThumbnailFolderLink': thumbnailFolderLink,
+    };
   }
 }

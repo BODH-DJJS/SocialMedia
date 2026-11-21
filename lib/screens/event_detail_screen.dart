@@ -643,13 +643,13 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     final s = event.stage.toLowerCase().replaceAll(' ', '');
     if (s == 'thumbnailcrosschecking' || s == 'thumbnailcrosscheck') return ['Thumbnail Processing'];
     if (s == 'thumbnailprocessing') return ['Thumbnail Selection'];
-    if (s == 'mediacrosscheck') return ['Photo Editing', 'Video Editing'];
-    if (s == 'mediafinalcrosscheck' || s == 'mediafinalcrosschecking') return ['Proofreading', 'Media Cross Check'];
+    if (s == 'mediacrosscheck') return ['Proofreading', 'Photo Editing', 'Video Editing'];
+    if (s == 'mediafinalcrosscheck' || s == 'mediafinalcrosschecking') return ['Proofreading', 'Media Cross Check', 'Photo Editing', 'Video Editing'];
     if (s == 'photosclean') return ['Ready to Post'];
     if (s == 'editing') return ['Writing'];
     if (s == 'proofreading') return ['Editing', 'Media Cross Check', 'Thumbnail Cross checking'];
     if (s == 'crosscheck' || s == 'textcrosscheck') return ['Proofreading'];
-    if (s == 'readytopost') return ['Text Crosscheck', 'Media Final Cross check'];
+    if (s == 'readytopost') return ['Text Crosscheck', 'Media Final Cross check', 'Proofreading'];
     return [];
   }
 

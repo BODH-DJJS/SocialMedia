@@ -335,6 +335,12 @@ class _DashboardScreenState extends State<DashboardScreen>
                   ]);
                 },
               ),
+          if (isAdmin)
+            IconButton(
+              icon: const Icon(Icons.assignment_outlined),
+              tooltip: 'Daily WhatsApp Task Summary',
+              onPressed: () => _showPendingTasksSummaryDialog(context, eventProvider),
+            ),
           IconButton(
             icon: const Icon(Icons.logout_rounded),
             tooltip: 'Logout',
@@ -470,6 +476,61 @@ class _DashboardScreenState extends State<DashboardScreen>
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: 16),
+
+          // Daily WhatsApp Pending Tasks Summary Banner Card
+          Card(
+            color: const Color(0xFFE8F5E9),
+            elevation: 1,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: BorderSide(color: Colors.green.shade300, width: 1.2),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF2E7D32),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.assignment_outlined, color: Colors.white, size: 24),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Daily WhatsApp Pending Tasks Summary',
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF1B5E20)),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'View section-wise pending tasks by user & copy instant formatted report for WhatsApp groups.',
+                          style: TextStyle(fontSize: 12, color: Colors.green.shade900),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  ElevatedButton.icon(
+                    onPressed: () => _showPendingTasksSummaryDialog(context, provider),
+                    icon: const Icon(Icons.content_copy_rounded, size: 16),
+                    label: const Text('Open & Copy'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF2E7D32),
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
           const SizedBox(height: 20),
 
@@ -621,6 +682,344 @@ class _DashboardScreenState extends State<DashboardScreen>
               ),
             ],
           ),
+    );
+  }
+
+  Map<String, Map<String, List<Event>>> _buildPendingSectionMap(List<Event> events) {
+    final activePending = events.where((e) {
+      final s = e.status.trim().toLowerCase();
+      return s != 'done' && s != 'waiting';
+    }).toList();
+
+    final sections = <String, Map<String, List<Event>>>{
+      '✍️ Writing': {},
+      '✂️ Editing': {},
+      '🔍 Proofreading': {},
+      '🔎 Text Crosscheck': {},
+      '🖼️ Thumbnail Stages': {},
+      '🎬 Media & Video Stages': {},
+      '🚀 Ready to Post': {},
+      '📌 Other Pending Stages': {},
+    };
+
+    for (final e in activePending) {
+      final stage = e.stage.trim().toLowerCase();
+      String sectionKey;
+      if (stage == 'writing') {
+        sectionKey = '✍️ Writing';
+      } else if (stage == 'editing') {
+        sectionKey = '✂️ Editing';
+      } else if (stage == 'proofreading') {
+        sectionKey = '🔍 Proofreading';
+      } else if (stage.contains('crosscheck') || stage.contains('cross check')) {
+        if (stage.contains('media')) {
+          sectionKey = '🎬 Media & Video Stages';
+        } else if (stage.contains('thumb')) {
+          sectionKey = '🖼️ Thumbnail Stages';
+        } else {
+          sectionKey = '🔎 Text Crosscheck';
+        }
+      } else if (stage.contains('thumb')) {
+        sectionKey = '🖼️ Thumbnail Stages';
+      } else if (stage.contains('photo') || stage.contains('video') || stage.contains('clean') || stage.contains('media')) {
+        sectionKey = '🎬 Media & Video Stages';
+      } else if (stage.contains('ready')) {
+        sectionKey = '🚀 Ready to Post';
+      } else {
+        sectionKey = '📌 Other Pending Stages';
+      }
+
+      final userName = e.assigneeName.isNotEmpty ? e.assigneeName : (e.assignee.isNotEmpty ? e.assignee : 'Unassigned');
+      sections[sectionKey]!.putIfAbsent(userName, () => []).add(e);
+    }
+
+    sections.removeWhere((key, val) => val.isEmpty);
+    return sections;
+  }
+
+  String _monthName(int month) {
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return (month >= 1 && month <= 12) ? months[month - 1] : '';
+  }
+
+  String _generateWhatsAppReport(Map<String, Map<String, List<Event>>> sectionMap, int totalPending) {
+    final now = DateTime.now();
+    final dateStr = '${now.day} ${_monthName(now.month)} ${now.year}';
+    final buffer = StringBuffer();
+    buffer.writeln('📊 *BODH Social Media - Daily Pending Tasks Report*');
+    buffer.writeln('📅 _Date: ${dateStr}_\n');
+
+    sectionMap.forEach((sectionTitle, userMap) {
+      if (userMap.isEmpty) return;
+      int sectionTotal = userMap.values.fold(0, (sum, list) => sum + list.length);
+      buffer.writeln('*$sectionTitle* (Total: $sectionTotal)');
+      userMap.forEach((userName, events) {
+        final postNos = events.map((e) => '#${e.postNo}').toSet().join(', ');
+        buffer.writeln('• *$userName* (${events.length} task${events.length > 1 ? 's' : ''}): $postNos');
+      });
+      buffer.writeln('');
+    });
+
+    buffer.writeln('────────────────────');
+    buffer.writeln('📌 *Total Active Tasks Pending:* $totalPending');
+    buffer.writeln('🙏 _Please update your respective tasks at the earliest._');
+    return buffer.toString();
+  }
+
+  String _generateSectionWhatsApp(String sectionTitle, Map<String, List<Event>> userMap) {
+    final now = DateTime.now();
+    final dateStr = '${now.day} ${_monthName(now.month)} ${now.year}';
+    final buffer = StringBuffer();
+    int sectionTotal = userMap.values.fold(0, (sum, list) => sum + list.length);
+    buffer.writeln('*$sectionTitle* (Total: $sectionTotal) - $dateStr\n');
+    userMap.forEach((userName, events) {
+      final postNos = events.map((e) => '#${e.postNo}').toSet().join(', ');
+      buffer.writeln('• *$userName* (${events.length} task${events.length > 1 ? 's' : ''}): $postNos');
+    });
+    buffer.writeln('\n🙏 _Please complete your respective tasks at the earliest._');
+    return buffer.toString();
+  }
+
+  void _showPendingTasksSummaryDialog(BuildContext context, EventProvider provider) {
+    final sectionMap = _buildPendingSectionMap(provider.events);
+    int totalPending = 0;
+    sectionMap.forEach((_, userMap) {
+      userMap.forEach((_, list) => totalPending += list.length);
+    });
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 10),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.green.shade100,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(Icons.assignment_outlined, color: Color(0xFF2E7D32)),
+            ),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Text(
+                'Daily Pending Tasks Summary',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: totalPending > 0 ? Colors.orange.shade100 : Colors.green.shade100,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                '$totalPending Pending',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 12,
+                  color: totalPending > 0 ? Colors.orange.shade900 : Colors.green.shade900,
+                ),
+              ),
+            ),
+          ],
+        ),
+        content: SizedBox(
+          width: 620,
+          child: sectionMap.isEmpty
+              ? const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 40),
+                  child: Center(
+                    child: Text(
+                      '🎉 All active tasks are completed!\nNo pending tasks at the moment.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 16, color: Colors.grey, height: 1.5),
+                    ),
+                  ),
+                )
+              : SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Copy entire report or individual sections directly to WhatsApp team groups.',
+                        style: TextStyle(fontSize: 12, color: Colors.grey),
+                      ),
+                      const SizedBox(height: 14),
+                      ...sectionMap.entries.map((entry) {
+                        final sectionTitle = entry.key;
+                        final userMap = entry.value;
+                        final secCount = userMap.values.fold(0, (sum, list) => sum + list.length);
+
+                        return Card(
+                          margin: const EdgeInsets.only(bottom: 14),
+                          elevation: 0.5,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            side: BorderSide(color: Colors.grey.shade300),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.all(12),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: Row(
+                                        children: [
+                                          Text(
+                                            sectionTitle,
+                                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                            decoration: BoxDecoration(
+                                              color: Colors.blue.shade50,
+                                              borderRadius: BorderRadius.circular(10),
+                                              border: Border.all(color: Colors.blue.shade200),
+                                            ),
+                                            child: Text(
+                                              '$secCount',
+                                              style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.blue.shade900),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    TextButton.icon(
+                                      onPressed: () {
+                                        final secText = _generateSectionWhatsApp(sectionTitle, userMap);
+                                        Clipboard.setData(ClipboardData(text: secText));
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          SnackBar(
+                                            content: Text('📋 Copied $sectionTitle to clipboard!'),
+                                            duration: const Duration(seconds: 2),
+                                            backgroundColor: const Color(0xFF2E7D32),
+                                          ),
+                                        );
+                                      },
+                                      icon: const Icon(Icons.copy, size: 14),
+                                      label: const Text('Copy Section', style: TextStyle(fontSize: 11)),
+                                      style: TextButton.styleFrom(
+                                        foregroundColor: const Color(0xFF2E7D32),
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const Divider(height: 16),
+                                ...userMap.entries.map((uEntry) {
+                                  final uName = uEntry.key;
+                                  final uEvents = uEntry.value;
+                                  final postNos = uEvents.map((e) => '#${e.postNo}').toSet().toList();
+
+                                  return Padding(
+                                    padding: const EdgeInsets.symmetric(vertical: 4),
+                                    child: Row(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        CircleAvatar(
+                                          radius: 12,
+                                          backgroundColor: Colors.indigo.shade50,
+                                          child: Text(
+                                            uName.isNotEmpty ? uName[0].toUpperCase() : '?',
+                                            style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.indigo.shade700),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Row(
+                                                children: [
+                                                  Text(
+                                                    uName,
+                                                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                                                  ),
+                                                  const SizedBox(width: 6),
+                                                  Container(
+                                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                                                    decoration: BoxDecoration(
+                                                      color: Colors.amber.shade100,
+                                                      borderRadius: BorderRadius.circular(8),
+                                                    ),
+                                                    child: Text(
+                                                      '${uEvents.length} pending',
+                                                      style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.amber.shade900),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                              const SizedBox(height: 4),
+                                              Wrap(
+                                                spacing: 4,
+                                                runSpacing: 4,
+                                                children: postNos.map((p) => Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                  decoration: BoxDecoration(
+                                                    color: Colors.grey.shade100,
+                                                    borderRadius: BorderRadius.circular(4),
+                                                    border: Border.all(color: Colors.grey.shade300),
+                                                  ),
+                                                  child: Text(
+                                                    p,
+                                                    style: TextStyle(fontSize: 11, color: Colors.grey.shade800, fontWeight: FontWeight.w500),
+                                                  ),
+                                                )).toList(),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                }),
+                              ],
+                            ),
+                          ),
+                        );
+                      }),
+                    ],
+                  ),
+                ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Close'),
+          ),
+          if (sectionMap.isNotEmpty)
+            ElevatedButton.icon(
+              onPressed: () {
+                final fullReport = _generateWhatsAppReport(sectionMap, totalPending);
+                Clipboard.setData(ClipboardData(text: fullReport));
+                Navigator.pop(ctx);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('📋 Entire report copied to clipboard! Ready to paste into WhatsApp.'),
+                    duration: Duration(seconds: 3),
+                    backgroundColor: Color(0xFF2E7D32),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.share, size: 16),
+              label: const Text('📋 Copy Full Report for WhatsApp'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF2E7D32),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+            ),
+        ],
+      ),
     );
   }
 

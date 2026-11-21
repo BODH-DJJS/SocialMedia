@@ -1,9 +1,13 @@
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../services/api_service.dart';
 import '../models/dev_pipeline_models.dart';
 
 class DevPipelineProvider with ChangeNotifier {
   final ApiService _apiService = ApiService();
+  static const String _cacheKeyProjects = 'cached_dev_projects_json';
+  static const String _cacheKeyTasks = 'cached_dev_tasks_json';
 
   List<DevProject> _projects = [];
   List<DevTask> _tasks = [];
@@ -24,33 +28,74 @@ class DevPipelineProvider with ChangeNotifier {
     }
   }
 
-  Future<void> fetchDevData({String? role, String? username}) async {
-    _isLoading = true;
+  Future<void> fetchDevData({String? role, String? username, bool force = false}) async {
+    // 1. Instant Cache Load (0ms)
+    if (_projects.isEmpty && _tasks.isEmpty) {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final cachedProjectsStr = prefs.getString(_cacheKeyProjects);
+        final cachedTasksStr = prefs.getString(_cacheKeyTasks);
+        if (cachedProjectsStr != null && cachedTasksStr != null) {
+          final List<dynamic> pList = json.decode(cachedProjectsStr);
+          final List<dynamic> tList = json.decode(cachedTasksStr);
+          _projects = pList.map((p) => DevProject.fromJson(Map<String, dynamic>.from(p))).toList();
+          _tasks = tList.map((t) => DevTask.fromJson(Map<String, dynamic>.from(t))).toList();
+          notifyListeners();
+        }
+      } catch (cacheErr) {
+        debugPrint('Dev cache read error: $cacheErr');
+      }
+    }
+
+    if (_projects.isEmpty && _tasks.isEmpty) {
+      _isLoading = true;
+      notifyListeners();
+    }
     _error = null;
-    notifyListeners();
 
     try {
-      final projResp = await _apiService.postData({
-        'action': 'getDevProjects',
-        'stream': '',
-      });
+      // 2. Fast combined fetch in single round-trip
+      Map<String, dynamic> combinedResp = {};
+      try {
+        combinedResp = await _apiService.postData({
+          'action': 'getDevPipelineData',
+          'role': role ?? 'Admin',
+          'username': username ?? '',
+        });
+      } catch (_) {}
 
-      if (projResp['success'] == true && projResp['projects'] is List) {
-        _projects = (projResp['projects'] as List)
+      if (combinedResp['success'] == true && combinedResp['projects'] is List && combinedResp['tasks'] is List) {
+        _projects = (combinedResp['projects'] as List)
             .map((p) => DevProject.fromJson(Map<String, dynamic>.from(p)))
             .toList();
-      }
-
-      final taskResp = await _apiService.postData({
-        'action': 'getDevTasks',
-        'role': role ?? 'Admin',
-        'username': username ?? '',
-      });
-
-      if (taskResp['success'] == true && taskResp['tasks'] is List) {
-        _tasks = (taskResp['tasks'] as List)
+        _tasks = (combinedResp['tasks'] as List)
             .map((t) => DevTask.fromJson(Map<String, dynamic>.from(t)))
             .toList();
+      } else {
+        // Fallback: parallel calls
+        final results = await Future.wait([
+          _apiService.postData({'action': 'getDevProjects', 'stream': ''}),
+          _apiService.postData({'action': 'getDevTasks', 'role': role ?? 'Admin', 'username': username ?? ''}),
+        ]);
+        if (results[0]['success'] == true && results[0]['projects'] is List) {
+          _projects = (results[0]['projects'] as List)
+              .map((p) => DevProject.fromJson(Map<String, dynamic>.from(p)))
+              .toList();
+        }
+        if (results[1]['success'] == true && results[1]['tasks'] is List) {
+          _tasks = (results[1]['tasks'] as List)
+              .map((t) => DevTask.fromJson(Map<String, dynamic>.from(t)))
+              .toList();
+        }
+      }
+
+      // 3. Save fresh data to local cache
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString(_cacheKeyProjects, json.encode(_projects.map((p) => p.toJson()).toList()));
+        await prefs.setString(_cacheKeyTasks, json.encode(_tasks.map((t) => t.toJson()).toList()));
+      } catch (cacheWriteErr) {
+        debugPrint('Dev cache write error: $cacheWriteErr');
       }
     } catch (e) {
       _error = e.toString();
