@@ -1024,8 +1024,8 @@ function _syncTaskToSupabase(sheet, rowIndex, headers) {
       completed_at: String(rowMap['CompletedAt'] || ''),
       doc_link: String(rowMap['DocLink'] || ''),
       canva_link: String(rowMap['CanvaLink'] || ''),
-      allotted_date: String(rowMap['AllottedDate'] || ''),
-      due_date: String(rowMap['DueDate'] || ''),
+      allotted_date: formatDate(rowMap['AllottedDate']),
+      due_date: formatDate(rowMap['DueDate']),
       notes: String(rowMap['Notes'] || ''),
       row_index: rowIndex,
       updated_at: new Date().toISOString()
