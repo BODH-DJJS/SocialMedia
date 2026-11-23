@@ -1011,13 +1011,15 @@ class EventProvider with ChangeNotifier {
         stage: stage,
         isCombined: isCombined,
       );
-      if (supaRes != null && supaRes['tasks'] != null && (supaRes['tasks'] as List).isNotEmpty) {
-        final rawTasks = supaRes['tasks'] as List<dynamic>;
+      if (supaRes != null && supaRes['success'] == true) {
+        final rawTasks = (supaRes['tasks'] as List<dynamic>?) ?? [];
         final tasks = rawTasks.map((j) => j is Event ? j : Event.fromJson(j as Map<String, dynamic>)).toList();
 
         // Update in-memory tasks so other UI components can see them
-        _events.removeWhere((t) => t.postNo == postNo || (taskId != null && t.taskId == taskId));
-        _events.addAll(tasks);
+        if (tasks.isNotEmpty) {
+          _events.removeWhere((t) => t.postNo == postNo || (taskId != null && t.taskId == taskId));
+          _events.addAll(tasks);
+        }
 
         return {
           'postData': supaRes['postData'],

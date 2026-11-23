@@ -49,6 +49,7 @@ class BodhSocialMediaApp extends StatelessWidget {
             final tabParam = state.uri.queryParameters['tab'];
             final pipelineParam = state.uri.queryParameters['pipeline'];
             return DashboardScreen(
+              key: const ValueKey('DashboardScreen'),
               initialTab: tabParam,
               initialPipeline: pipelineParam,
             );

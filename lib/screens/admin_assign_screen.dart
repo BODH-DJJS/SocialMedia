@@ -115,8 +115,16 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
       if (isDataMissing && postNo.isNotEmpty) {
         // STEP 1: Instant check from local browser cache (localStorage)
         final prefs = await SharedPreferences.getInstance();
-        final cachedPostsJson = prefs.getString('cached_raw_posts');
-        final cachedEventsJson = prefs.getString('cached_events');
+        String? cachedPostsJson = prefs.getString('cache_posts') ?? prefs.getString('cached_raw_posts');
+        String? cachedEventsJson = prefs.getString('cache_events') ?? prefs.getString('cached_events');
+        if (cachedEventsJson == null || cachedEventsJson.isEmpty) {
+          for (final key in prefs.getKeys()) {
+            if (key.startsWith('cache_events')) {
+              cachedEventsJson = prefs.getString(key);
+              if (cachedEventsJson != null && cachedEventsJson.isNotEmpty) break;
+            }
+          }
+        }
         bool foundInLocalCache = false;
 
         if (cachedPostsJson != null && cachedPostsJson.isNotEmpty) {
@@ -127,7 +135,7 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
 
             if (isCombined) {
               final combinedPosts = allCachedPosts
-                  .where((p) => p['GroupID']?.toString() == postNo)
+                  .where((p) => (p['GroupID'] ?? p['group_id'])?.toString() == postNo)
                   .cast<Map<String, dynamic>>()
                   .toList()
                 ..sort(comparePostNumbers);
@@ -146,7 +154,7 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
               }
             } else {
               final found = allCachedPosts.firstWhere(
-                (p) => p['PostNo']?.toString() == postNo,
+                (p) => (p['PostNo'] ?? p['post_no'])?.toString() == postNo,
                 orElse: () => null,
               );
               if (found != null) {
@@ -381,11 +389,11 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
 
       for (int i = 0; i < combinedPosts.length; i++) {
         final p = combinedPosts[i] as Map<String, dynamic>;
-        final pDate = p['Date']?.toString() ?? '';
-        final pVenue = p['Venue']?.toString() ?? '';
-        final pMonth = p['FolderLink']?.toString() ?? '';
-        final pTheme = p['Theme']?.toString() ?? '';
-        final pNo = p['PostNo']?.toString() ?? '';
+        final pDate = p['Date']?.toString() ?? p['date']?.toString() ?? '';
+        final pVenue = p['Venue']?.toString() ?? p['venue']?.toString() ?? '';
+        final pMonth = p['FolderLink']?.toString() ?? p['folder_link']?.toString() ?? '';
+        final pTheme = p['Theme']?.toString() ?? p['theme']?.toString() ?? '';
+        final pNo = p['PostNo']?.toString() ?? p['post_no']?.toString() ?? '';
 
         if (pMonth.isNotEmpty) {
           final links = await provider.fetchMediaFolders(pMonth, pDate, 'AdminAssign', venue: pVenue, postNo: pNo);
@@ -959,17 +967,17 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
                             ...(List<dynamic>.from(_postData['combinedPosts'] as List)..sort(comparePostNumbers)).asMap().entries.map((entry) {
                               final idx = entry.key;
                               final p = entry.value as Map<String, dynamic>;
-                              final pNo = p['PostNo']?.toString() ?? '';
-                              final pTheme = p['Theme']?.toString() ?? '';
-                              final pProgram = p['Program']?.toString() ?? '';
-                              final pDate = p['Date']?.toString() ?? '';
-                              final pVenue = p['Venue']?.toString() ?? '';
-                              final pBranch = p['Branch']?.toString() ?? '';
-                              final pState = p['State']?.toString() ?? '';
-                              final pMale = p['Male'] ?? 0;
-                              final pFemale = p['Female'] ?? 0;
-                              final pChildren = p['Children'] ?? 0;
-                              final pTotal = p['TotalBeneficiary'] ??
+                              final pNo = p['PostNo']?.toString() ?? p['post_no']?.toString() ?? '';
+                              final pTheme = p['Theme']?.toString() ?? p['theme']?.toString() ?? '';
+                              final pProgram = p['Program']?.toString() ?? p['program']?.toString() ?? '';
+                              final pDate = p['Date']?.toString() ?? p['date']?.toString() ?? '';
+                              final pVenue = p['Venue']?.toString() ?? p['venue']?.toString() ?? '';
+                              final pBranch = p['Branch']?.toString() ?? p['branch']?.toString() ?? '';
+                              final pState = p['State']?.toString() ?? p['state']?.toString() ?? '';
+                              final pMale = p['Male'] ?? p['male'] ?? 0;
+                              final pFemale = p['Female'] ?? p['female'] ?? 0;
+                              final pChildren = p['Children'] ?? p['children'] ?? 0;
+                              final pTotal = p['TotalBeneficiary'] ?? p['total_beneficiary'] ??
                                   ((pMale is num ? pMale : 0) +
                                       (pFemale is num ? pFemale : 0) +
                                       (pChildren is num ? pChildren : 0));

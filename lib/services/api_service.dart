@@ -236,9 +236,12 @@ class ApiService {
           ? '$supabaseUrl/rest/v1/tasks?task_id=eq.${Uri.encodeComponent(cleanTId)}'
           : '$supabaseUrl/rest/v1/tasks?post_no=eq.${Uri.encodeComponent(cleanPNo)}';
 
-      final postQuery = cleanPNo.isNotEmpty
-          ? '$supabaseUrl/rest/v1/posts?select=*&or=(post_no.eq.${Uri.encodeComponent(cleanPNo)},group_id.eq.${Uri.encodeComponent(cleanPNo)})'
-          : '$supabaseUrl/rest/v1/posts?select=*&limit=1';
+      final quotedPNo = '"' + cleanPNo.replaceAll('"', '') + '"';
+      final isGroupLike = cleanPNo.contains('(') || cleanPNo.toLowerCase().contains('combined') || cleanPNo.toLowerCase().contains('group');
+
+      final postQuery = isGroupLike
+          ? '$supabaseUrl/rest/v1/posts?select=*&group_id=eq.${Uri.encodeComponent(cleanPNo)}'
+          : '$supabaseUrl/rest/v1/posts?select=*&or=(post_no.eq.${Uri.encodeComponent(quotedPNo)},group_id.eq.${Uri.encodeComponent(quotedPNo)})';
 
       final responses = await Future.wait([
         http.get(
@@ -284,37 +287,146 @@ class ApiService {
         }
       }
 
-      if (rawTasks.isEmpty) return null;
+      List<dynamic> rawPosts = postResp.statusCode == 200 ? json.decode(postResp.body) : [];
 
-      final List<dynamic> rawPosts = postResp.statusCode == 200 ? json.decode(postResp.body) : [];
-      rawPosts.sort((a, b) {
-        final pA = (a is Map ? (a['post_no'] ?? a['PostNo'] ?? '') : a).toString().trim();
-        final pB = (b is Map ? (b['post_no'] ?? b['PostNo'] ?? '') : b).toString().trim();
+      // If post wasn't found by group query, retry with or=(...)
+      if (rawPosts.isEmpty && cleanPNo.isNotEmpty) {
+        final retryPostResp = await http.get(
+          Uri.parse('$supabaseUrl/rest/v1/posts?select=*&or=(post_no.eq.${Uri.encodeComponent(quotedPNo)},group_id.eq.${Uri.encodeComponent(quotedPNo)})'),
+          headers: {
+            'apikey': supabaseAnonKey,
+            'Authorization': 'Bearer $supabaseAnonKey',
+            'Accept': 'application/json',
+          },
+        );
+        if (retryPostResp.statusCode == 200) {
+          rawPosts = json.decode(retryPostResp.body);
+        }
+      }
+
+      // If single post found and it has a group_id, fetch all sibling posts so combined post is complete!
+      if (rawPosts.length == 1 && (isCombined || cleanPNo.toLowerCase().contains('combined'))) {
+        final gId = rawPosts.first['group_id']?.toString() ?? '';
+        if (gId.isNotEmpty && gId != cleanPNo) {
+          final groupPostsResp = await http.get(
+            Uri.parse('$supabaseUrl/rest/v1/posts?select=*&group_id=eq.${Uri.encodeComponent(gId)}'),
+            headers: {
+              'apikey': supabaseAnonKey,
+              'Authorization': 'Bearer $supabaseAnonKey',
+              'Accept': 'application/json',
+            },
+          );
+          if (groupPostsResp.statusCode == 200) {
+            final List<dynamic> groupList = json.decode(groupPostsResp.body);
+            if (groupList.isNotEmpty) {
+              rawPosts = groupList;
+            }
+          }
+        }
+      }
+
+      if (rawTasks.isEmpty && rawPosts.isEmpty) return null;
+
+      // Normalize all post maps to have both PascalCase and snake_case fields
+      final List<Map<String, dynamic>> normalizedPosts = rawPosts.map((e) {
+        final m = Map<String, dynamic>.from(e as Map<String, dynamic>);
+        m['PostNo'] = m['post_no']?.toString() ?? m['PostNo']?.toString() ?? '';
+        m['Program'] = m['program']?.toString() ?? m['Program']?.toString() ?? '';
+        m['Branch'] = m['branch']?.toString() ?? m['Branch']?.toString() ?? '';
+        m['State'] = m['state']?.toString() ?? m['State']?.toString() ?? '';
+        m['Venue'] = m['venue']?.toString() ?? m['Venue']?.toString() ?? '';
+        m['Theme'] = m['theme']?.toString() ?? m['Theme']?.toString() ?? '';
+        m['Date'] = m['date']?.toString() ?? m['Date']?.toString() ?? '';
+        m['Timings'] = m['timings']?.toString() ?? m['Timings']?.toString() ?? '';
+        m['Male'] = m['male'] ?? m['Male'] ?? 0;
+        m['Female'] = m['female'] ?? m['Female'] ?? 0;
+        m['Children'] = m['children'] ?? m['Children'] ?? 0;
+        m['TotalBeneficiary'] = m['total_beneficiary'] ?? m['TotalBeneficiary'] ?? 0;
+        m['Organizers'] = m['organizers']?.toString() ?? m['Organizers']?.toString() ?? '';
+        m['Partners'] = m['partners']?.toString() ?? m['Partners']?.toString() ?? '';
+        m['GuestType'] = m['guest_type']?.toString() ?? m['GuestType']?.toString() ?? '';
+        m['GuestName'] = m['guest_name']?.toString() ?? m['GuestName']?.toString() ?? '';
+        m['GuestDesignation'] = m['guest_designation']?.toString() ?? m['GuestDesignation']?.toString() ?? '';
+        m['GuestOrg'] = m['guest_org']?.toString() ?? m['GuestOrg']?.toString() ?? '';
+        m['ImportantInfo'] = m['important_info']?.toString() ?? m['ImportantInfo']?.toString() ?? '';
+        m['FolderLink'] = m['folder_link']?.toString() ?? m['FolderLink']?.toString() ?? '';
+        m['ActivityType'] = m['activity_type']?.toString() ?? m['ActivityType']?.toString() ?? '';
+        m['ActivitiesConducted'] = m['activities_conducted']?.toString() ?? m['ActivitiesConducted']?.toString() ?? '';
+        m['AnyInformation'] = m['any_information']?.toString() ?? m['AnyInformation']?.toString() ?? '';
+        m['MOP'] = m['mop']?.toString() ?? m['MOP']?.toString() ?? '';
+        m['DataUploaded'] = m['data_uploaded']?.toString() ?? m['DataUploaded']?.toString() ?? '';
+        m['InProcess'] = m['in_process']?.toString() ?? m['InProcess']?.toString() ?? '';
+        m['DesignDone'] = m['design_done']?.toString() ?? m['DesignDone']?.toString() ?? '';
+        m['GroupID'] = m['group_id']?.toString() ?? m['GroupID']?.toString() ?? '';
+        return m;
+      }).toList()..sort((a, b) {
+        final pA = (a['PostNo'] ?? '').toString().trim();
+        final pB = (b['PostNo'] ?? '').toString().trim();
         final nA = int.tryParse(pA.replaceAll(RegExp(r'[^0-9]'), ''));
         final nB = int.tryParse(pB.replaceAll(RegExp(r'[^0-9]'), ''));
         if (nA != null && nB != null && nA != nB) return nA.compareTo(nB);
         return pA.compareTo(pB);
       });
-      final postData = rawPosts.isNotEmpty ? (rawPosts.first as Map<String, dynamic>) : <String, dynamic>{};
-      final combinedPosts = rawPosts.length > 1 ? rawPosts.cast<Map<String, dynamic>>() : <Map<String, dynamic>>[];
-      final isCombinedVal = isCombined || combinedPosts.length > 1 || cleanPNo.toLowerCase().contains('combined');
+
+      final isCombinedVal = isCombined || normalizedPosts.length > 1 || cleanPNo.toLowerCase().contains('combined') || cleanPNo.contains('(');
+
+      Map<String, dynamic> postData = {};
+      if (normalizedPosts.isNotEmpty) {
+        if (isCombinedVal && normalizedPosts.length > 1) {
+          int totalM = 0, totalF = 0, totalC = 0;
+          for (final m in normalizedPosts) {
+            totalM += (m['Male'] is num ? m['Male'] as num : int.tryParse(m['Male'].toString()) ?? 0).toInt();
+            totalF += (m['Female'] is num ? m['Female'] as num : int.tryParse(m['Female'].toString()) ?? 0).toInt();
+            totalC += (m['Children'] is num ? m['Children'] as num : int.tryParse(m['Children'].toString()) ?? 0).toInt();
+          }
+          final firstPost = normalizedPosts.first;
+          postData = Map<String, dynamic>.from(firstPost);
+          postData['PostNo'] = cleanPNo;
+          postData['post_no'] = cleanPNo;
+          postData['Theme'] = cleanPNo;
+          postData['theme'] = cleanPNo;
+          postData['GroupID'] = cleanPNo;
+          postData['group_id'] = cleanPNo;
+          postData['Male'] = totalM;
+          postData['male'] = totalM;
+          postData['Female'] = totalF;
+          postData['female'] = totalF;
+          postData['Children'] = totalC;
+          postData['children'] = totalC;
+          postData['TotalBeneficiary'] = totalM + totalF + totalC;
+          postData['total_beneficiary'] = totalM + totalF + totalC;
+          postData['isCombined'] = true;
+          postData['is_combined'] = true;
+          postData['CombinedPosts'] = normalizedPosts;
+          postData['combined_posts'] = normalizedPosts;
+        } else {
+          postData = Map<String, dynamic>.from(normalizedPosts.first);
+        }
+      }
 
       final tasks = rawTasks.map((t) {
         final map = Map<String, dynamic>.from(t as Map<String, dynamic>);
+        final originalTaskPostNo = map['post_no']?.toString() ?? map['PostNo']?.toString() ?? '';
         for (final k in postData.keys) {
           if (!map.containsKey(k) || map[k] == null || map[k].toString().isEmpty) {
             map[k] = postData[k];
           }
         }
+        if (originalTaskPostNo.isNotEmpty) {
+          map['post_no'] = originalTaskPostNo;
+          map['PostNo'] = originalTaskPostNo;
+        }
         map['isCombined'] = isCombinedVal;
-        map['CombinedPosts'] = combinedPosts;
+        map['is_combined'] = isCombinedVal;
+        map['CombinedPosts'] = normalizedPosts;
+        map['combined_posts'] = normalizedPosts;
         return map;
       }).toList();
 
       return {
         'success': true,
         'postData': postData,
-        'combinedPosts': combinedPosts,
+        'combinedPosts': normalizedPosts,
         'tasks': tasks,
         'isCombined': isCombinedVal,
       };

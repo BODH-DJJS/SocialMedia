@@ -199,6 +199,17 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
         return list.firstWhere((e) => e.postNo.trim().toLowerCase() == cleanPNo);
       } catch (_) {}
     }
+    // 4. Combined sub-post match (e.g. pNo is "719" or "720" belonging to a combined group)
+    if (cleanPNo.isNotEmpty) {
+      try {
+        return list.firstWhere((e) =>
+          e.isCombined && e.combinedPosts.any((sub) {
+            final subPNo = (sub['PostNo'] ?? sub['post_no'] ?? '').toString().trim().toLowerCase();
+            return subPNo == cleanPNo;
+          }) && (cleanStg.isEmpty || e.stage.trim().toLowerCase() == cleanStg)
+        );
+      } catch (_) {}
+    }
     return null;
   }
 
@@ -218,11 +229,11 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
 
       for (int i = 0; i < sortedPosts.length; i++) {
         final p = sortedPosts[i];
-        final pDate = p['Date']?.toString() ?? '';
-        final pVenue = p['Venue']?.toString() ?? '';
-        final pMonth = p['FolderLink']?.toString() ?? '';
-        final pTheme = p['Theme']?.toString() ?? '';
-        final pNo = p['PostNo']?.toString() ?? '';
+        final pDate = p['Date']?.toString() ?? p['date']?.toString() ?? '';
+        final pVenue = p['Venue']?.toString() ?? p['venue']?.toString() ?? '';
+        final pMonth = p['FolderLink']?.toString() ?? p['folder_link']?.toString() ?? '';
+        final pTheme = p['Theme']?.toString() ?? p['theme']?.toString() ?? '';
+        final pNo = p['PostNo']?.toString() ?? p['post_no']?.toString() ?? '';
         
         if (pMonth.isNotEmpty) {
            final links = await provider.fetchMediaFolders(pMonth, pDate, event.stage, venue: pVenue, postNo: pNo);
@@ -1036,17 +1047,17 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                             ...((List<Map<String, dynamic>>.from(e.combinedPosts))..sort(comparePostNumbers)).asMap().entries.map((entry) {
                               final idx = entry.key;
                               final p = entry.value;
-                              final pNo = p['PostNo']?.toString() ?? '';
-                              final pTheme = p['Theme']?.toString() ?? '';
-                              final pProgram = p['Program']?.toString() ?? '';
-                              final pDate = p['Date']?.toString() ?? '';
-                              final pVenue = p['Venue']?.toString() ?? '';
-                              final pBranch = p['Branch']?.toString() ?? '';
-                              final pState = p['State']?.toString() ?? '';
-                              final pMale = p['Male'] ?? 0;
-                              final pFemale = p['Female'] ?? 0;
-                              final pChildren = p['Children'] ?? 0;
-                              final pTotal = p['TotalBeneficiary'] ??
+                              final pNo = p['PostNo']?.toString() ?? p['post_no']?.toString() ?? '';
+                              final pTheme = p['Theme']?.toString() ?? p['theme']?.toString() ?? '';
+                              final pProgram = p['Program']?.toString() ?? p['program']?.toString() ?? '';
+                              final pDate = p['Date']?.toString() ?? p['date']?.toString() ?? '';
+                              final pVenue = p['Venue']?.toString() ?? p['venue']?.toString() ?? '';
+                              final pBranch = p['Branch']?.toString() ?? p['branch']?.toString() ?? '';
+                              final pState = p['State']?.toString() ?? p['state']?.toString() ?? '';
+                              final pMale = p['Male'] ?? p['male'] ?? 0;
+                              final pFemale = p['Female'] ?? p['female'] ?? 0;
+                              final pChildren = p['Children'] ?? p['children'] ?? 0;
+                              final pTotal = p['TotalBeneficiary'] ?? p['total_beneficiary'] ??
                                   ((pMale is num ? pMale : 0) +
                                       (pFemale is num ? pFemale : 0) +
                                       (pChildren is num ? pChildren : 0));

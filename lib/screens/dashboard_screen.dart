@@ -65,11 +65,11 @@ class _DashboardScreenState extends State<DashboardScreen>
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('last_pipeline', index == 1 ? 'dev' : 'social');
     } catch (_) {}
-    if (mounted) {
+    try {
       final tabName = _getTabName(_currentIndex);
       final pipelineName = index == 1 ? 'dev' : 'social';
-      context.go('/dashboard?pipeline=$pipelineName&tab=$tabName');
-    }
+      html.window.history.replaceState(null, '', '#/dashboard?pipeline=$pipelineName&tab=$tabName');
+    } catch (_) {}
   }
 
   void _switchTab(int index) async {
@@ -78,11 +78,11 @@ class _DashboardScreenState extends State<DashboardScreen>
       final prefs = await SharedPreferences.getInstance();
       await prefs.setInt('last_dashboard_tab', index);
     } catch (_) {}
-    if (mounted) {
+    try {
       final tabName = _getTabName(index);
       final pipelineName = _activePipelineIndex == 1 ? 'dev' : 'social';
-      context.go('/dashboard?pipeline=$pipelineName&tab=$tabName');
-    }
+      html.window.history.replaceState(null, '', '#/dashboard?pipeline=$pipelineName&tab=$tabName');
+    } catch (_) {}
   }
 
   Future<void> _loadSavedState() async {
@@ -121,12 +121,30 @@ class _DashboardScreenState extends State<DashboardScreen>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final auth = context.read<AuthProvider>();
       final provider = context.read<EventProvider>();
-      provider.fetchEvents(auth.role, auth.username);
+      // Silent refresh if data already present, otherwise normal fetch
+      provider.fetchEvents(auth.role, auth.username, silent: provider.events.isNotEmpty);
       if (auth.role.toLowerCase() == 'admin') {
-        provider.fetchUsers();
-        provider.fetchBranchSPOCs();
+        if (provider.users.isEmpty) provider.fetchUsers();
+        if (provider.spocs.isEmpty) provider.fetchBranchSPOCs();
       }
     });
+  }
+
+  @override
+  void didUpdateWidget(DashboardScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.initialTab != oldWidget.initialTab && widget.initialTab != null) {
+      if (widget.initialTab == 'pipeline' || widget.initialTab == 'kanban') {
+        setState(() => _currentIndex = 2);
+      } else if (widget.initialTab == 'posts' || widget.initialTab == 'all') {
+        setState(() => _currentIndex = 1);
+      } else if (widget.initialTab == 'tasks') {
+        setState(() => _currentIndex = 0);
+      }
+    }
+    if (widget.initialPipeline != oldWidget.initialPipeline && widget.initialPipeline != null) {
+      setState(() => _activePipelineIndex = widget.initialPipeline == 'dev' ? 1 : 0);
+    }
   }
 
   Future<void> _loadColumnWidths() async {
