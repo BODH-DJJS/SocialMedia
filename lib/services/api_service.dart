@@ -102,7 +102,8 @@ class ApiService {
     
     // Non-admin can only see their assigned tasks
     if (role != null && role.toLowerCase() != 'admin' && username != null && username.isNotEmpty) {
-      baseQuery += '&assignee=eq.${Uri.encodeComponent(username)}';
+      final cleanUser = username.trim().toLowerCase();
+      baseQuery += '&or=(assignee.ilike.${Uri.encodeComponent(cleanUser)},assignee_name.ilike.${Uri.encodeComponent(cleanUser)})';
     }
 
     try {

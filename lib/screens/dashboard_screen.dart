@@ -345,6 +345,7 @@ class _DashboardScreenState extends State<DashboardScreen>
             icon: const Icon(Icons.logout_rounded),
             tooltip: 'Logout',
             onPressed: () {
+              context.read<EventProvider>().clear();
               auth.logout();
               context.go('/login');
             },
@@ -356,7 +357,7 @@ class _DashboardScreenState extends State<DashboardScreen>
               ? const Center(child: CircularProgressIndicator())
               : isAdmin
               ? _buildAdminBody(eventProvider, auth)
-              : _buildUserBody(eventProvider),
+              : _buildUserBody(eventProvider, auth),
       bottomNavigationBar:
           isAdmin
               ? NavigationBarTheme(
@@ -4960,9 +4961,38 @@ class _DashboardScreenState extends State<DashboardScreen>
   }
 
   // ── USER BODY (My Queue) ──
-  Widget _buildUserBody(EventProvider provider) {
-    List<Event> visibleEvents =
-        provider.events.where((e) => e.status.trim().toLowerCase() != 'waiting').toList();
+  Widget _buildUserBody(EventProvider provider, AuthProvider auth) {
+    final myEmail = auth.username.trim().toLowerCase();
+
+    // Match any display name associated with this user in user directories
+    String myDisplayName = '';
+    for (final u in provider.users) {
+      final uEmail = (u['email'] ?? u['Email'] ?? u['username'])?.toString().trim().toLowerCase();
+      if (uEmail == myEmail) {
+        myDisplayName = (u['name'] ?? u['Name'])?.toString().trim().toLowerCase() ?? '';
+        break;
+      }
+    }
+    if (myDisplayName.isEmpty) {
+      for (final u in provider.devUsers) {
+        final uEmail = (u['email'] ?? u['Email'] ?? u['username'])?.toString().trim().toLowerCase();
+        if (uEmail == myEmail) {
+          myDisplayName = (u['name'] ?? u['Name'])?.toString().trim().toLowerCase() ?? '';
+          break;
+        }
+      }
+    }
+
+    List<Event> visibleEvents = provider.events.where((e) {
+      if (e.status.trim().toLowerCase() == 'waiting') return false;
+      final ass = e.assignee.trim().toLowerCase();
+      final assName = e.assigneeName.trim().toLowerCase();
+
+      final matchesEmail = myEmail.isNotEmpty && (ass == myEmail || assName == myEmail || ass.contains(myEmail));
+      final matchesName = myDisplayName.isNotEmpty && (ass == myDisplayName || assName == myDisplayName);
+      return matchesEmail || matchesName;
+    }).toList();
+
     if (_myQueueFilter != 'All Tasks') {
       visibleEvents =
           visibleEvents.where((e) => e.status == _myQueueFilter).toList();

@@ -34,9 +34,20 @@ class EventProvider with ChangeNotifier {
 
   final ApiService _apiService = ApiService();
 
+  /// Reset in-memory state on logout or account switch
+  void clear() {
+    _events = [];
+    _rawPosts = [];
+    _isLoading = false;
+    _isSyncing = false;
+    notifyListeners();
+  }
+
   // ── Load events from localStorage and show immediately, then refresh in bg ──
   Future<void> fetchEvents(String role, String username, {bool silent = false, bool force = false}) async {
     final isAdmin = role.toLowerCase() == 'admin';
+    final cleanUsername = username.trim().toLowerCase();
+    final userCacheKey = 'cache_events_${isAdmin ? "admin" : (cleanUsername.isNotEmpty ? cleanUsername : "user")}';
     final prefs = await SharedPreferences.getInstance();
     final now = DateTime.now().millisecondsSinceEpoch;
 
@@ -48,7 +59,7 @@ class EventProvider with ChangeNotifier {
     // --- STEP 1: Serve from localStorage cache instantly (only if NOT force) ---
     bool loadedFromCache = false;
     if (!force) {
-      final cachedEventsJson = prefs.getString(_cacheKeyEvents);
+      final cachedEventsJson = prefs.getString(userCacheKey);
       if (cachedEventsJson != null && cachedEventsJson.isNotEmpty) {
         try {
           final List<dynamic> cachedList = json.decode(cachedEventsJson);
@@ -150,6 +161,15 @@ class EventProvider with ChangeNotifier {
           supaEvents.add(Event.fromJson(merged));
         }
 
+        // Defensive client-side check for non-admin users
+        if (!isAdmin && cleanUsername.isNotEmpty) {
+          supaEvents.removeWhere((e) {
+            final ass = e.assignee.trim().toLowerCase();
+            final assName = e.assigneeName.trim().toLowerCase();
+            return ass != cleanUsername && assName != cleanUsername && !ass.contains(cleanUsername);
+          });
+        }
+
         _events = supaEvents;
         _rawPosts = supaPosts;
 
@@ -158,7 +178,7 @@ class EventProvider with ChangeNotifier {
         notifyListeners();
 
         // Save fresh data to local cache
-        prefs.setString(_cacheKeyEvents, json.encode(_events.map((e) => e.toJson()).toList()));
+        prefs.setString(userCacheKey, json.encode(_events.map((e) => e.toJson()).toList()));
         prefs.setInt(_cacheKeyTsEvents, now);
         if (_rawPosts.isNotEmpty) {
           prefs.setString(_cacheKeyPosts, json.encode(_rawPosts));
@@ -192,7 +212,7 @@ class EventProvider with ChangeNotifier {
           final List<dynamic> tasksData = tasksResponse['tasks'];
           _events = tasksData.map((json) => Event.fromJson(json)).toList();
           // Save to localStorage
-          prefs.setString(_cacheKeyEvents, json.encode(tasksData));
+          prefs.setString(userCacheKey, json.encode(tasksData));
           prefs.setInt(_cacheKeyTsEvents, now);
         }
         if (postsResponse['success'] == true) {
@@ -212,8 +232,16 @@ class EventProvider with ChangeNotifier {
         if (response['success'] == true) {
           final List<dynamic> tasksData = response['tasks'];
           _events = tasksData.map((json) => Event.fromJson(json)).toList();
+          // Defensive check for non-admin
+          if (cleanUsername.isNotEmpty) {
+            _events.removeWhere((e) {
+              final ass = e.assignee.trim().toLowerCase();
+              final assName = e.assigneeName.trim().toLowerCase();
+              return ass != cleanUsername && assName != cleanUsername && !ass.contains(cleanUsername);
+            });
+          }
           // Save to localStorage
-          prefs.setString(_cacheKeyEvents, json.encode(tasksData));
+          prefs.setString(userCacheKey, json.encode(_events.map((e) => e.toJson()).toList()));
           prefs.setInt(_cacheKeyTsEvents, now);
         }
       }

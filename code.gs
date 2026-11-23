@@ -656,7 +656,12 @@ function handleGetTasks(payload) {
     tObj['rowIndex'] = i + 1;
     tObj['AssigneeName'] = userMap[(tObj['Assignee'] || '').toString().trim().toLowerCase()] || tObj['Assignee'];
     
-    if (payload.role === 'Admin' || tObj['Assignee'] === payload.username) {
+    var cleanUsername = (payload.username || '').toString().trim().toLowerCase();
+    var isUserAdmin = payload.role && payload.role.toString().trim().toLowerCase() === 'admin';
+    var taskAssignee = (tObj['Assignee'] || '').toString().trim().toLowerCase();
+    var taskAssigneeName = (tObj['AssigneeName'] || '').toString().trim().toLowerCase();
+
+    if (isUserAdmin || taskAssignee === cleanUsername || taskAssigneeName === cleanUsername || (cleanUsername && taskAssignee.indexOf(cleanUsername) !== -1)) {
       var matchedRows = postsMap[tObj['PostNo']] || [];
 
       if (matchedRows.length == 1) {
