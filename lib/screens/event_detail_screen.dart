@@ -213,8 +213,11 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       String firstProofread = '';
       String firstCrosscheck = '';
       
-      for (int i = 0; i < event.combinedPosts.length; i++) {
-        final p = event.combinedPosts[i];
+      final sortedPosts = List<Map<String, dynamic>>.from(event.combinedPosts)
+        ..sort(comparePostNumbers);
+
+      for (int i = 0; i < sortedPosts.length; i++) {
+        final p = sortedPosts[i];
         final pDate = p['Date']?.toString() ?? '';
         final pVenue = p['Venue']?.toString() ?? '';
         final pMonth = p['FolderLink']?.toString() ?? '';
@@ -235,6 +238,8 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
         }
       }
       
+      groupLinks.sort((a, b) => comparePostNumbers(a.postNo, b.postNo));
+
       if (mounted) {
         setState(() {
           _groupMediaLinks = groupLinks;
@@ -1028,7 +1033,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                               ],
                             ),
                             const SizedBox(height: 12),
-                            ...e.combinedPosts.asMap().entries.map((entry) {
+                            ...((List<Map<String, dynamic>>.from(e.combinedPosts))..sort(comparePostNumbers)).asMap().entries.map((entry) {
                               final idx = entry.key;
                               final p = entry.value;
                               final pNo = p['PostNo']?.toString() ?? '';

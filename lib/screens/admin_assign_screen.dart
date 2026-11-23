@@ -129,7 +129,8 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
               final combinedPosts = allCachedPosts
                   .where((p) => p['GroupID']?.toString() == postNo)
                   .cast<Map<String, dynamic>>()
-                  .toList();
+                  .toList()
+                ..sort(comparePostNumbers);
               if (combinedPosts.isNotEmpty) {
                 final postTasks = cachedEvents.where((t) => t.postNo == postNo).toList();
                 _postData = {
@@ -371,7 +372,8 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
   Future<void> _fetchMediaLinks() async {
     final provider = context.read<EventProvider>();
     final isCombined = _postData['isCombined'] == true;
-    final combinedPosts = _postData['combinedPosts'] as List<dynamic>? ?? [];
+    final combinedPosts = List<dynamic>.from(_postData['combinedPosts'] as List<dynamic>? ?? [])
+      ..sort(comparePostNumbers);
 
     if (isCombined && combinedPosts.isNotEmpty) {
       List<GroupMediaLink> groupLinks = [];
@@ -394,6 +396,8 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
           }
         }
       }
+
+      groupLinks.sort((a, b) => comparePostNumbers(a.postNo, b.postNo));
 
       if (mounted) {
         setState(() {
@@ -952,7 +956,7 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
                               ],
                             ),
                             const SizedBox(height: 12),
-                            ...( _postData['combinedPosts'] as List).asMap().entries.map((entry) {
+                            ...(List<dynamic>.from(_postData['combinedPosts'] as List)..sort(comparePostNumbers)).asMap().entries.map((entry) {
                               final idx = entry.key;
                               final p = entry.value as Map<String, dynamic>;
                               final pNo = p['PostNo']?.toString() ?? '';

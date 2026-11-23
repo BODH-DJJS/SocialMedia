@@ -133,6 +133,7 @@ class EventProvider with ChangeNotifier {
             merged['post_no'] = tPostNo;
             merged['PostNo'] = tPostNo;
           } else if (matched.length > 1) {
+            matched.sort(comparePostNumbers);
             int totalM = 0, totalF = 0, totalC = 0;
             for (final m in matched) {
               totalM += (m['Male'] ?? m['male'] ?? 0) as int;
@@ -1040,6 +1041,7 @@ class EventProvider with ChangeNotifier {
       if (response['success'] == true) {
         final postData = response['postData'] as Map<String, dynamic>? ?? {};
         final combinedPosts = (response['combinedPosts'] as List<dynamic>?)?.cast<Map<String, dynamic>>() ?? [];
+        combinedPosts.sort(comparePostNumbers);
         final rawTasks = response['tasks'] as List<dynamic>? ?? [];
         final isCombinedVal = response['isCombined'] == true || combinedPosts.length > 1;
 

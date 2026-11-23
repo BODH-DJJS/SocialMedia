@@ -287,6 +287,14 @@ class ApiService {
       if (rawTasks.isEmpty) return null;
 
       final List<dynamic> rawPosts = postResp.statusCode == 200 ? json.decode(postResp.body) : [];
+      rawPosts.sort((a, b) {
+        final pA = (a is Map ? (a['post_no'] ?? a['PostNo'] ?? '') : a).toString().trim();
+        final pB = (b is Map ? (b['post_no'] ?? b['PostNo'] ?? '') : b).toString().trim();
+        final nA = int.tryParse(pA.replaceAll(RegExp(r'[^0-9]'), ''));
+        final nB = int.tryParse(pB.replaceAll(RegExp(r'[^0-9]'), ''));
+        if (nA != null && nB != null && nA != nB) return nA.compareTo(nB);
+        return pA.compareTo(pB);
+      });
       final postData = rawPosts.isNotEmpty ? (rawPosts.first as Map<String, dynamic>) : <String, dynamic>{};
       final combinedPosts = rawPosts.length > 1 ? rawPosts.cast<Map<String, dynamic>>() : <Map<String, dynamic>>[];
       final isCombinedVal = isCombined || combinedPosts.length > 1 || cleanPNo.toLowerCase().contains('combined');

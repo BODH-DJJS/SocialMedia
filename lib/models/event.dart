@@ -1,5 +1,16 @@
 import '../utils/due_date_utils.dart';
 
+int comparePostNumbers(dynamic a, dynamic b) {
+  final strA = (a is Map ? (a['PostNo'] ?? a['post_no'] ?? '') : a).toString().trim();
+  final strB = (b is Map ? (b['PostNo'] ?? b['post_no'] ?? '') : b).toString().trim();
+  final numA = int.tryParse(strA.replaceAll(RegExp(r'[^0-9]'), ''));
+  final numB = int.tryParse(strB.replaceAll(RegExp(r'[^0-9]'), ''));
+  if (numA != null && numB != null && numA != numB) {
+    return numA.compareTo(numB);
+  }
+  return strA.compareTo(strB);
+}
+
 class Event {
   final String taskId;
   final String postNo;
@@ -169,9 +180,10 @@ class Event {
           ? (int.tryParse(json['rowIndex'].toString()) ?? 0) 
           : (json['row_index'] != null ? int.tryParse(json['row_index'].toString()) ?? 0 : 0),
       isCombined: json['isCombined'] == true || json['is_combined'] == true,
-      combinedPosts: json['CombinedPosts'] != null 
+      combinedPosts: (json['CombinedPosts'] != null 
           ? List<Map<String, dynamic>>.from(json['CombinedPosts']) 
-          : (json['combined_posts'] != null ? List<Map<String, dynamic>>.from(json['combined_posts']) : []),
+          : (json['combined_posts'] != null ? List<Map<String, dynamic>>.from(json['combined_posts']) : []))
+        ..sort(comparePostNumbers),
     );
   }
 

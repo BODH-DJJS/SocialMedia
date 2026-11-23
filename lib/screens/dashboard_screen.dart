@@ -1887,6 +1887,7 @@ class _DashboardScreenState extends State<DashboardScreen>
         }
       }
       for (var entry in groups.entries) {
+        entry.value.sort(comparePostNumbers);
         combinedGroups.add({'GroupID': entry.key, 'Posts': entry.value});
       }
     } else {
