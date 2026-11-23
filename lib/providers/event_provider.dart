@@ -21,8 +21,6 @@ class EventProvider with ChangeNotifier {
   static const _cacheKeyPosts  = 'cache_posts';
   static const _cacheKeyTsEvents = 'cache_ts_events';
   static const _cacheKeyTsPosts  = 'cache_ts_posts';
-  // Consider cache valid for 3 minutes
-  static const _cacheTtlMs = 3 * 60 * 1000;
 
   List<Event> get events => _events;
   List<Map<String, dynamic>> get rawPosts => _rawPosts;
@@ -41,6 +39,14 @@ class EventProvider with ChangeNotifier {
     _isLoading = false;
     _isSyncing = false;
     notifyListeners();
+  }
+
+  /// Populate in-memory events from local cache if empty
+  void setEvents(List<Event> newEvents) {
+    if (newEvents.isNotEmpty && _events.isEmpty) {
+      _events = List.from(newEvents);
+      notifyListeners();
+    }
   }
 
   // ── Load events from localStorage and show immediately, then refresh in bg ──
@@ -989,8 +995,41 @@ class EventProvider with ChangeNotifier {
     return [];
   }
 
-  /// Fast targeted fetch for single post or combined group (completes in ~1-2 seconds)
-  Future<Map<String, dynamic>?> fetchSinglePostDetails(String postNo, {bool isCombined = false}) async {
+  /// Fast targeted fetch for single post or combined group (Supabase ~50ms, GAS fallback ~1-2s)
+  Future<Map<String, dynamic>?> fetchSinglePostDetails(
+    String postNo, {
+    String? taskId,
+    String? stage,
+    bool isCombined = false,
+  }) async {
+    // 1. FAST PATH: Fetch directly from Supabase (< 100ms)
+    try {
+      final supaRes = await _apiService.fetchSinglePostFromSupabase(
+        postNo,
+        taskId: taskId,
+        stage: stage,
+        isCombined: isCombined,
+      );
+      if (supaRes != null && supaRes['tasks'] != null && (supaRes['tasks'] as List).isNotEmpty) {
+        final rawTasks = supaRes['tasks'] as List<dynamic>;
+        final tasks = rawTasks.map((j) => j is Event ? j : Event.fromJson(j as Map<String, dynamic>)).toList();
+
+        // Update in-memory tasks so other UI components can see them
+        _events.removeWhere((t) => t.postNo == postNo || (taskId != null && t.taskId == taskId));
+        _events.addAll(tasks);
+
+        return {
+          'postData': supaRes['postData'],
+          'combinedPosts': supaRes['combinedPosts'],
+          'tasks': tasks,
+          'isCombined': supaRes['isCombined'],
+        };
+      }
+    } catch (e) {
+      debugPrint('Supabase single post fetch error: $e');
+    }
+
+    // 2. FALLBACK: Google Apps Script getPostDetails
     try {
       final response = await _apiService.postData({
         'action': 'getPostDetails',

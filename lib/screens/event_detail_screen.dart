@@ -1,6 +1,8 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models/event.dart';
 import '../providers/event_provider.dart';
@@ -92,12 +94,50 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     final provider = context.read<EventProvider>();
     final auth = context.read<AuthProvider>();
 
+    // 1. Check in-memory events
     Event? found = _findMatchingEvent(provider.events, pNo, stg, tId);
 
-    // If not found in cache, fetch single post details (fast API call, 1-2 sec)
-    if (found == null && pNo.isNotEmpty) {
+    // 2. Instant localStorage cache check (0ms)
+    if (found == null) {
       try {
-        final details = await provider.fetchSinglePostDetails(pNo, isCombined: widget.isCombined);
+        final prefs = await SharedPreferences.getInstance();
+        for (final key in prefs.getKeys()) {
+          if (key.startsWith('cache_events')) {
+            final jsonStr = prefs.getString(key);
+            if (jsonStr != null && jsonStr.isNotEmpty) {
+              final List<dynamic> list = json.decode(jsonStr);
+              final cachedEvents = list.map((j) => Event.fromJson(j as Map<String, dynamic>)).toList();
+              final cachedFound = _findMatchingEvent(cachedEvents, pNo, stg, tId);
+              if (cachedFound != null) {
+                found = cachedFound;
+                provider.setEvents(cachedEvents);
+                if (mounted) {
+                  setState(() {
+                    _event = found;
+                    _canvaLink = found!.canvaLink;
+                    _isLoadingEvent = false;
+                  });
+                  _fetchMediaLinks();
+                }
+                break;
+              }
+            }
+          }
+        }
+      } catch (e) {
+        debugPrint('Cache check error in _loadEventFromQuery: $e');
+      }
+    }
+
+    // 3. Fast Supabase targeted fetch (< 100ms) with fallback to Google Apps Script
+    if (found == null && (pNo.isNotEmpty || tId.isNotEmpty)) {
+      try {
+        final details = await provider.fetchSinglePostDetails(
+          pNo,
+          taskId: tId,
+          stage: stg,
+          isCombined: widget.isCombined,
+        );
         if (details != null && details['tasks'] != null) {
           final tasks = (details['tasks'] as List<dynamic>).cast<Event>();
           found = _findMatchingEvent(tasks, pNo, stg, tId);
@@ -107,7 +147,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       }
     }
 
-    // Fallback: fetch all events
+    // 4. Fallback: fetch all events
     if (found == null && auth.isLoggedIn) {
       try {
         await provider.fetchEvents(auth.role, auth.username);
@@ -117,7 +157,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       }
     }
 
-    if (mounted) {
+    if (mounted && _isLoadingEvent) {
       if (found != null) {
         setState(() {
           _event = found;

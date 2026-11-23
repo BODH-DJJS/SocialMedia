@@ -218,6 +218,104 @@ class ApiService {
     }
   }
 
+  /// Fetches a single post and its associated tasks from Supabase in ~50-80ms
+  Future<Map<String, dynamic>?> fetchSinglePostFromSupabase(
+    String postNo, {
+    String? taskId,
+    String? stage,
+    bool isCombined = false,
+  }) async {
+    final cleanPNo = postNo.trim();
+    final cleanTId = taskId?.trim() ?? '';
+    if (cleanPNo.isEmpty && cleanTId.isEmpty) return null;
+
+    final stopwatch = Stopwatch()..start();
+
+    try {
+      final taskQuery = cleanTId.isNotEmpty
+          ? '$supabaseUrl/rest/v1/tasks?task_id=eq.${Uri.encodeComponent(cleanTId)}'
+          : '$supabaseUrl/rest/v1/tasks?post_no=eq.${Uri.encodeComponent(cleanPNo)}';
+
+      final postQuery = cleanPNo.isNotEmpty
+          ? '$supabaseUrl/rest/v1/posts?select=*&or=(post_no.eq.${Uri.encodeComponent(cleanPNo)},group_id.eq.${Uri.encodeComponent(cleanPNo)})'
+          : '$supabaseUrl/rest/v1/posts?select=*&limit=1';
+
+      final responses = await Future.wait([
+        http.get(
+          Uri.parse(taskQuery),
+          headers: {
+            'apikey': supabaseAnonKey,
+            'Authorization': 'Bearer $supabaseAnonKey',
+            'Accept': 'application/json',
+          },
+        ),
+        http.get(
+          Uri.parse(postQuery),
+          headers: {
+            'apikey': supabaseAnonKey,
+            'Authorization': 'Bearer $supabaseAnonKey',
+            'Accept': 'application/json',
+          },
+        ),
+      ]);
+
+      stopwatch.stop();
+      debugPrint('⚡ [Supabase Single Post] Queried in ${stopwatch.elapsedMilliseconds} ms!');
+
+      final taskResp = responses[0];
+      final postResp = responses[1];
+
+      List<dynamic> rawTasks = [];
+      if (taskResp.statusCode == 200) {
+        rawTasks = json.decode(taskResp.body) as List<dynamic>;
+      }
+
+      if (rawTasks.isEmpty && cleanTId.isNotEmpty && cleanPNo.isNotEmpty) {
+        final fallbackTasksResp = await http.get(
+          Uri.parse('$supabaseUrl/rest/v1/tasks?post_no=eq.${Uri.encodeComponent(cleanPNo)}'),
+          headers: {
+            'apikey': supabaseAnonKey,
+            'Authorization': 'Bearer $supabaseAnonKey',
+            'Accept': 'application/json',
+          },
+        );
+        if (fallbackTasksResp.statusCode == 200) {
+          rawTasks = json.decode(fallbackTasksResp.body) as List<dynamic>;
+        }
+      }
+
+      if (rawTasks.isEmpty) return null;
+
+      final List<dynamic> rawPosts = postResp.statusCode == 200 ? json.decode(postResp.body) : [];
+      final postData = rawPosts.isNotEmpty ? (rawPosts.first as Map<String, dynamic>) : <String, dynamic>{};
+      final combinedPosts = rawPosts.length > 1 ? rawPosts.cast<Map<String, dynamic>>() : <Map<String, dynamic>>[];
+      final isCombinedVal = isCombined || combinedPosts.length > 1 || cleanPNo.toLowerCase().contains('combined');
+
+      final tasks = rawTasks.map((t) {
+        final map = Map<String, dynamic>.from(t as Map<String, dynamic>);
+        for (final k in postData.keys) {
+          if (!map.containsKey(k) || map[k] == null || map[k].toString().isEmpty) {
+            map[k] = postData[k];
+          }
+        }
+        map['isCombined'] = isCombinedVal;
+        map['CombinedPosts'] = combinedPosts;
+        return map;
+      }).toList();
+
+      return {
+        'success': true,
+        'postData': postData,
+        'combinedPosts': combinedPosts,
+        'tasks': tasks,
+        'isCombined': isCombinedVal,
+      };
+    } catch (e) {
+      debugPrint('⚠️ [Supabase Single Post Exception]: $e');
+      return null;
+    }
+  }
+
   /// Updates task instantly in Supabase (takes ~50ms)
   Future<bool> updateTaskInSupabase(String taskId, Map<String, dynamic> updates) async {
     final uri = Uri.parse('$supabaseUrl/rest/v1/tasks?task_id=eq.${Uri.encodeComponent(taskId)}');
