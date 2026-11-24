@@ -633,65 +633,124 @@ class EventProvider with ChangeNotifier {
     return false;
   }
 
+  Future<void> _saveRawPostsToCache() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_cacheKeyPosts, json.encode(_rawPosts));
+    } catch (_) {}
+  }
+
   Future<bool> groupPosts(List<String> postNos, String groupId) async {
-    invalidateCache();
+    final cleanGId = groupId.trim();
+    if (postNos.isEmpty || cleanGId.isEmpty) return false;
+
+    // 1. Optimistically update in-memory
+    for (var p in _rawPosts) {
+      final pNo = (p['PostNo'] ?? p['post_no'])?.toString() ?? '';
+      if (postNos.contains(pNo)) {
+        p['GroupID'] = cleanGId;
+        p['group_id'] = cleanGId;
+        p['PostType'] = 'Combined';
+        p['post_type'] = 'Combined';
+        final curStatus = p['PostStatus']?.toString().trim().toLowerCase() ?? '';
+        if (curStatus == 'data unavailable' || curStatus == 'dataunavailable') {
+          p['PostStatus'] = '';
+          p['post_status'] = '';
+        }
+      }
+    }
+    notifyListeners();
+    _saveRawPostsToCache();
+
+    // 2. Update Supabase
+    _apiService.groupPostsInSupabase(postNos, cleanGId);
+
+    // 3. Update Google Apps Script
     try {
       final response = await _apiService.postData({
         'action': 'groupPosts',
         'postNos': postNos,
-        'groupId': groupId,
+        'groupId': cleanGId,
       });
-      if (response['success'] == true) {
-        for (var p in _rawPosts) {
-          final pNo = p['PostNo']?.toString() ?? '';
-          if (postNos.contains(pNo)) {
-            p['GroupID'] = groupId;
-            final curStatus = p['PostStatus']?.toString().trim().toLowerCase() ?? '';
-            if (curStatus == 'data unavailable' || curStatus == 'dataunavailable') {
-              p['PostStatus'] = '';
-            }
-          }
-        }
-        notifyListeners();
-        return true;
-      }
+      return response['success'] == true;
     } catch (e) {
-      debugPrint('Error grouping posts: $e');
+      debugPrint('Error grouping posts in GAS: $e');
+      return true;
     }
-    return false;
   }
 
   Future<bool> ungroupPost(String postNo) async {
-    invalidateCache();
+    final cleanPNo = postNo.trim();
+    if (cleanPNo.isEmpty) return false;
+
+    // 1. Optimistically update in-memory
+    for (var p in _rawPosts) {
+      final pNo = (p['PostNo'] ?? p['post_no'])?.toString() ?? '';
+      if (pNo == cleanPNo) {
+        p['GroupID'] = '';
+        p['group_id'] = '';
+        p['PostType'] = 'Individual';
+        p['post_type'] = 'Individual';
+      }
+    }
+    notifyListeners();
+    _saveRawPostsToCache();
+
+    // 2. Update Supabase
+    _apiService.ungroupPostInSupabase(cleanPNo);
+
+    // 3. Update Google Apps Script
     try {
       final response = await _apiService.postData({
         'action': 'ungroupPost',
-        'postNo': postNo,
+        'postNo': cleanPNo,
       });
-      if (response['success'] == true) {
-        return true;
-      }
+      return response['success'] == true;
     } catch (e) {
-      debugPrint('Error ungrouping post: $e');
+      debugPrint('Error ungrouping post in GAS: $e');
+      return true;
     }
-    return false;
   }
 
   Future<bool> renameGroup(String oldGroupId, String newGroupId) async {
-    invalidateCache();
+    final cleanOld = oldGroupId.trim();
+    final cleanNew = newGroupId.trim();
+    if (cleanOld.isEmpty || cleanNew.isEmpty) return false;
+
+    // 1. Optimistically update in-memory
+    for (var p in _rawPosts) {
+      if ((p['GroupID'] ?? p['group_id'])?.toString() == cleanOld) {
+        p['GroupID'] = cleanNew;
+        p['group_id'] = cleanNew;
+      }
+    }
+    _events = _events.map((t) {
+      if (t.postNo == cleanOld) {
+        final j = t.toJson();
+        j['PostNo'] = cleanNew;
+        j['post_no'] = cleanNew;
+        return Event.fromJson(j);
+      }
+      return t;
+    }).toList();
+    notifyListeners();
+    _saveRawPostsToCache();
+
+    // 2. Update Supabase
+    _apiService.renameGroupInSupabase(cleanOld, cleanNew);
+
+    // 3. Update Google Apps Script
     try {
       final response = await _apiService.postData({
         'action': 'renameGroup',
-        'oldGroupId': oldGroupId,
-        'newGroupId': newGroupId,
+        'oldGroupId': cleanOld,
+        'newGroupId': cleanNew,
       });
-      if (response['success'] == true) {
-        return true;
-      }
+      return response['success'] == true;
     } catch (e) {
-      debugPrint('Error renaming group: $e');
+      debugPrint('Error renaming group in GAS: $e');
+      return true;
     }
-    return false;
   }
 
   Future<bool> updatePostMeta(String postNo, Map<String, dynamic> updates) async {
@@ -895,35 +954,63 @@ class EventProvider with ChangeNotifier {
   Future<bool> deleteWorkflow({
     required String postNo,
     bool isCombined = false,
+    String newPostStatus = 'Inactive',
     String? username,
     String? role,
   }) async {
-    try {
-      final res = await _apiService.postData({
-        'action': 'deleteWorkflow',
-        'postNo': postNo,
-        'isCombined': isCombined,
-      });
+    final cleanPNo = postNo.trim();
+    if (cleanPNo.isEmpty) return false;
 
-      if (res['success'] == true) {
-        // Optimistically remove tasks locally
-        _events.removeWhere((t) => t.postNo == postNo);
-        if (isCombined) {
-          for (final p in _rawPosts) {
-            if (p['GroupID']?.toString() == postNo) {
-              p['GroupID'] = '';
-            }
+    try {
+      final affectedPostNos = <String>{cleanPNo};
+
+      // 1. Optimistically remove tasks locally
+      _events.removeWhere((t) => t.postNo == cleanPNo);
+      if (isCombined) {
+        for (final p in _rawPosts) {
+          if ((p['GroupID'] ?? p['group_id'])?.toString() == cleanPNo) {
+            final mPNo = (p['PostNo'] ?? p['post_no'])?.toString() ?? '';
+            if (mPNo.isNotEmpty) affectedPostNos.add(mPNo);
+            p['GroupID'] = '';
+            p['group_id'] = '';
+            p['PostType'] = 'Individual';
+            p['post_type'] = 'Individual';
+            p['PostStatus'] = newPostStatus;
+            p['post_status'] = newPostStatus;
           }
         }
-        notifyListeners();
-
-        // Refresh events in background
-        if (role != null && username != null) {
-          fetchEvents(role, username);
+        _events.removeWhere((t) => affectedPostNos.contains(t.postNo));
+        _apiService.clearGroupPostsInSupabase(cleanPNo, newStatus: newPostStatus);
+      } else {
+        for (final p in _rawPosts) {
+          if ((p['PostNo'] ?? p['post_no'])?.toString() == cleanPNo) {
+            p['GroupID'] = '';
+            p['group_id'] = '';
+            p['PostType'] = 'Individual';
+            p['post_type'] = 'Individual';
+            p['PostStatus'] = newPostStatus;
+            p['post_status'] = newPostStatus;
+          }
         }
-        return true;
+        _apiService.ungroupPostInSupabase(cleanPNo, newStatus: newPostStatus);
       }
-      return false;
+      notifyListeners();
+      _saveRawPostsToCache();
+
+      // 2. Delete tasks from Supabase immediately (~50ms)
+      for (final pNo in affectedPostNos) {
+        _apiService.deleteTasksFromSupabase(pNo);
+      }
+
+      // 3. Sync to Google Apps Script
+      final res = await _apiService.postData({
+        'action': 'deleteWorkflow',
+        'postNo': cleanPNo,
+        'isCombined': isCombined,
+        'postStatus': newPostStatus,
+      });
+
+      return res['success'] == true;
     } catch (e) {
       debugPrint('Error deleting workflow: $e');
       return false;

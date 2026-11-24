@@ -2295,6 +2295,7 @@ function handleDeleteWorkflow(payload) {
   
   var postNo = (payload.postNo || '').toString().trim();
   var isCombined = payload.isCombined === true;
+  var newPostStatus = (payload.postStatus || '').toString().trim();
   
   if (!postNo) return { success: false, message: 'postNo required' };
   
@@ -2318,13 +2319,27 @@ function handleDeleteWorkflow(payload) {
       var currentGroupId = postsData[p][37] ? postsData[p][37].toString().trim() : '';
       if (currentGroupId === postNo) {
         postsSheet.getRange(p + 1, 38).setValue('');
+        if (newPostStatus) {
+          postsSheet.getRange(p + 1, 41).setValue(newPostStatus);
+        }
+      }
+    }
+  } else if (!isCombined && postsSheet && newPostStatus) {
+    var postsData = postsSheet.getDataRange().getValues();
+    for (var p = 1; p < postsData.length; p++) {
+      if (postsData[p][0] == postNo) {
+        postsSheet.getRange(p + 1, 41).setValue(newPostStatus);
+        break;
       }
     }
   }
   
+  try { CacheService.getScriptCache().remove('all_posts'); } catch(e) {}
+  try { CacheService.getScriptCache().remove('all_tasks'); } catch(e) {}
+  
   return { 
     success: true, 
-    message: 'Workflow deleted (' + deletedCount + ' tasks removed). Post is now inactive.' 
+    message: 'Workflow deleted (' + deletedCount + ' tasks removed).' 
   };
 }
 

@@ -698,7 +698,16 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Setup Workflow'),
+        title: Text(isCombined ? 'Combined Workflow ($postNo)' : 'Setup Workflow #$postNo'),
+        actions: [
+          if (isInitialized)
+            TextButton.icon(
+              icon: const Icon(Icons.delete_outline, color: Colors.red, size: 18),
+              label: const Text('Delete Workflow', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+              onPressed: () => _showWorkflowDeletionDialog(context, provider, postNo.toString(), isCombined),
+            ),
+          const SizedBox(width: 8),
+        ],
       ),
       body: provider.isLoading
           ? const Center(child: CircularProgressIndicator())
@@ -779,7 +788,8 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
                                   onChanged: (newVal) async {
                                     if (newVal == null || newVal == _postStatus) return;
 
-                                    if (newVal == 'Inactive' && isInitialized) {
+                                    final shouldClearTasks = (newVal == 'Data Unavailable' || newVal == 'Inactive' || newVal == 'Skip');
+                                    if (shouldClearTasks && isInitialized) {
                                       final confirm = await showDialog<bool>(
                                         context: context,
                                         builder: (ctx) => AlertDialog(
@@ -788,14 +798,14 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
                                             children: const [
                                               Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 28),
                                               SizedBox(width: 8),
-                                              Text('Mark as Inactive?'),
+                                              Text('Auto-Remove Tasks?'),
                                             ],
                                           ),
-                                          content: const Text(
-                                            'This post currently has active workflow tasks.\n\n'
-                                            'Setting status to Inactive will remove its workflow tasks and convert this post back to Inactive.\n\n'
+                                          content: Text(
+                                            'This post currently has active workflow tasks across stages (e.g. Photo Editing, Writing).\n\n'
+                                            'Setting status to "$newVal" will automatically delete all active tasks and unassign all stages for this post.\n\n'
                                             'Do you want to proceed?',
-                                            style: TextStyle(fontSize: 14, height: 1.4),
+                                            style: const TextStyle(fontSize: 14, height: 1.4),
                                           ),
                                           actions: [
                                             TextButton(
@@ -809,7 +819,7 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
                                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                                               ),
                                               onPressed: () => Navigator.pop(ctx, true),
-                                              child: const Text('Yes, Make Inactive'),
+                                              child: Text('Yes, Set $newVal & Clear Tasks'),
                                             ),
                                           ],
                                         ),
@@ -820,23 +830,27 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
                                       final ok = await provider.deleteWorkflow(
                                         postNo: postNo.toString(),
                                         isCombined: isCombined,
+                                        newPostStatus: newVal,
                                         username: auth.username,
                                         role: auth.role,
                                       );
+                                      // Explicitly persist new status (e.g. Data Unavailable) to Supabase and Sheets
+                                      await provider.updatePostMeta(postNo.toString(), {'postStatus': newVal});
+
                                       if (mounted) {
                                         if (ok) {
                                           ScaffoldMessenger.of(context).showSnackBar(
-                                            const SnackBar(
-                                              content: Text('Workflow deleted and post marked Inactive.'),
+                                            SnackBar(
+                                              content: Text('All tasks removed and post marked $newVal.'),
                                               backgroundColor: Colors.green,
-                                              duration: Duration(seconds: 2),
+                                              duration: const Duration(seconds: 2),
                                             ),
                                           );
                                           context.pop();
                                         } else {
                                           ScaffoldMessenger.of(context).showSnackBar(
                                             const SnackBar(
-                                              content: Text('Failed to make post Inactive.'),
+                                              content: Text('Failed to clear workflow tasks.'),
                                               backgroundColor: Colors.red,
                                             ),
                                           );
@@ -1599,6 +1613,102 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
       default:
         return Colors.blue.shade800;
     }
+  }
+
+  void _showWorkflowDeletionDialog(BuildContext context, EventProvider provider, String postNo, bool isCombined) {
+    final auth = context.read<AuthProvider>();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: const [
+            Icon(Icons.warning_amber_rounded, color: Colors.red, size: 28),
+            SizedBox(width: 8),
+            Text('Workflow Options'),
+          ],
+        ),
+        content: Text(
+          isCombined
+              ? 'Combined post "$postNo" has active workflow tasks across stages.\n\n'
+                'Choose how you would like to proceed:'
+              : 'Post #$postNo currently has active workflow tasks across stages.\n\n'
+                'Choose how you would like to proceed:',
+          style: const TextStyle(fontSize: 14, height: 1.4),
+        ),
+        actionsAlignment: MainAxisAlignment.spaceBetween,
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+          ),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              OutlinedButton.icon(
+                icon: const Icon(Icons.block, size: 16),
+                label: const Text('Mark Data Unavailable & Delete'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.orange.shade900,
+                  side: BorderSide(color: Colors.orange.shade400),
+                ),
+                onPressed: () async {
+                  Navigator.pop(ctx);
+                  final ok = await provider.deleteWorkflow(
+                    postNo: postNo,
+                    isCombined: isCombined,
+                    newPostStatus: 'Data Unavailable',
+                    username: auth.username,
+                    role: auth.role,
+                  );
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(ok
+                            ? 'Workflow deleted and marked "Data Unavailable".'
+                            : 'Failed to delete workflow.'),
+                        backgroundColor: ok ? Colors.green : Colors.red,
+                      ),
+                    );
+                    if (ok) context.pop();
+                  }
+                },
+              ),
+              ElevatedButton.icon(
+                icon: const Icon(Icons.delete_forever, size: 16),
+                label: const Text('Delete & Make Inactive'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red,
+                  foregroundColor: Colors.white,
+                ),
+                onPressed: () async {
+                  Navigator.pop(ctx);
+                  final ok = await provider.deleteWorkflow(
+                    postNo: postNo,
+                    isCombined: isCombined,
+                    newPostStatus: 'Inactive',
+                    username: auth.username,
+                    role: auth.role,
+                  );
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(ok
+                            ? 'Workflow deleted and marked "Inactive".'
+                            : 'Failed to delete workflow.'),
+                        backgroundColor: ok ? Colors.orange.shade800 : Colors.red,
+                      ),
+                    );
+                    if (ok) context.pop();
+                  }
+                },
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 }
 

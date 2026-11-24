@@ -617,6 +617,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   }
 
   void _confirmDeletePostWorkflow(BuildContext context) {
+    final title = (event.isCombined || event.postNo.toLowerCase().startsWith('combined')) ? event.postNo : 'Post #${event.postNo}';
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -625,53 +626,97 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
           children: const [
             Icon(Icons.warning_amber_rounded, color: Colors.red, size: 28),
             SizedBox(width: 8),
-            Text('Delete Workflow?'),
+            Text('Manage Workflow'),
           ],
         ),
         content: Text(
-          'Are you sure you want to delete all workflow tasks for ${(event.isCombined || event.postNo.toLowerCase().startsWith('combined')) ? event.postNo : 'Post #${event.postNo}'}?\n\n'
-          'This will remove all assigned tasks and convert the post back to Inactive.',
+          'If media is not available or you want to delete the active workflow for $title, select an option below:\n\n'
+          '• Data Unavailable: Removes all tasks across all stages (Photo Editing, Writing, etc.) and marks the post as "Data Unavailable".\n'
+          '• Make Inactive: Removes all tasks across all stages and reverts the post to "Inactive".',
           style: const TextStyle(fontSize: 14, height: 1.4),
         ),
+        actionsAlignment: MainAxisAlignment.spaceBetween,
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
             child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
           ),
-          ElevatedButton.icon(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red.shade700,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            ),
-            icon: const Icon(Icons.delete_forever, size: 18),
-            label: const Text('Delete & Make Inactive', style: TextStyle(fontWeight: FontWeight.bold)),
-            onPressed: () async {
-              Navigator.pop(ctx);
-              final provider = context.read<EventProvider>();
-              final messenger = ScaffoldMessenger.of(context);
-              final ok = await provider.deleteWorkflow(
-                postNo: event.postNo,
-                isCombined: event.isCombined,
-              );
-              if (mounted) {
-                messenger.showSnackBar(
-                  SnackBar(
-                    content: Text(ok
-                        ? '${(event.isCombined || event.postNo.toLowerCase().startsWith('combined')) ? event.postNo : 'Post #${event.postNo}'} workflow deleted and marked Inactive.'
-                        : 'Failed to delete workflow.'),
-                    backgroundColor: ok ? Colors.green : Colors.red,
-                  ),
-                );
-                if (ok) {
-                  if (context.canPop()) {
-                    context.pop();
-                  } else {
-                    context.go('/dashboard');
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              OutlinedButton.icon(
+                icon: const Icon(Icons.block, size: 16),
+                label: const Text('Mark Data Unavailable & Delete'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.orange.shade900,
+                  side: BorderSide(color: Colors.orange.shade400),
+                ),
+                onPressed: () async {
+                  Navigator.pop(ctx);
+                  final provider = context.read<EventProvider>();
+                  final messenger = ScaffoldMessenger.of(context);
+                  final ok = await provider.deleteWorkflow(
+                    postNo: event.postNo,
+                    isCombined: event.isCombined,
+                    newPostStatus: 'Data Unavailable',
+                  );
+                  if (mounted) {
+                    messenger.showSnackBar(
+                      SnackBar(
+                        content: Text(ok
+                            ? '$title workflow deleted and marked Data Unavailable.'
+                            : 'Failed to delete workflow.'),
+                        backgroundColor: ok ? Colors.green : Colors.red,
+                      ),
+                    );
+                    if (ok) {
+                      if (context.canPop()) {
+                        context.pop();
+                      } else {
+                        context.go('/dashboard');
+                      }
+                    }
                   }
-                }
-              }
-            },
+                },
+              ),
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red.shade700,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                icon: const Icon(Icons.delete_forever, size: 18),
+                label: const Text('Delete & Make Inactive', style: TextStyle(fontWeight: FontWeight.bold)),
+                onPressed: () async {
+                  Navigator.pop(ctx);
+                  final provider = context.read<EventProvider>();
+                  final messenger = ScaffoldMessenger.of(context);
+                  final ok = await provider.deleteWorkflow(
+                    postNo: event.postNo,
+                    isCombined: event.isCombined,
+                    newPostStatus: 'Inactive',
+                  );
+                  if (mounted) {
+                    messenger.showSnackBar(
+                      SnackBar(
+                        content: Text(ok
+                            ? '$title workflow deleted and marked Inactive.'
+                            : 'Failed to delete workflow.'),
+                        backgroundColor: ok ? Colors.green : Colors.red,
+                      ),
+                    );
+                    if (ok) {
+                      if (context.canPop()) {
+                        context.pop();
+                      } else {
+                        context.go('/dashboard');
+                      }
+                    }
+                  }
+                },
+              ),
+            ],
           ),
         ],
       ),

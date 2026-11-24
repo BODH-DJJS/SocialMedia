@@ -28,6 +28,9 @@ class _DashboardScreenState extends State<DashboardScreen>
   String _postFilter = 'All';
   String _postTab = 'Overall'; // 'Overall', 'Individual' or 'Combined'
   Timer? _refreshTimer;
+  Timer? _searchDebounce;
+  int _postsPage = 0;
+  int _postsPerPage = 50;
   final Set<String> _selectedPosts = {};
   bool _isSelectionMode = false;
   final TextEditingController _searchController = TextEditingController();
@@ -185,6 +188,7 @@ class _DashboardScreenState extends State<DashboardScreen>
   @override
   void dispose() {
     _refreshTimer?.cancel();
+    _searchDebounce?.cancel();
     _searchController.dispose();
     _workflowSearchController.dispose();
     _horizontalScrollController.dispose();
@@ -1941,6 +1945,7 @@ class _DashboardScreenState extends State<DashboardScreen>
               onSelectionChanged: (val) {
                 setState(() {
                   _postTab = val.first;
+                  _postsPage = 0;
                   _isSelectionMode = false;
                   _selectedPosts.clear();
                 });
@@ -1970,12 +1975,25 @@ class _DashboardScreenState extends State<DashboardScreen>
                     _searchController.text.isNotEmpty
                         ? IconButton(
                           icon: const Icon(Icons.clear),
-                          onPressed:
-                              () => setState(() => _searchController.clear()),
+                          onPressed: () {
+                            _searchController.clear();
+                            setState(() {
+                              _postsPage = 0;
+                            });
+                          },
                         )
                         : null,
               ),
-              onChanged: (value) => setState(() {}),
+              onChanged: (value) {
+                _searchDebounce?.cancel();
+                _searchDebounce = Timer(const Duration(milliseconds: 200), () {
+                  if (mounted) {
+                    setState(() {
+                      _postsPage = 0;
+                    });
+                  }
+                });
+              },
             ),
           ),
           // Filter chips
@@ -1998,6 +2016,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                         onSelected:
                             (_) => setState(() {
                               _postFilter = f;
+                              _postsPage = 0;
                               _isSelectionMode = false;
                               _selectedPosts.clear();
                             }),
@@ -2859,46 +2878,178 @@ class _DashboardScreenState extends State<DashboardScreen>
   }
 
   void _confirmDeletePostWorkflow(Map<String, dynamic> post, EventProvider provider, AuthProvider auth) {
-    final postNo = post['PostNo']?.toString() ?? '';
+    final postNo = (post['PostNo'] ?? post['post_no'])?.toString() ?? '';
+    final groupId = (post['GroupID'] ?? post['group_id'])?.toString().trim() ?? '';
+
+    if (groupId.isNotEmpty) {
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Row(
+            children: [
+              Icon(Icons.call_split_rounded, color: Colors.purple.shade700, size: 26),
+              const SizedBox(width: 8),
+              Text('Post #$postNo is in Group'),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Post #$postNo is part of combined group:\n"$groupId"',
+                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'What would you like to do?',
+                style: TextStyle(fontSize: 13, color: Colors.black87),
+              ),
+            ],
+          ),
+          actionsAlignment: MainAxisAlignment.spaceBetween,
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+            ),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                OutlinedButton.icon(
+                  icon: const Icon(Icons.link_off, size: 16),
+                  label: Text('Remove #$postNo from Group'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.purple.shade700,
+                    side: BorderSide(color: Colors.purple.shade300),
+                  ),
+                  onPressed: () async {
+                    Navigator.pop(ctx);
+                    final ok = await provider.ungroupPost(postNo);
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(ok
+                              ? 'Post #$postNo removed from "$groupId". It is now an individual post.'
+                              : 'Failed to remove post from group.'),
+                          backgroundColor: ok ? Colors.green : Colors.red,
+                        ),
+                      );
+                    }
+                  },
+                ),
+                ElevatedButton.icon(
+                  icon: const Icon(Icons.delete_forever, size: 16),
+                  label: const Text('Delete Group Workflow'),
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+                  onPressed: () async {
+                    Navigator.pop(ctx);
+                    final ok = await provider.deleteWorkflow(
+                      postNo: groupId,
+                      isCombined: true,
+                      username: auth.username,
+                      role: auth.role,
+                    );
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(ok
+                              ? 'Combined post "$groupId" deleted and all posts unlinked.'
+                              : 'Failed to delete combined workflow.'),
+                          backgroundColor: ok ? Colors.orange.shade800 : Colors.red,
+                        ),
+                      );
+                    }
+                  },
+                ),
+              ],
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Row(
           children: [
-            Icon(Icons.warning_amber_rounded, color: Colors.red.shade700),
+            Icon(Icons.warning_amber_rounded, color: Colors.red.shade700, size: 26),
             const SizedBox(width: 8),
-            const Text('Delete Workflow?'),
+            Text('Manage Post #$postNo Workflow'),
           ],
         ),
         content: Text(
-          'Are you sure you want to delete all workflow tasks for Post #$postNo?\n\nThis will remove all assigned tasks and convert the post back to Inactive.',
-          style: const TextStyle(fontSize: 14),
+          'Post #$postNo currently has active workflow tasks.\n\n'
+          'If media is not available or you want to remove its tasks, select an option:',
+          style: const TextStyle(fontSize: 14, height: 1.4),
         ),
+        actionsAlignment: MainAxisAlignment.spaceBetween,
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
+            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
           ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
-            onPressed: () async {
-              Navigator.pop(ctx);
-              final ok = await provider.deleteWorkflow(
-                postNo: postNo,
-                isCombined: false,
-                username: auth.username,
-                role: auth.role,
-              );
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(ok ? 'Post #$postNo workflow deleted and marked Inactive.' : 'Failed to delete workflow.'),
-                    backgroundColor: ok ? Colors.orange.shade800 : Colors.red,
-                  ),
-                );
-              }
-            },
-            child: const Text('Delete & Make Inactive'),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              OutlinedButton.icon(
+                icon: const Icon(Icons.block, size: 16),
+                label: const Text('Mark Data Unavailable & Delete'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.orange.shade900,
+                  side: BorderSide(color: Colors.orange.shade400),
+                ),
+                onPressed: () async {
+                  Navigator.pop(ctx);
+                  final ok = await provider.deleteWorkflow(
+                    postNo: postNo,
+                    isCombined: false,
+                    newPostStatus: 'Data Unavailable',
+                    username: auth.username,
+                    role: auth.role,
+                  );
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(ok
+                            ? 'Post #$postNo workflow deleted and marked Data Unavailable.'
+                            : 'Failed to delete workflow.'),
+                        backgroundColor: ok ? Colors.green : Colors.red,
+                      ),
+                    );
+                  }
+                },
+              ),
+              ElevatedButton.icon(
+                icon: const Icon(Icons.delete_forever, size: 16),
+                label: const Text('Delete & Make Inactive'),
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+                onPressed: () async {
+                  Navigator.pop(ctx);
+                  final ok = await provider.deleteWorkflow(
+                    postNo: postNo,
+                    isCombined: false,
+                    newPostStatus: 'Inactive',
+                    username: auth.username,
+                    role: auth.role,
+                  );
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(ok ? 'Post #$postNo workflow deleted and marked Inactive.' : 'Failed to delete workflow.'),
+                        backgroundColor: ok ? Colors.orange.shade800 : Colors.red,
+                      ),
+                    );
+                  }
+                },
+              ),
+            ],
           ),
         ],
       ),
@@ -2911,42 +3062,83 @@ class _DashboardScreenState extends State<DashboardScreen>
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Row(
           children: [
-            Icon(Icons.warning_amber_rounded, color: Colors.red.shade700),
+            Icon(Icons.warning_amber_rounded, color: Colors.red.shade700, size: 26),
             const SizedBox(width: 8),
-            const Text('Delete Combined Post?'),
+            const Text('Manage Combined Workflow'),
           ],
         ),
         content: Text(
-          'Are you sure you want to delete combined post "$groupId"?\n\nThis will delete all workflow tasks, ungroup the ${posts.length} events, and convert all of them back to Inactive.',
-          style: const TextStyle(fontSize: 14),
+          'Combined post "$groupId" contains ${posts.length} grouped events.\n\n'
+          'If media is not available or you want to remove this workflow, select an option:\n\n'
+          '• Data Unavailable: Deletes all workflow tasks, ungroups posts, and marks all posts as "Data Unavailable".\n'
+          '• Make Inactive: Deletes all workflow tasks, ungroups posts, and marks all posts as "Inactive".',
+          style: const TextStyle(fontSize: 13, height: 1.4),
         ),
+        actionsAlignment: MainAxisAlignment.spaceBetween,
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
+            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
           ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
-            onPressed: () async {
-              Navigator.pop(ctx);
-              final ok = await provider.deleteWorkflow(
-                postNo: groupId,
-                isCombined: true,
-                username: auth.username,
-                role: auth.role,
-              );
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(ok ? 'Combined post $groupId deleted. Events are now Inactive.' : 'Failed to delete combined post.'),
-                    backgroundColor: ok ? Colors.orange.shade800 : Colors.red,
-                  ),
-                );
-              }
-            },
-            child: const Text('Delete & Make Inactive'),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              OutlinedButton.icon(
+                icon: const Icon(Icons.block, size: 16),
+                label: const Text('Mark Data Unavailable & Delete'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.orange.shade900,
+                  side: BorderSide(color: Colors.orange.shade400),
+                ),
+                onPressed: () async {
+                  Navigator.pop(ctx);
+                  final ok = await provider.deleteWorkflow(
+                    postNo: groupId,
+                    isCombined: true,
+                    newPostStatus: 'Data Unavailable',
+                    username: auth.username,
+                    role: auth.role,
+                  );
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(ok
+                            ? 'Combined post "$groupId" workflow deleted and marked Data Unavailable.'
+                            : 'Failed to delete combined workflow.'),
+                        backgroundColor: ok ? Colors.green : Colors.red,
+                      ),
+                    );
+                  }
+                },
+              ),
+              ElevatedButton.icon(
+                icon: const Icon(Icons.delete_forever, size: 16),
+                label: const Text('Delete & Make Inactive'),
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+                onPressed: () async {
+                  Navigator.pop(ctx);
+                  final ok = await provider.deleteWorkflow(
+                    postNo: groupId,
+                    isCombined: true,
+                    newPostStatus: 'Inactive',
+                    username: auth.username,
+                    role: auth.role,
+                  );
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(ok ? 'Combined post "$groupId" deleted. Events are now Inactive.' : 'Failed to delete combined post.'),
+                        backgroundColor: ok ? Colors.orange.shade800 : Colors.red,
+                      ),
+                    );
+                  }
+                },
+              ),
+            ],
           ),
         ],
       ),
@@ -3272,6 +3464,16 @@ class _DashboardScreenState extends State<DashboardScreen>
             ],
           ),
         ),
+        const PopupMenuItem<String>(
+          value: 'delete_workflow',
+          child: Row(
+            children: [
+              Icon(Icons.delete_outline, size: 18, color: Colors.red),
+              SizedBox(width: 10),
+              Text('Delete Workflow / Data Unavailable', style: TextStyle(fontSize: 13, color: Colors.red)),
+            ],
+          ),
+        ),
       ],
     ).then((value) {
       if (value == 'open_task_new_tab') {
@@ -3280,6 +3482,22 @@ class _DashboardScreenState extends State<DashboardScreen>
         _openInNewTab(workflowUrl);
       } else if (value == 'open_current_tab') {
         context.push(taskUrl, extra: task);
+      } else if (value == 'delete_workflow') {
+        final provider = context.read<EventProvider>();
+        final auth = context.read<AuthProvider>();
+        if (task.isCombined) {
+          final group = {
+            'GroupID': task.postNo,
+            'Posts': provider.rawPosts.where((p) => (p['GroupID'] ?? p['group_id'])?.toString() == task.postNo).toList(),
+          };
+          _confirmDeleteCombinedWorkflow(group, provider, auth);
+        } else {
+          final post = provider.rawPosts.firstWhere(
+            (p) => (p['PostNo'] ?? p['post_no'])?.toString() == task.postNo,
+            orElse: () => {'PostNo': task.postNo},
+          );
+          _confirmDeletePostWorkflow(post, provider, auth);
+        }
       }
     });
   }
@@ -3707,26 +3925,38 @@ class _DashboardScreenState extends State<DashboardScreen>
       });
     }
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        return Scrollbar(
-          controller: _verticalScrollController,
-          thumbVisibility: true,
-          child: SingleChildScrollView(
-            controller: _verticalScrollController,
-            scrollDirection: Axis.vertical,
-            child: Scrollbar(
-              controller: _horizontalScrollController,
-              thumbVisibility: true,
-              trackVisibility: true,
-              thickness: 10,
-              radius: const Radius.circular(5),
-              child: SingleChildScrollView(
-                controller: _horizontalScrollController,
-                scrollDirection: Axis.horizontal,
-                child: Padding(
-                  padding: const EdgeInsets.only(bottom: 16),
-                  child: DataTable(
+    final totalPosts = posts.length;
+    final maxPage = totalPosts == 0 ? 0 : (totalPosts - 1) ~/ _postsPerPage;
+    if (_postsPage > maxPage) {
+      _postsPage = maxPage;
+    }
+    final startIndex = _postsPage * _postsPerPage;
+    final endIndex = (startIndex + _postsPerPage < totalPosts) ? startIndex + _postsPerPage : totalPosts;
+    final pagedPosts = totalPosts == 0 ? <Map<String, dynamic>>[] : posts.sublist(startIndex, endIndex);
+
+    return Column(
+      children: [
+        Expanded(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              return Scrollbar(
+                controller: _verticalScrollController,
+                thumbVisibility: true,
+                child: SingleChildScrollView(
+                  controller: _verticalScrollController,
+                  scrollDirection: Axis.vertical,
+                  child: Scrollbar(
+                    controller: _horizontalScrollController,
+                    thumbVisibility: true,
+                    trackVisibility: true,
+                    thickness: 10,
+                    radius: const Radius.circular(5),
+                    child: SingleChildScrollView(
+                      controller: _horizontalScrollController,
+                      scrollDirection: Axis.horizontal,
+                      child: Padding(
+                        padding: const EdgeInsets.only(bottom: 16),
+                        child: DataTable(
                     columnSpacing: 10,
                     horizontalMargin: 12,
                     headingRowHeight: 40,
@@ -3797,7 +4027,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                         ),
                       ),
                     ],
-                    rows: posts.map((post) {
+                    rows: pagedPosts.map((post) {
                       final auth = context.read<AuthProvider>();
                       final isAdmin = auth.role.toLowerCase() == 'admin';
                       final postNo = post['PostNo']?.toString() ?? '';
@@ -4029,11 +4259,11 @@ class _DashboardScreenState extends State<DashboardScreen>
                                       onPressed: () => _showEditPostBeneficiariesDialog(post, provider),
                                     ),
                                   ],
-                                  if (isInitialized) ...[
+                                  if (isInitialized || groupId.isNotEmpty) ...[
                                     const SizedBox(width: 4),
                                     IconButton(
                                       icon: Icon(Icons.delete_outline, size: 18, color: Colors.red.shade600),
-                                      tooltip: 'Delete Workflow (Make Inactive)',
+                                      tooltip: groupId.isNotEmpty ? 'Manage Group / Delete' : 'Delete Workflow (Make Inactive)',
                                       padding: EdgeInsets.zero,
                                       constraints: const BoxConstraints(minWidth: 26, minHeight: 26),
                                       onPressed: () => _confirmDeletePostWorkflow(post, provider, context.read<AuthProvider>()),
@@ -4053,6 +4283,97 @@ class _DashboardScreenState extends State<DashboardScreen>
           ),
         );
       },
+    ),
+  ),
+  _buildPaginationControls(totalPosts, startIndex, endIndex, maxPage),
+],
+);
+  }
+
+  Widget _buildPaginationControls(int totalPosts, int startIndex, int endIndex, int maxPage) {
+    if (totalPosts == 0) return const SizedBox.shrink();
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border(top: BorderSide(color: Colors.grey.shade200)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(
+            children: [
+              Text(
+                'Showing ${startIndex + 1}–$endIndex of $totalPosts posts',
+                style: TextStyle(fontSize: 12, color: Colors.grey.shade700, fontWeight: FontWeight.w500),
+              ),
+              const SizedBox(width: 16),
+              Text('Rows per page:', style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+              const SizedBox(width: 6),
+              DropdownButton<int>(
+                value: _postsPerPage,
+                isDense: true,
+                underline: const SizedBox.shrink(),
+                style: const TextStyle(fontSize: 12, color: Colors.black87, fontWeight: FontWeight.bold),
+                items: const [
+                  DropdownMenuItem(value: 25, child: Text('25')),
+                  DropdownMenuItem(value: 50, child: Text('50')),
+                  DropdownMenuItem(value: 100, child: Text('100')),
+                  DropdownMenuItem(value: 200, child: Text('200')),
+                ],
+                onChanged: (val) {
+                  if (val != null && val != _postsPerPage) {
+                    setState(() {
+                      _postsPerPage = val;
+                      _postsPage = 0;
+                    });
+                  }
+                },
+              ),
+            ],
+          ),
+          Row(
+            children: [
+              IconButton(
+                icon: const Icon(Icons.first_page, size: 20),
+                tooltip: 'First Page',
+                onPressed: _postsPage > 0
+                    ? () => setState(() => _postsPage = 0)
+                    : null,
+              ),
+              IconButton(
+                icon: const Icon(Icons.chevron_left, size: 20),
+                tooltip: 'Previous Page',
+                onPressed: _postsPage > 0
+                    ? () => setState(() => _postsPage--)
+                    : null,
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: Text(
+                  'Page ${_postsPage + 1} of ${maxPage + 1}',
+                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.chevron_right, size: 20),
+                tooltip: 'Next Page',
+                onPressed: _postsPage < maxPage
+                    ? () => setState(() => _postsPage++)
+                    : null,
+              ),
+              IconButton(
+                icon: const Icon(Icons.last_page, size: 20),
+                tooltip: 'Last Page',
+                onPressed: _postsPage < maxPage
+                    ? () => setState(() => _postsPage = maxPage)
+                    : null,
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 

@@ -480,6 +480,7 @@ class ApiService {
     if (updates.containsKey('postType')) payload['post_type'] = updates['postType'];
     if (updates.containsKey('mediaMode')) payload['media_mode'] = updates['mediaMode'];
     if (updates.containsKey('description')) payload['description'] = updates['description'];
+    if (updates.containsKey('groupId')) payload['group_id'] = updates['groupId'];
 
     try {
       final response = await http.patch(
@@ -495,6 +496,160 @@ class ApiService {
       return response.statusCode == 200 || response.statusCode == 204;
     } catch (e) {
       debugPrint('⚠️ [Supabase Post Update Error]: $e');
+      return false;
+    }
+  }
+
+  /// Deletes all tasks for a post or combined group from Supabase instantly (~50ms)
+  Future<bool> deleteTasksFromSupabase(String postNo) async {
+    final cleanPNo = postNo.trim();
+    if (cleanPNo.isEmpty) return false;
+    final uri = Uri.parse('$supabaseUrl/rest/v1/tasks?post_no=eq.${Uri.encodeComponent(cleanPNo)}');
+    try {
+      final response = await http.delete(
+        uri,
+        headers: {
+          'apikey': supabaseAnonKey,
+          'Authorization': 'Bearer $supabaseAnonKey',
+          'Prefer': 'return=minimal',
+        },
+      );
+      return response.statusCode == 200 || response.statusCode == 204;
+    } catch (e) {
+      debugPrint('⚠️ [Supabase Task Delete Error]: $e');
+      return false;
+    }
+  }
+
+  /// Ungroups a post in Supabase instantly (~50ms)
+  Future<bool> ungroupPostInSupabase(String postNo, {String? newStatus}) async {
+    final cleanPNo = postNo.trim();
+    if (cleanPNo.isEmpty) return false;
+    final uri = Uri.parse('$supabaseUrl/rest/v1/posts?post_no=eq.${Uri.encodeComponent(cleanPNo)}');
+    try {
+      final body = <String, dynamic>{
+        'group_id': '',
+        'post_type': 'Individual',
+        'updated_at': DateTime.now().toIso8601String(),
+      };
+      if (newStatus != null && newStatus.isNotEmpty) {
+        body['post_status'] = newStatus;
+      }
+      final response = await http.patch(
+        uri,
+        headers: {
+          'apikey': supabaseAnonKey,
+          'Authorization': 'Bearer $supabaseAnonKey',
+          'Content-Type': 'application/json',
+          'Prefer': 'return=minimal',
+        },
+        body: json.encode(body),
+      );
+      return response.statusCode == 200 || response.statusCode == 204;
+    } catch (e) {
+      debugPrint('⚠️ [Supabase Ungroup Error]: $e');
+      return false;
+    }
+  }
+
+  /// Groups posts under a combined group in Supabase instantly (~50ms)
+  Future<bool> groupPostsInSupabase(List<String> postNos, String groupId) async {
+    if (postNos.isEmpty || groupId.trim().isEmpty) return false;
+    try {
+      for (final pNo in postNos) {
+        final uri = Uri.parse('$supabaseUrl/rest/v1/posts?post_no=eq.${Uri.encodeComponent(pNo.trim())}');
+        await http.patch(
+          uri,
+          headers: {
+            'apikey': supabaseAnonKey,
+            'Authorization': 'Bearer $supabaseAnonKey',
+            'Content-Type': 'application/json',
+            'Prefer': 'return=minimal',
+          },
+          body: json.encode({
+            'group_id': groupId.trim(),
+            'post_type': 'Combined',
+            'updated_at': DateTime.now().toIso8601String(),
+          }),
+        );
+      }
+      return true;
+    } catch (e) {
+      debugPrint('⚠️ [Supabase Group Error]: $e');
+      return false;
+    }
+  }
+
+  /// Renames a combined group in Supabase instantly (~50ms)
+  Future<bool> renameGroupInSupabase(String oldGroupId, String newGroupId) async {
+    final cleanOld = oldGroupId.trim();
+    final cleanNew = newGroupId.trim();
+    if (cleanOld.isEmpty || cleanNew.isEmpty) return false;
+    try {
+      // 1. Update posts table
+      final postsUri = Uri.parse('$supabaseUrl/rest/v1/posts?group_id=eq.${Uri.encodeComponent(cleanOld)}');
+      await http.patch(
+        postsUri,
+        headers: {
+          'apikey': supabaseAnonKey,
+          'Authorization': 'Bearer $supabaseAnonKey',
+          'Content-Type': 'application/json',
+          'Prefer': 'return=minimal',
+        },
+        body: json.encode({
+          'group_id': cleanNew,
+          'updated_at': DateTime.now().toIso8601String(),
+        }),
+      );
+      // 2. Update tasks table
+      final tasksUri = Uri.parse('$supabaseUrl/rest/v1/tasks?post_no=eq.${Uri.encodeComponent(cleanOld)}');
+      await http.patch(
+        tasksUri,
+        headers: {
+          'apikey': supabaseAnonKey,
+          'Authorization': 'Bearer $supabaseAnonKey',
+          'Content-Type': 'application/json',
+          'Prefer': 'return=minimal',
+        },
+        body: json.encode({
+          'post_no': cleanNew,
+          'updated_at': DateTime.now().toIso8601String(),
+        }),
+      );
+      return true;
+    } catch (e) {
+      debugPrint('⚠️ [Supabase Rename Group Error]: $e');
+      return false;
+    }
+  }
+
+  /// Clears group_id from all posts in a combined group in Supabase (~50ms)
+  Future<bool> clearGroupPostsInSupabase(String groupId, {String? newStatus}) async {
+    final cleanGId = groupId.trim();
+    if (cleanGId.isEmpty) return false;
+    final uri = Uri.parse('$supabaseUrl/rest/v1/posts?group_id=eq.${Uri.encodeComponent(cleanGId)}');
+    try {
+      final body = <String, dynamic>{
+        'group_id': '',
+        'post_type': 'Individual',
+        'updated_at': DateTime.now().toIso8601String(),
+      };
+      if (newStatus != null && newStatus.isNotEmpty) {
+        body['post_status'] = newStatus;
+      }
+      final response = await http.patch(
+        uri,
+        headers: {
+          'apikey': supabaseAnonKey,
+          'Authorization': 'Bearer $supabaseAnonKey',
+          'Content-Type': 'application/json',
+          'Prefer': 'return=minimal',
+        },
+        body: json.encode(body),
+      );
+      return response.statusCode == 200 || response.statusCode == 204;
+    } catch (e) {
+      debugPrint('⚠️ [Supabase Clear Group Error]: $e');
       return false;
     }
   }
