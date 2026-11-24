@@ -133,6 +133,11 @@ class BodhSocialMediaApp extends StatelessWidget {
     return MaterialApp.router(
       title: 'BODH Social Media',
       debugShowCheckedModeBanner: false,
+      builder: (context, child) {
+        return SelectionArea(
+          child: child ?? const SizedBox.shrink(),
+        );
+      },
       theme: ThemeData(
         useMaterial3: true,
         brightness: Brightness.light,
