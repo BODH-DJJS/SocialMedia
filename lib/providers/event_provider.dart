@@ -127,6 +127,38 @@ class EventProvider with ChangeNotifier {
           final tPostNo = t['post_no']?.toString() ?? '';
           final matched = postsMap[tPostNo] ?? [];
 
+          // Helper to check if status means unavailable / inactive
+          bool isInactive(String? s) {
+            if (s == null) return false;
+            final l = s.trim().toLowerCase();
+            return l == 'data unavailable' || l == 'dataunavailable' || l == 'inactive' || l == 'skip';
+          }
+
+          // Defensive check 1: If matched post(s) are all marked Data Unavailable / Inactive / Skip
+          if (matched.isNotEmpty && matched.every((p) => isInactive((p['PostStatus'] ?? p['post_status'])?.toString()))) {
+            _apiService.deleteTasksFromSupabase(tPostNo);
+            continue;
+          }
+
+          // Defensive check 2: If matched is empty, check if tPostNo is a combined group with member post numbers
+          if (matched.isEmpty) {
+            final extractedNumbers = RegExp(r'\b\d+\b').allMatches(tPostNo).map((m) => m.group(0)!).toSet();
+            if (extractedNumbers.isNotEmpty) {
+              final relatedPosts = extractedNumbers.expand((no) => postsMap[no] ?? <Map<String, dynamic>>[]).toList();
+              if (relatedPosts.isNotEmpty) {
+                final allRelatedInactive = relatedPosts.every((p) => isInactive((p['PostStatus'] ?? p['post_status'])?.toString()));
+                final noneBelongsToGroup = relatedPosts.every((p) {
+                  final gId = (p['GroupID'] ?? p['group_id'])?.toString().trim();
+                  return gId != tPostNo;
+                });
+                if (allRelatedInactive || noneBelongsToGroup) {
+                  _apiService.deleteTasksFromSupabase(tPostNo);
+                  continue;
+                }
+              }
+            }
+          }
+
           if (matched.length == 1) {
             merged.addAll(matched.first);
             // Ensure original task post_no isn't overwritten by post's post_no if task is a combined group!
@@ -754,14 +786,29 @@ class EventProvider with ChangeNotifier {
   }
 
   Future<bool> updatePostMeta(String postNo, Map<String, dynamic> updates) async {
+    final cleanPNo = postNo.trim();
+    if (cleanPNo.isEmpty) return false;
+
     try {
-      final Map<String, dynamic> payload = {'action': 'updatePostMeta', 'postNo': postNo};
+      // 1. Immediately update Supabase posts table
+      _apiService.updatePostInSupabase(cleanPNo, updates);
+
+      // 2. If postStatus is set to Data Unavailable / Inactive / Skip, remove tasks immediately
+      if (updates.containsKey('postStatus')) {
+        final st = updates['postStatus']?.toString().trim().toLowerCase() ?? '';
+        if (st == 'data unavailable' || st == 'dataunavailable' || st == 'inactive' || st == 'skip') {
+          _events.removeWhere((t) => t.postNo == cleanPNo);
+          _apiService.deleteTasksFromSupabase(cleanPNo);
+        }
+      }
+
+      final Map<String, dynamic> payload = {'action': 'updatePostMeta', 'postNo': cleanPNo};
       payload.addAll(updates);
       final response = await _apiService.postData(payload);
       if (response['success'] == true) {
         // Update in-memory rawPosts if present
         for (var p in _rawPosts) {
-          if (p['PostNo']?.toString() == postNo || (p['GroupID']?.toString().isNotEmpty == true && p['GroupID']?.toString() == postNo)) {
+          if (p['PostNo']?.toString() == cleanPNo || (p['GroupID']?.toString().isNotEmpty == true && p['GroupID']?.toString() == cleanPNo)) {
             if (updates.containsKey('activityType')) {
               p['ActivityType'] = updates['activityType'];
             }

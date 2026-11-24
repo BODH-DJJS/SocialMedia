@@ -789,7 +789,9 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
                                     if (newVal == null || newVal == _postStatus) return;
 
                                     final shouldClearTasks = (newVal == 'Data Unavailable' || newVal == 'Inactive' || newVal == 'Skip');
-                                    if (shouldClearTasks && isInitialized) {
+                                    final pNoStr = postNo.toString().trim();
+                                    final hasTasks = isInitialized || provider.events.any((t) => t.postNo == pNoStr);
+                                    if (shouldClearTasks && hasTasks) {
                                       final confirm = await showDialog<bool>(
                                         context: context,
                                         builder: (ctx) => AlertDialog(

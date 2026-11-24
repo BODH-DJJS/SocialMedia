@@ -56,7 +56,6 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   String _crosscheckDocLink = '';
   String _canvaLink = '';
   bool _isSavingCanva = false;
-  List<Map<String, dynamic>> _photos = [];
   List<GroupMediaLink> _groupMediaLinks = [];
 
   @override
@@ -279,7 +278,6 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
           _writingDocLink = links['writingDoc'] ?? '';
           _proofreadDocLink = links['proofreadDoc'] ?? '';
           _crosscheckDocLink = links['crosscheckDoc'] ?? '';
-          _photos = fetchedPhotos;
           _isLoadingMedia = false;
         });
       }

@@ -440,21 +440,49 @@ class _DashboardScreenState extends State<DashboardScreen>
     }
   }
 
+  Set<String> _getUnavailablePostNos(EventProvider provider) {
+    final set = <String>{};
+    for (final p in provider.rawPosts) {
+      final st = (p['PostStatus'] ?? p['post_status'])?.toString().trim().toLowerCase();
+      if (st == 'data unavailable' || st == 'dataunavailable' || st == 'inactive' || st == 'skip') {
+        final pNo = (p['PostNo'] ?? p['post_no'])?.toString().trim();
+        if (pNo != null && pNo.isNotEmpty) set.add(pNo);
+        final gId = (p['GroupID'] ?? p['group_id'])?.toString().trim();
+        if (gId != null && gId.isNotEmpty) set.add(gId);
+      }
+    }
+    return set;
+  }
+
+  bool _isTaskUnavailable(Event e, Set<String> unavailablePostNos) {
+    final cleanPNo = e.postNo.trim();
+    if (unavailablePostNos.contains(cleanPNo)) return true;
+    if (e.isCombined) {
+      final extracted = RegExp(r'\b\d+\b').allMatches(cleanPNo).map((m) => m.group(0)!).toSet();
+      if (extracted.isNotEmpty && extracted.every((no) => unavailablePostNos.contains(no))) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   // ── OVERVIEW / STATS ──
   Widget _buildOverview(EventProvider provider) {
-    final total = provider.events.length;
-    final done = provider.events.where((e) => e.status == 'Done').length;
+    final unavail = _getUnavailablePostNos(provider);
+    final activeEvents = provider.events.where((e) => !_isTaskUnavailable(e, unavail)).toList();
+    final total = activeEvents.length;
+    final done = activeEvents.where((e) => e.status == 'Done').length;
     final pending = total - done;
     final writing =
-        provider.events
+        activeEvents
             .where((e) => e.stage == 'Writing' && e.status != 'Done')
             .length;
     final editing =
-        provider.events
+        activeEvents
             .where((e) => e.stage == 'Editing' && e.status != 'Done')
             .length;
     final proofing =
-        provider.events
+        activeEvents
             .where((e) => e.stage == 'Proofreading' && e.status != 'Done')
             .length;
 
@@ -1114,10 +1142,14 @@ class _DashboardScreenState extends State<DashboardScreen>
 
   // ── KANBAN ──
   Widget _buildKanbanBoard(EventProvider provider) {
+    final unavail = _getUnavailablePostNos(provider);
     final wQuery = _workflowSearchController.text.trim().toLowerCase();
-    final filteredEvents = wQuery.isEmpty
-          ? provider.events.where((e) => e.status != 'Done').toList()
-          : provider.events.where((e) => (e.postNo.toLowerCase().contains(wQuery) || e.branch.toLowerCase().contains(wQuery)) && e.status != 'Done').toList();
+    final filteredEvents = provider.events.where((e) {
+      if (e.status == 'Done') return false;
+      if (_isTaskUnavailable(e, unavail)) return false;
+      if (wQuery.isEmpty) return true;
+      return e.postNo.toLowerCase().contains(wQuery) || e.branch.toLowerCase().contains(wQuery);
+    }).toList();
 
     final contentStages = [
       (
@@ -5323,8 +5355,10 @@ class _DashboardScreenState extends State<DashboardScreen>
       }
     }
 
+    final unavail = _getUnavailablePostNos(provider);
     List<Event> visibleEvents = provider.events.where((e) {
       if (e.status.trim().toLowerCase() == 'waiting') return false;
+      if (_isTaskUnavailable(e, unavail)) return false;
       final ass = e.assignee.trim().toLowerCase();
       final assName = e.assigneeName.trim().toLowerCase();
 
