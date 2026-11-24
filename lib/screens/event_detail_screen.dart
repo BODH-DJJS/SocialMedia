@@ -586,25 +586,44 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       }
     }
     
+    setState(() => _isSaving = true);
+
     final messenger = ScaffoldMessenger.of(context);
+    final provider = context.read<EventProvider>();
+    provider.invalidateCache();
+
+    final error = await provider.updateEvent(event, {'Status': 'Done'});
+
+    if (!mounted) return;
+
+    setState(() {
+      _isSaving = false;
+      event.status = 'Done';
+    });
+
+    if (error != null && error != 'timeout') {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('Failed: $error. Please try again.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
     messenger.showSnackBar(
       const SnackBar(
-        content: Text('Task marked as Done successfully!'),
+        content: Text('✓ Task marked as Done & handed off successfully!'),
         backgroundColor: Colors.green,
         duration: Duration(seconds: 2),
-      )
+      ),
     );
-    Navigator.pop(context); // Go back immediately
 
-    final provider = context.read<EventProvider>();
-    provider.invalidateCache(); 
-    provider.updateEvent(event, {'Status': 'Done'}).then((error) {
-      if (error != null && error != 'timeout') {
-         messenger.showSnackBar(
-           const SnackBar(content: Text('Failed: Please resubmit task again.'), backgroundColor: Colors.red)
-         );
-      }
-    });
+    if (context.canPop()) {
+      context.pop();
+    } else {
+      context.go('/dashboard');
+    }
   }
 
   void _showReassignDialog(BuildContext context, Event targetEvent) {
@@ -871,7 +890,11 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
               backgroundColor: Colors.orange,
             ),
           );
-          Navigator.pop(context);
+          if (context.canPop()) {
+            context.pop();
+          } else {
+            context.go('/dashboard');
+          }
         } else {
           messenger.showSnackBar(
             const SnackBar(
@@ -2192,8 +2215,12 @@ class _ReassignDialogState extends State<_ReassignDialog> {
             
             // Pop the dialog immediately
             Navigator.pop(context);
-            // Optionally pop the detail screen as well to return to dashboard
-            Navigator.pop(context);
+            // Return to dashboard or pop detail screen
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go('/dashboard');
+            }
 
             // Process in background
             final provider = context.read<EventProvider>();
