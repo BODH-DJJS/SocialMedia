@@ -220,7 +220,7 @@ class ApiService {
 
   /// Fetches users from Supabase in ~50ms (returns empty list if table doesn't exist yet)
   Future<List<Map<String, dynamic>>> fetchUsersFromSupabase() async {
-    final uri = Uri.parse('$supabaseUrl/rest/v1/users?select=*&order=name.asc');
+    final uri = Uri.parse('$supabaseUrl/rest/v1/users?select=*&order=row_index.asc');
     try {
       final response = await http.get(
         uri,

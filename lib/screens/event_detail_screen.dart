@@ -2321,18 +2321,24 @@ class _ReassignDialogState extends State<_ReassignDialog> {
       if (email.endsWith('@example.com') || name.startsWith('Sample ')) return false;
 
       if (expectedRole == 'Thumbnail Selector') {
-        return userHasRole(u, 'Thumbnail Selector') || userHasRole(u, 'Thumbnail Processor') || userHasRole(u, 'Admin');
+        return userHasRole(u, 'Thumbnail Selector') || userHasRole(u, 'Admin');
       }
       if (expectedRole == 'Thumbnail Processor') {
         return userHasRole(u, 'Thumbnail Processor') || userHasRole(u, 'Admin');
       }
       if (expectedRole == 'Thumbnail CrossChecker') {
-        return userHasRole(u, 'Thumbnail CrossChecker') || userHasRole(u, 'Thumbnail Processor') || userHasRole(u, 'Admin');
+        return userHasRole(u, 'Thumbnail CrossChecker') || userHasRole(u, 'Admin');
       }
       return userHasRole(u, expectedRole) || userHasRole(u, 'Admin');
     }).toList();
 
-    // Sort: Exact role users first, then non-admin fallbacks, then Admin-only strictly at the END!
+    final isMediaRole = expectedRole == 'Photo Editor' ||
+        expectedRole == 'Video Editor' ||
+        expectedRole == 'Media CrossChecker' ||
+        expectedRole == 'Photo Selector';
+
+    // Sort: Exact role users first, Admin-only at the END.
+    // Media roles sort alphabetically; Content & Thumbnail roles preserve Google Sheet order (row_index).
     roleUsers.sort((a, b) {
       final isExactA = userHasRole(a, expectedRole);
       final isExactB = userHasRole(b, expectedRole);
@@ -2344,9 +2350,15 @@ class _ReassignDialogState extends State<_ReassignDialog> {
       if (isAdminOnlyA && !isAdminOnlyB) return 1;
       if (!isAdminOnlyA && isAdminOnlyB) return -1;
 
-      final nameA = (a['name'] ?? a['email'] ?? '').toString().toLowerCase();
-      final nameB = (b['name'] ?? b['email'] ?? '').toString().toLowerCase();
-      return nameA.compareTo(nameB);
+      if (isMediaRole) {
+        final nameA = (a['name'] ?? a['email'] ?? '').toString().toLowerCase();
+        final nameB = (b['name'] ?? b['email'] ?? '').toString().toLowerCase();
+        return nameA.compareTo(nameB);
+      }
+
+      final rowA = int.tryParse((a['row_index'] ?? '').toString()) ?? 999999;
+      final rowB = int.tryParse((b['row_index'] ?? '').toString()) ?? 999999;
+      return rowA.compareTo(rowB);
     });
 
     return AlertDialog(

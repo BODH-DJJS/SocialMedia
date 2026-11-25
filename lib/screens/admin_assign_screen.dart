@@ -488,13 +488,13 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
       }
 
       if (role == 'Thumbnail Selector') {
-        return _userHasRole(u, 'Thumbnail Selector') || _userHasRole(u, 'Thumbnail Processor') || _userHasRole(u, 'Admin');
+        return _userHasRole(u, 'Thumbnail Selector') || _userHasRole(u, 'Admin');
       }
       if (role == 'Thumbnail Processor') {
         return _userHasRole(u, 'Thumbnail Processor') || _userHasRole(u, 'Admin');
       }
       if (role == 'Thumbnail CrossChecker') {
-        return _userHasRole(u, 'Thumbnail CrossChecker') || _userHasRole(u, 'Thumbnail Processor') || _userHasRole(u, 'Admin');
+        return _userHasRole(u, 'Thumbnail CrossChecker') || _userHasRole(u, 'Admin');
       }
       if (role == 'Photo Selector') {
         return _userHasRole(u, 'Photo Selector') || _userHasRole(u, 'Photo Editor') || _userHasRole(u, 'Uploader') || _userHasRole(u, 'Admin');
@@ -502,7 +502,13 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
       return _userHasRole(u, role) || _userHasRole(u, 'Admin');
     }).toList();
 
-    // Sort: Exact role users first, then non-admin fallbacks, and Admin-only users strictly at the END!
+    final isMediaRole = role == 'Photo Editor' ||
+        role == 'Video Editor' ||
+        role == 'Media CrossChecker' ||
+        role == 'Photo Selector';
+
+    // Sort: Exact role users first, Admin-only at the END.
+    // Media roles sort alphabetically; Content & Thumbnail roles preserve Google Sheet order (row_index).
     users.sort((a, b) {
       final isExactA = _userHasRole(a, role);
       final isExactB = _userHasRole(b, role);
@@ -514,9 +520,15 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
       if (isAdminOnlyA && !isAdminOnlyB) return 1;
       if (!isAdminOnlyA && isAdminOnlyB) return -1;
 
-      final nameA = (a['name'] ?? a['email'] ?? '').toString().toLowerCase();
-      final nameB = (b['name'] ?? b['email'] ?? '').toString().toLowerCase();
-      return nameA.compareTo(nameB);
+      if (isMediaRole) {
+        final nameA = (a['name'] ?? a['email'] ?? '').toString().toLowerCase();
+        final nameB = (b['name'] ?? b['email'] ?? '').toString().toLowerCase();
+        return nameA.compareTo(nameB);
+      }
+
+      final rowA = int.tryParse((a['row_index'] ?? '').toString()) ?? 999999;
+      final rowB = int.tryParse((b['row_index'] ?? '').toString()) ?? 999999;
+      return rowA.compareTo(rowB);
     });
 
     final uniqueUsers = <String, Map<String, dynamic>>{};
