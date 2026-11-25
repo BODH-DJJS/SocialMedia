@@ -2306,29 +2306,43 @@ class _ReassignDialogState extends State<_ReassignDialog> {
     else if (stage.contains('media cross')) expectedRole = 'Media CrossChecker';
     else if (stage.contains('ready')) expectedRole = 'Uploader';
 
+    bool userHasRole(Map<String, dynamic> u, String targetRole) {
+      final target = targetRole.trim().toLowerCase();
+      return (u['role'] ?? '')
+          .toString()
+          .split(',')
+          .map((s) => s.trim().toLowerCase())
+          .any((r) => r == target);
+    }
+
     final roleUsers = users.where((u) {
-      final r = u['role']?.toString() ?? '';
-      // Support specific thumbnail roles as well as generic 'Thumbnail Designer'
-      if (expectedRole.startsWith('Thumbnail')) {
-        return r == expectedRole || r == 'Thumbnail Designer' || r == 'Admin';
+      final email = (u['email'] ?? '').toString().trim().toLowerCase();
+      final name = (u['name'] ?? '').toString().trim();
+      if (email.endsWith('@example.com') || name.startsWith('Sample ')) return false;
+
+      if (expectedRole == 'Thumbnail Selector') {
+        return userHasRole(u, 'Thumbnail Selector') || userHasRole(u, 'Thumbnail Processor') || userHasRole(u, 'Admin');
       }
-      return r == expectedRole || r == 'Admin';
+      if (expectedRole == 'Thumbnail Processor') {
+        return userHasRole(u, 'Thumbnail Processor') || userHasRole(u, 'Admin');
+      }
+      if (expectedRole == 'Thumbnail CrossChecker') {
+        return userHasRole(u, 'Thumbnail CrossChecker') || userHasRole(u, 'Thumbnail Processor') || userHasRole(u, 'Admin');
+      }
+      return userHasRole(u, expectedRole) || userHasRole(u, 'Admin');
     }).toList();
 
-    // Sort: Users of that role first, then fallbacks, then Admin strictly at the END!
+    // Sort: Exact role users first, then non-admin fallbacks, then Admin-only strictly at the END!
     roleUsers.sort((a, b) {
-      final roleA = (a['role'] ?? '').toString().toLowerCase();
-      final roleB = (b['role'] ?? '').toString().toLowerCase();
-      final isAdminA = roleA == 'admin';
-      final isAdminB = roleB == 'admin';
-      if (isAdminA && !isAdminB) return 1;
-      if (!isAdminA && isAdminB) return -1;
-
-      final targetLower = expectedRole.toLowerCase();
-      final isExactA = roleA == targetLower;
-      final isExactB = roleB == targetLower;
+      final isExactA = userHasRole(a, expectedRole);
+      final isExactB = userHasRole(b, expectedRole);
       if (isExactA && !isExactB) return -1;
       if (!isExactA && isExactB) return 1;
+
+      final isAdminOnlyA = userHasRole(a, 'Admin') && !isExactA;
+      final isAdminOnlyB = userHasRole(b, 'Admin') && !isExactB;
+      if (isAdminOnlyA && !isAdminOnlyB) return 1;
+      if (!isAdminOnlyA && isAdminOnlyB) return -1;
 
       final nameA = (a['name'] ?? a['email'] ?? '').toString().toLowerCase();
       final nameB = (b['name'] ?? b['email'] ?? '').toString().toLowerCase();

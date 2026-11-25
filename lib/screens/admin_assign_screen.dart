@@ -468,6 +468,15 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
     if (date != null) onSelect(date);
   }
 
+  bool _userHasRole(Map<String, dynamic> u, String targetRole) {
+    final target = targetRole.trim().toLowerCase();
+    return (u['role'] ?? '')
+        .toString()
+        .split(',')
+        .map((s) => s.trim().toLowerCase())
+        .any((r) => r == target);
+  }
+
   Widget _buildUserDropdown(String title, String role, String? value, Function(String?) onChanged) {
     final allUsers = context.watch<EventProvider>().users;
     final users = allUsers.where((u) {
@@ -478,36 +487,32 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
         return false;
       }
 
-      final r = (u['role'] ?? '').toString().trim();
       if (role == 'Thumbnail Selector') {
-        return r == 'Thumbnail Selector' || r == 'Thumbnail Processor' || r == 'Admin';
+        return _userHasRole(u, 'Thumbnail Selector') || _userHasRole(u, 'Thumbnail Processor') || _userHasRole(u, 'Admin');
       }
       if (role == 'Thumbnail Processor') {
-        return r == 'Thumbnail Processor' || r == 'Admin';
+        return _userHasRole(u, 'Thumbnail Processor') || _userHasRole(u, 'Admin');
       }
       if (role == 'Thumbnail CrossChecker') {
-        return r == 'Thumbnail CrossChecker' || r == 'Thumbnail Processor' || r == 'Admin';
+        return _userHasRole(u, 'Thumbnail CrossChecker') || _userHasRole(u, 'Thumbnail Processor') || _userHasRole(u, 'Admin');
       }
       if (role == 'Photo Selector') {
-        return r == 'Photo Selector' || r == 'Photo Editor' || r == 'Uploader' || r == 'Admin';
+        return _userHasRole(u, 'Photo Selector') || _userHasRole(u, 'Photo Editor') || _userHasRole(u, 'Uploader') || _userHasRole(u, 'Admin');
       }
-      return r == role || r == 'Admin';
+      return _userHasRole(u, role) || _userHasRole(u, 'Admin');
     }).toList();
 
-    // Sort: Specific role users first, then fallback role users, and Admin strictly at the END!
+    // Sort: Exact role users first, then non-admin fallbacks, and Admin-only users strictly at the END!
     users.sort((a, b) {
-      final roleA = (a['role'] ?? '').toString().trim().toLowerCase();
-      final roleB = (b['role'] ?? '').toString().trim().toLowerCase();
-      final isAdminA = roleA == 'admin';
-      final isAdminB = roleB == 'admin';
-      if (isAdminA && !isAdminB) return 1;
-      if (!isAdminA && isAdminB) return -1;
-
-      final targetLower = role.toLowerCase();
-      final isExactA = roleA == targetLower;
-      final isExactB = roleB == targetLower;
+      final isExactA = _userHasRole(a, role);
+      final isExactB = _userHasRole(b, role);
       if (isExactA && !isExactB) return -1;
       if (!isExactA && isExactB) return 1;
+
+      final isAdminOnlyA = _userHasRole(a, 'Admin') && !isExactA;
+      final isAdminOnlyB = _userHasRole(b, 'Admin') && !isExactB;
+      if (isAdminOnlyA && !isAdminOnlyB) return 1;
+      if (!isAdminOnlyA && isAdminOnlyB) return -1;
 
       final nameA = (a['name'] ?? a['email'] ?? '').toString().toLowerCase();
       final nameB = (b['name'] ?? b['email'] ?? '').toString().toLowerCase();
@@ -535,10 +540,12 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
     
     final isInitialized = widget.postData['isInitialized'] == true;
     
-    // Find first non-admin user so Admin is NEVER auto-selected by default
+    // Find first exact-role or non-admin user so pure Admin is NEVER auto-selected by default
     String? firstNonAdminEmail;
     for (final u in uniqueUsers.values) {
-      if ((u['role'] ?? '').toString().trim().toLowerCase() != 'admin') {
+      final isExact = _userHasRole(u, role);
+      final isAdminOnly = _userHasRole(u, 'Admin') && !isExact;
+      if (!isAdminOnly) {
         firstNonAdminEmail = u['email']?.toString();
         break;
       }

@@ -4655,6 +4655,17 @@ function syncAllUsersToSupabase(ss) {
   ss = ss || SpreadsheetApp.getActiveSpreadsheet();
   var usersMap = {};
 
+  function mergeRole(existing, added) {
+    var list = String(existing || '').split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+    var addList = String(added || '').split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+    for (var k = 0; k < addList.length; k++) {
+      var r = addList[k];
+      var exists = list.some(function(x) { return x.toLowerCase() === r.toLowerCase(); });
+      if (!exists) list.push(r);
+    }
+    return list.join(', ');
+  }
+
   // 1. Read main Users sheet
   var usersSheet = ss.getSheetByName(USERS_SHEET);
   if (usersSheet && usersSheet.getLastRow() >= 2) {
@@ -4662,16 +4673,22 @@ function syncAllUsersToSupabase(ss) {
     for (var i = 1; i < uData.length; i++) {
       var email = String(uData[i][0] || '').trim().toLowerCase();
       var uName = String(uData[i][1] || '').trim();
+      var uRole = String(uData[i][2] || 'User').trim();
       if (!email || email === 'email' || email.indexOf('@example.com') !== -1 || uName.indexOf('Sample ') === 0) continue;
-      usersMap[email] = {
-        email: email,
-        name: uName || email,
-        role: String(uData[i][2] || 'User').trim(),
-        category: '',
-        sheet_type: 'Users',
-        row_index: i + 1,
-        updated_at: new Date().toISOString()
-      };
+      if (usersMap[email]) {
+        usersMap[email].role = mergeRole(usersMap[email].role, uRole);
+        if (!usersMap[email].name || usersMap[email].name === email) usersMap[email].name = uName || email;
+      } else {
+        usersMap[email] = {
+          email: email,
+          name: uName || email,
+          role: uRole,
+          category: '',
+          sheet_type: 'Users',
+          row_index: i + 1,
+          updated_at: new Date().toISOString()
+        };
+      }
     }
   }
 
@@ -4682,15 +4699,17 @@ function syncAllUsersToSupabase(ss) {
     for (var j = 1; j < dData.length; j++) {
       var dEmail = String(dData[j][0] || '').trim().toLowerCase();
       var dName = String(dData[j][1] || '').trim();
+      var dRole = String(dData[j][2] || 'User').trim();
       if (!dEmail || dEmail === 'email' || dEmail.indexOf('@example.com') !== -1 || dName.indexOf('Sample ') === 0) continue;
       if (usersMap[dEmail]) {
+        usersMap[dEmail].role = mergeRole(usersMap[dEmail].role, dRole);
         usersMap[dEmail].category = String(dData[j][3] || '').trim();
         usersMap[dEmail].sheet_type = 'Both';
       } else {
         usersMap[dEmail] = {
           email: dEmail,
           name: dName || dEmail,
-          role: String(dData[j][2] || 'User').trim(),
+          role: dRole,
           category: String(dData[j][3] || '').trim(),
           sheet_type: 'Dev_Users',
           row_index: j + 1,
@@ -4905,16 +4924,8 @@ function onEdit(e) {
       var userCategory = sheetName === DEV_USERS_SHEET ? String(rowData[3] || '').trim() : '';
 
       if (userEmail && SUPABASE_SYNC_CONFIG && SUPABASE_SYNC_CONFIG.url) {
-        // 1. Upsert user to Supabase users table
-        _pushBatchesToSupabase('users?on_conflict=email', [{
-          email: userEmail,
-          name: userName || userEmail,
-          role: userRole,
-          category: userCategory,
-          sheet_type: sheetName,
-          row_index: row,
-          updated_at: new Date().toISOString()
-        }]);
+        // 1. Re-sync users so multi-role rows for the same email stay merged
+        syncAllUsersToSupabase(sheet.getParent());
 
         // 2. Patch assignee_name on existing tasks in Supabase
         if (userName) {
