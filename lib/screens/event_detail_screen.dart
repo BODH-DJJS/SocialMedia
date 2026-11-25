@@ -2356,8 +2356,15 @@ class _ReassignDialogState extends State<_ReassignDialog> {
         return nameA.compareTo(nameB);
       }
 
-      final rowA = int.tryParse((a['row_index'] ?? '').toString()) ?? 999999;
-      final rowB = int.tryParse((b['row_index'] ?? '').toString()) ?? 999999;
+      final roleRowsA = a['_roleRows'];
+      final roleRowsB = b['_roleRows'];
+      final targetLower = expectedRole.trim().toLowerCase();
+      final rowA = (roleRowsA is Map && roleRowsA.containsKey(targetLower))
+          ? (int.tryParse(roleRowsA[targetLower].toString()) ?? 999999)
+          : (int.tryParse((a['row_index'] ?? '').toString()) ?? 999999);
+      final rowB = (roleRowsB is Map && roleRowsB.containsKey(targetLower))
+          ? (int.tryParse(roleRowsB[targetLower].toString()) ?? 999999)
+          : (int.tryParse((b['row_index'] ?? '').toString()) ?? 999999);
       return rowA.compareTo(rowB);
     });
 

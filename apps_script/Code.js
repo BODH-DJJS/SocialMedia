@@ -4654,6 +4654,7 @@ function syncAllToSupabase() {
 function syncAllUsersToSupabase(ss) {
   ss = ss || SpreadsheetApp.getActiveSpreadsheet();
   var usersMap = {};
+  var roleRowsMap = {};
 
   function mergeRole(existing, added) {
     var list = String(existing || '').split(',').map(function(s) { return s.trim(); }).filter(Boolean);
@@ -4666,6 +4667,16 @@ function syncAllUsersToSupabase(ss) {
     return list.join(', ');
   }
 
+  function recordRoleRow(email, roleStr, rowNum) {
+    if (!roleRowsMap[email]) roleRowsMap[email] = {};
+    var parts = String(roleStr || '').split(',').map(function(s) { return s.trim().toLowerCase(); }).filter(Boolean);
+    for (var p = 0; p < parts.length; p++) {
+      if (roleRowsMap[email][parts[p]] === undefined) {
+        roleRowsMap[email][parts[p]] = rowNum;
+      }
+    }
+  }
+
   // 1. Read main Users sheet
   var usersSheet = ss.getSheetByName(USERS_SHEET);
   if (usersSheet && usersSheet.getLastRow() >= 2) {
@@ -4675,6 +4686,7 @@ function syncAllUsersToSupabase(ss) {
       var uName = String(uData[i][1] || '').trim();
       var uRole = String(uData[i][2] || 'User').trim();
       if (!email || email === 'email' || email.indexOf('@example.com') !== -1 || uName.indexOf('Sample ') === 0) continue;
+      recordRoleRow(email, uRole, i + 1);
       if (usersMap[email]) {
         usersMap[email].role = mergeRole(usersMap[email].role, uRole);
         if (!usersMap[email].name || usersMap[email].name === email) usersMap[email].name = uName || email;
@@ -4701,6 +4713,7 @@ function syncAllUsersToSupabase(ss) {
       var dName = String(dData[j][1] || '').trim();
       var dRole = String(dData[j][2] || 'User').trim();
       if (!dEmail || dEmail === 'email' || dEmail.indexOf('@example.com') !== -1 || dName.indexOf('Sample ') === 0) continue;
+      recordRoleRow(dEmail, dRole, j + 1);
       if (usersMap[dEmail]) {
         usersMap[dEmail].role = mergeRole(usersMap[dEmail].role, dRole);
         usersMap[dEmail].category = String(dData[j][3] || '').trim();
@@ -4719,7 +4732,14 @@ function syncAllUsersToSupabase(ss) {
     }
   }
 
-  var usersList = Object.keys(usersMap).map(function(k) { return usersMap[k]; });
+  var usersList = Object.keys(usersMap).map(function(k) {
+    var u = usersMap[k];
+    var rMap = roleRowsMap[k];
+    if (rMap && Object.keys(rMap).length > 1) {
+      u.category = (u.category ? u.category + '|' : '') + '__rr:' + JSON.stringify(rMap);
+    }
+    return u;
+  });
   if (usersList.length === 0) return { count: 0, status: 'No users data' };
   return _pushBatchesToSupabase('users?on_conflict=email', usersList);
 }

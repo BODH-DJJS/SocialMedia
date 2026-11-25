@@ -235,6 +235,16 @@ class ApiService {
         return list.map((raw) {
           final m = Map<String, dynamic>.from(raw as Map);
           m['username'] = m['email'];
+          final cat = (m['category'] ?? '').toString();
+          final rrIdx = cat.indexOf('__rr:');
+          if (rrIdx != -1) {
+            final cleanCat = cat.substring(0, rrIdx).replaceAll(RegExp(r'\|+$'), '').trim();
+            final jsonStr = cat.substring(rrIdx + 5).trim();
+            m['category'] = cleanCat;
+            try {
+              m['_roleRows'] = Map<String, dynamic>.from(json.decode(jsonStr) as Map);
+            } catch (_) {}
+          }
           return m;
         }).toList();
       }
