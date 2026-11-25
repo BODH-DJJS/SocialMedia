@@ -471,17 +471,33 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
   Widget _buildUserDropdown(String title, String role, String? value, Function(String?) onChanged) {
     final allUsers = context.watch<EventProvider>().users;
     final users = allUsers.where((u) {
-      final r = u['role']?.toString() ?? '';
-      if (role == 'Thumbnail Selector') return r == 'Thumbnail Selector' || r == 'Thumbnail Designer' || r == 'Admin';
-      if (role == 'Thumbnail Processor') return r == 'Thumbnail Processor' || r == 'Thumbnail Designer' || r == 'Admin';
-      if (role == 'Thumbnail CrossChecker') return r == 'Thumbnail CrossChecker' || r == 'Thumbnail Designer' || r == 'Admin';
+      final email = (u['email'] ?? '').toString().trim().toLowerCase();
+      final name = (u['name'] ?? '').toString().trim();
+      // Exclude auto-generated sample/dummy users unless already assigned
+      if ((email.endsWith('@example.com') || name.startsWith('Sample ')) && email != (value ?? '').trim().toLowerCase()) {
+        return false;
+      }
+
+      final r = (u['role'] ?? '').toString().trim();
+      if (role == 'Thumbnail Selector') {
+        return r == 'Thumbnail Selector' || r == 'Thumbnail Processor' || r == 'Admin';
+      }
+      if (role == 'Thumbnail Processor') {
+        return r == 'Thumbnail Processor' || r == 'Admin';
+      }
+      if (role == 'Thumbnail CrossChecker') {
+        return r == 'Thumbnail CrossChecker' || r == 'Thumbnail Processor' || r == 'Admin';
+      }
+      if (role == 'Photo Selector') {
+        return r == 'Photo Selector' || r == 'Photo Editor' || r == 'Uploader' || r == 'Admin';
+      }
       return r == role || r == 'Admin';
     }).toList();
 
-    // Sort: Specific role users first, then fallback designers, and Admin strictly at the END!
+    // Sort: Specific role users first, then fallback role users, and Admin strictly at the END!
     users.sort((a, b) {
-      final roleA = (a['role'] ?? '').toString().toLowerCase();
-      final roleB = (b['role'] ?? '').toString().toLowerCase();
+      final roleA = (a['role'] ?? '').toString().trim().toLowerCase();
+      final roleB = (b['role'] ?? '').toString().trim().toLowerCase();
       final isAdminA = roleA == 'admin';
       final isAdminB = roleB == 'admin';
       if (isAdminA && !isAdminB) return 1;
@@ -519,15 +535,24 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
     
     final isInitialized = widget.postData['isInitialized'] == true;
     
-    // Auto-select first user if value is null AND it is a new assignment
-    if (!isInitialized && (safeValue == null || safeValue.isEmpty) && uniqueUsers.isNotEmpty) {
-      final firstEmail = uniqueUsers.keys.first;
+    // Find first non-admin user so Admin is NEVER auto-selected by default
+    String? firstNonAdminEmail;
+    for (final u in uniqueUsers.values) {
+      if ((u['role'] ?? '').toString().trim().toLowerCase() != 'admin') {
+        firstNonAdminEmail = u['email']?.toString();
+        break;
+      }
+    }
+
+    // Auto-select first non-admin user if value is null AND it is a new assignment
+    if (!isInitialized && (safeValue == null || safeValue.isEmpty) && firstNonAdminEmail != null && firstNonAdminEmail.isNotEmpty) {
+      final defaultEmail = firstNonAdminEmail;
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) onChanged(firstEmail);
+        if (mounted) onChanged(defaultEmail);
       });
     }
     
-    final effectiveValue = safeValue ?? (!isInitialized && uniqueUsers.isNotEmpty ? uniqueUsers.keys.first : null);
+    final effectiveValue = safeValue ?? (!isInitialized ? firstNonAdminEmail : null);
     
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,

@@ -21,56 +21,6 @@ function ensureSheets() {
     var users = ss.insertSheet(USERS_SHEET);
     users.appendRow(['Email', 'Name', 'Role']);
   }
-  var usersSheet = ss.getSheetByName(USERS_SHEET);
-  var usersData = usersSheet.getDataRange().getValues();
-  var roleCounts = {};
-  for (var u = 1; u < usersData.length; u++) {
-    var role = usersData[u][2];
-    if (role) {
-      roleCounts[role] = (roleCounts[role] || 0) + 1;
-    }
-  }
-
-  var roles = [
-    {role: 'Writer', prefix: 'writer'},
-    {role: 'Editor', prefix: 'editor'},
-    {role: 'Proofreader', prefix: 'proofreader'},
-    {role: 'CrossChecker', prefix: 'crosscheck'},
-    {role: 'Thumbnail Designer', prefix: 'thumbnail'},
-    {role: 'Thumbnail Selector', prefix: 'thumbnailselect'},
-    {role: 'Thumbnail Processor', prefix: 'thumbnailprocess'},
-    {role: 'Thumbnail CrossChecker', prefix: 'thumbnailcrosscheck'},
-    {role: 'Photo Selector', prefix: 'photoselect'},
-    {role: 'Photo Editor', prefix: 'photoedit'},
-    {role: 'Video Editor', prefix: 'videoedit'},
-    {role: 'Media CrossChecker', prefix: 'mediacheck'},
-    {role: 'Uploader', prefix: 'uploader'},
-    // Development Pipeline Roles
-    {role: 'Campaign Ideator', prefix: 'ideator'},
-    {role: 'Campaign Researcher', prefix: 'researcher'},
-    {role: 'Sequencer', prefix: 'sequencer'},
-    {role: 'Campaign Writer', prefix: 'camp_writer'},
-    {role: 'PPT Designer', prefix: 'ppt_dev'},
-    {role: 'Campaign Proofreader', prefix: 'camp_proof'},
-    {role: 'Campaign Editor', prefix: 'camp_editor'},
-    {role: 'Final Reviewer', prefix: 'final_rev'}
-  ];
-
-  for (var r = 0; r < roles.length; r++) {
-    var count = roleCounts[roles[r].role] || 0;
-    // Add users until we have at least 1 sample user for each role
-    var suffix = count + 1;
-    var targetCount = roles[r].role.indexOf('Campaign') !== -1 || roles[r].role === 'Sequencer' || roles[r].role === 'PPT Designer' || roles[r].role === 'Final Reviewer' ? 2 : 5;
-    while (count < targetCount) {
-      usersSheet.appendRow([roles[r].prefix + suffix + '@example.com', 'Sample ' + roles[r].role + ' ' + suffix, roles[r].role]);
-      count++;
-      suffix++;
-    }
-  }
-  
-  if (!roleCounts['Admin']) {
-    usersSheet.appendRow(['admin', 'Admin User', 'Admin']);
-  }
   
   var pipeSheet = ss.getSheetByName(PIPELINE_SHEET);
   if (!pipeSheet) {
@@ -4711,10 +4661,11 @@ function syncAllUsersToSupabase(ss) {
     var uData = usersSheet.getDataRange().getValues();
     for (var i = 1; i < uData.length; i++) {
       var email = String(uData[i][0] || '').trim().toLowerCase();
-      if (!email || email === 'email') continue;
+      var uName = String(uData[i][1] || '').trim();
+      if (!email || email === 'email' || email.indexOf('@example.com') !== -1 || uName.indexOf('Sample ') === 0) continue;
       usersMap[email] = {
         email: email,
-        name: String(uData[i][1] || '').trim() || email,
+        name: uName || email,
         role: String(uData[i][2] || 'User').trim(),
         category: '',
         sheet_type: 'Users',
@@ -4730,14 +4681,15 @@ function syncAllUsersToSupabase(ss) {
     var dData = devUsersSheet.getDataRange().getValues();
     for (var j = 1; j < dData.length; j++) {
       var dEmail = String(dData[j][0] || '').trim().toLowerCase();
-      if (!dEmail || dEmail === 'email') continue;
+      var dName = String(dData[j][1] || '').trim();
+      if (!dEmail || dEmail === 'email' || dEmail.indexOf('@example.com') !== -1 || dName.indexOf('Sample ') === 0) continue;
       if (usersMap[dEmail]) {
         usersMap[dEmail].category = String(dData[j][3] || '').trim();
         usersMap[dEmail].sheet_type = 'Both';
       } else {
         usersMap[dEmail] = {
           email: dEmail,
-          name: String(dData[j][1] || '').trim() || dEmail,
+          name: dName || dEmail,
           role: String(dData[j][2] || 'User').trim(),
           category: String(dData[j][3] || '').trim(),
           sheet_type: 'Dev_Users',
