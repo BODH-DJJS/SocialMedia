@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/event.dart';
 import '../services/api_service.dart';
@@ -415,11 +416,21 @@ class EventProvider with ChangeNotifier {
     required String currentStage,
     required String targetStage,
     String reason = '',
+    String senderName = '',
   }) async {
     invalidateCache();
 
     final targetNorm = targetStage.toLowerCase().replaceAll(' ', '');
     final currentNorm = currentStage.toLowerCase().replaceAll(' ', '');
+
+    final dateStr = DateFormat('dd MMM yyyy, hh:mm a').format(DateTime.now());
+    final authorStr = senderName.trim().isNotEmpty
+        ? '$currentStage ($senderName)'
+        : currentStage;
+    final revisionTag = '[Revision from $authorStr on $dateStr]';
+    final revisionEntry = reason.trim().isNotEmpty
+        ? '$revisionTag: ${reason.trim()}'
+        : '$revisionTag: Sent back for revision';
 
     // 1. Optimistically update in-memory tasks & Supabase directly
     for (final e in _events) {
@@ -430,7 +441,14 @@ class EventProvider with ChangeNotifier {
         final s = e.stage.toLowerCase().replaceAll(' ', '');
         if (s == targetNorm) {
           e.status = 'Ready';
-          _apiService.updateTaskInSupabase(e.taskId, {'Status': 'Ready'});
+          final updatedNotes = e.notes.trim().isNotEmpty
+              ? '${e.notes.trim()}\n\n$revisionEntry'
+              : revisionEntry;
+          e.notes = updatedNotes;
+          _apiService.updateTaskInSupabase(e.taskId, {
+            'Status': 'Ready',
+            'Notes': updatedNotes,
+          });
         } else if (s == currentNorm) {
           e.status = 'Waiting';
           _apiService.updateTaskInSupabase(e.taskId, {'Status': 'Waiting'});
@@ -456,6 +474,7 @@ class EventProvider with ChangeNotifier {
         'currentStage': currentStage,
         'targetStage': targetStage,
         'reason': reason,
+        'senderName': senderName,
       });
       if (response['success'] == true) {
         return true;

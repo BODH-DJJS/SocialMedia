@@ -22,7 +22,7 @@ class Event {
   String canvaLink;
   final String allottedDate;
   final String dueDate;
-  final String notes;
+  String notes;
   
   // Post metadata
   final String program;
@@ -248,5 +248,68 @@ class Event {
       'isCombined': isCombined,
       'CombinedPosts': combinedPosts,
     };
+  }
+
+  /// Whether this task has any revision notes / remarks
+  bool get hasRevisionRemarks {
+    final n = notes.toLowerCase();
+    return n.contains('[revision') || n.contains('revision:') || n.contains('sent back') || n.contains('send back');
+  }
+
+  /// Extracts the list of individual revision entries
+  List<String> get revisionEntries {
+    if (notes.trim().isEmpty) return [];
+    return notes
+        .split(RegExp(r'\n+(?=\[(?:Revision|Sent Back))', caseSensitive: false))
+        .map((s) => s.trim())
+        .where((s) => s.isNotEmpty)
+        .toList();
+  }
+
+  /// Extracts the clean comment text from the latest revision remark
+  String get latestRevisionCleanRemark {
+    if (notes.trim().isEmpty) return '';
+    final entries = revisionEntries;
+    final last = entries.isNotEmpty ? entries.last : notes.trim();
+    final match = RegExp(r'^\[(?:Revision|Sent Back)[^\]]*\]:\s*(.*)$', dotAll: true, caseSensitive: false).firstMatch(last);
+    if (match != null && match.group(1) != null && match.group(1)!.trim().isNotEmpty) {
+      return match.group(1)!.trim();
+    }
+    return last;
+  }
+
+  /// Extracts sender / reviewer info
+  String get latestRevisionSender {
+    if (notes.trim().isEmpty) return '';
+    final entries = revisionEntries;
+    final last = entries.isNotEmpty ? entries.last : notes.trim();
+    final matchFrom = RegExp(r'\[Revision from ([^\]]+?) on ', caseSensitive: false).firstMatch(last);
+    if (matchFrom != null) {
+      return matchFrom.group(1)?.trim() ?? '';
+    }
+    final matchSentBack = RegExp(r'\[Sent Back by ([^\]]+?)\]', caseSensitive: false).firstMatch(last);
+    if (matchSentBack != null) {
+      return matchSentBack.group(1)?.trim() ?? '';
+    }
+    if (last.toLowerCase().contains('[revision')) {
+      return 'Reviewer / Proofreader';
+    }
+    return '';
+  }
+
+  /// Extracts timestamp or date
+  String get latestRevisionDate {
+    if (notes.trim().isEmpty) return '';
+    final entries = revisionEntries;
+    final last = entries.isNotEmpty ? entries.last : notes.trim();
+    final matchFrom = RegExp(r' on ([^\]]+)\]', caseSensitive: false).firstMatch(last);
+    if (matchFrom != null) {
+      return matchFrom.group(1)?.trim() ?? '';
+    }
+    final matchOld = RegExp(r'\[Revision:\s*([^\]]+)\]', caseSensitive: false).firstMatch(last);
+    if (matchOld != null) {
+      return matchOld.group(1)?.trim() ?? '';
+    }
+    return '';
   }
 }

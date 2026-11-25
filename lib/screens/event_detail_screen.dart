@@ -264,11 +264,6 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     } else {
       final links = await provider.fetchMediaFolders(event.folderLink, event.date, event.stage, venue: event.venue, postNo: event.postNo.toString());
       
-      List<Map<String, dynamic>> fetchedPhotos = [];
-      if (links['raw'] != null && links['raw']!.isNotEmpty) {
-        fetchedPhotos = await provider.fetchPhotos(links['raw']!);
-      }
-      
       if (mounted) {
         setState(() {
           _rawFolderLink = links['raw'] ?? '';
@@ -871,12 +866,21 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       setState(() => _isSaving = true);
       final provider = context.read<EventProvider>();
       final messenger = ScaffoldMessenger.of(context);
+      final auth = context.read<AuthProvider>();
+      
+      // Resolve user's display name
+      final u = provider.users.firstWhere(
+        (u) => (u['email'] ?? u['Email'] ?? u['username'])?.toString().trim().toLowerCase() == auth.username.trim().toLowerCase(),
+        orElse: () => <String, dynamic>{},
+      );
+      final senderName = (u['name'] ?? u['Name'])?.toString().trim() ?? (auth.username.isNotEmpty ? auth.username : 'Proofreader');
       
       final success = await provider.reverseTask(
         postNo: event.postNo,
         currentStage: event.stage,
         targetStage: selectedStage,
         reason: reasonController.text.trim(),
+        senderName: senderName,
       );
       
       if (mounted) {
@@ -1082,6 +1086,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  _buildRevisionAlertBanner(e),
                   // Combined Events Section — show each event's details
                   if (e.isCombined && e.combinedPosts.isNotEmpty) ...[
                     Card(
@@ -1738,6 +1743,199 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildRevisionAlertBanner(Event e) {
+    String noteText = e.notes.trim();
+    if (noteText.isEmpty) {
+      final provider = context.read<EventProvider>();
+      final related = provider.events.where((t) => t.postNo.trim().toLowerCase() == e.postNo.trim().toLowerCase() && t.notes.trim().isNotEmpty);
+      if (related.isNotEmpty) {
+        noteText = related.first.notes.trim();
+      }
+    }
+    if (noteText.isEmpty) return const SizedBox.shrink();
+
+    final isDone = e.status == 'Done';
+    final hasRevision = e.hasRevisionRemarks || noteText.toLowerCase().contains('[revision') || noteText.toLowerCase().contains('sent back');
+    final sender = e.latestRevisionSender.isNotEmpty ? e.latestRevisionSender : 'Reviewer / Proofreader';
+    final date = e.latestRevisionDate;
+    final cleanRemark = e.latestRevisionCleanRemark.isNotEmpty ? e.latestRevisionCleanRemark : noteText;
+
+    final bgColor = isDone ? Colors.grey.shade50 : const Color(0xFFFFF8E1);
+    final borderColor = isDone ? Colors.grey.shade300 : Colors.orange.shade400;
+    final primaryColor = isDone ? Colors.grey.shade700 : Colors.deepOrange.shade900;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: borderColor, width: isDone ? 1 : 1.5),
+        boxShadow: isDone
+            ? null
+            : [
+                BoxShadow(
+                  color: Colors.orange.withOpacity(0.12),
+                  blurRadius: 10,
+                  offset: const Offset(0, 3),
+                ),
+              ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Banner Top Header
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: isDone ? Colors.grey.shade200 : const Color(0xFFFFECB3),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(11)),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  hasRevision ? Icons.assignment_return_rounded : Icons.info_outline_rounded,
+                  color: primaryColor,
+                  size: 22,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              hasRevision
+                                  ? 'SENT BACK FOR REVISION'
+                                  : 'STAGE REMARKS & NOTES',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w900,
+                                fontSize: 13,
+                                letterSpacing: 0.5,
+                                color: primaryColor,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: isDone ? Colors.green : Colors.deepOrange.shade700,
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              isDone ? 'REVISED' : 'ACTION NEEDED',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 9,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 0.3,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (hasRevision) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          'Sent back by: $sender${date.isNotEmpty ? ' • $date' : ''}',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: isDone ? Colors.grey.shade700 : Colors.brown.shade800,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Banner Body with the comments
+          Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  hasRevision
+                      ? 'Proofreader / Reviewer Comments & Instructions:'
+                      : 'Notes:',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: isDone ? Colors.grey.shade800 : Colors.brown.shade900,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border(
+                      left: BorderSide(
+                        color: isDone ? Colors.grey.shade400 : Colors.deepOrange.shade600,
+                        width: 4,
+                      ),
+                      top: BorderSide(color: Colors.grey.shade200),
+                      right: BorderSide(color: Colors.grey.shade200),
+                      bottom: BorderSide(color: Colors.grey.shade200),
+                    ),
+                  ),
+                  child: SelectableText(
+                    cleanRemark,
+                    style: TextStyle(
+                      fontSize: 13,
+                      height: 1.45,
+                      fontWeight: FontWeight.w600,
+                      color: isDone ? Colors.grey.shade800 : const Color(0xFF2C1810),
+                    ),
+                  ),
+                ),
+                if (e.revisionEntries.length > 1) ...[
+                  const SizedBox(height: 10),
+                  Theme(
+                    data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+                    child: ExpansionTile(
+                      tilePadding: EdgeInsets.zero,
+                      childrenPadding: EdgeInsets.zero,
+                      dense: true,
+                      leading: Icon(Icons.history_rounded, size: 16, color: Colors.grey.shade700),
+                      title: Text(
+                        'View full revision history (${e.revisionEntries.length} entries)',
+                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.blue.shade800),
+                      ),
+                      children: e.revisionEntries.reversed.skip(1).map((entry) {
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 6),
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade50,
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: Colors.grey.shade300),
+                          ),
+                          child: SelectableText(
+                            entry,
+                            style: TextStyle(fontSize: 12, color: Colors.grey.shade800, height: 1.35),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

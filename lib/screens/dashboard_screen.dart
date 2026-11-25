@@ -1535,22 +1535,23 @@ class _DashboardScreenState extends State<DashboardScreen>
   Widget _buildTaskCard(Event task, Color accentColor) {
     final isDone = task.status == 'Done';
     final isExpired = isDueDateExpired(task.dueDate, isDone: isDone);
+    final hasRevision = task.hasRevisionRemarks && !isDone;
     final combinedQuery = task.isCombined ? '&isCombined=true' : '';
     final taskUrl = '/event?postNo=${Uri.encodeComponent(task.postNo)}&stage=${Uri.encodeComponent(task.stage)}&taskId=${Uri.encodeComponent(task.taskId)}$combinedQuery';
 
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
-      elevation: isDone ? 0 : (isExpired ? 3 : 2),
+      elevation: isDone ? 0 : (isExpired ? 3 : (hasRevision ? 3 : 2)),
       color: isDone
           ? Colors.grey.shade100
-          : (isExpired ? const Color(0xFFFFEBEE) : Colors.white),
+          : (isExpired ? const Color(0xFFFFEBEE) : (hasRevision ? const Color(0xFFFFFDF5) : Colors.white)),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
         side: BorderSide(
           color: isExpired
               ? Colors.red.shade400
-              : Colors.grey.shade200,
-          width: isExpired ? 1.5 : 1,
+              : (hasRevision ? Colors.orange.shade300 : Colors.grey.shade200),
+          width: isExpired ? 1.5 : (hasRevision ? 1.2 : 1),
         ),
       ),
       child: Listener(
@@ -1581,16 +1582,24 @@ class _DashboardScreenState extends State<DashboardScreen>
             decoration: BoxDecoration(
               color: isDone
                   ? Colors.grey.shade100
-                  : (isExpired ? const Color(0xFFFFEBEE) : Colors.white),
+                  : (isExpired ? const Color(0xFFFFEBEE) : (hasRevision ? const Color(0xFFFFFDF5) : Colors.white)),
               borderRadius: BorderRadius.circular(16),
               border: Border(
                 left: BorderSide(
-                  color: isExpired ? Colors.red.shade700 : accentColor,
-                  width: isExpired ? 6 : 4,
+                  color: isExpired
+                      ? Colors.red.shade700
+                      : (hasRevision ? Colors.deepOrange.shade700 : accentColor),
+                  width: isExpired ? 6 : (hasRevision ? 5 : 4),
                 ),
-                top: isExpired ? BorderSide(color: Colors.red.shade300, width: 1.5) : BorderSide.none,
-                right: isExpired ? BorderSide(color: Colors.red.shade300, width: 1.5) : BorderSide.none,
-                bottom: isExpired ? BorderSide(color: Colors.red.shade300, width: 1.5) : BorderSide.none,
+                top: isExpired
+                    ? BorderSide(color: Colors.red.shade300, width: 1.5)
+                    : (hasRevision ? BorderSide(color: Colors.orange.shade200, width: 1) : BorderSide.none),
+                right: isExpired
+                    ? BorderSide(color: Colors.red.shade300, width: 1.5)
+                    : (hasRevision ? BorderSide(color: Colors.orange.shade200, width: 1) : BorderSide.none),
+                bottom: isExpired
+                    ? BorderSide(color: Colors.red.shade300, width: 1.5)
+                    : (hasRevision ? BorderSide(color: Colors.orange.shade200, width: 1) : BorderSide.none),
               ),
             ),
             padding: const EdgeInsets.all(12),
@@ -1663,6 +1672,35 @@ class _DashboardScreenState extends State<DashboardScreen>
                           SizedBox(width: 2),
                           Text(
                             'EXPIRED',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 9,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 0.3,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                  if (hasRevision) ...[
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 3,
+                      ),
+                      margin: const EdgeInsets.only(right: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.deepOrange.shade700,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.replay_rounded, size: 10, color: Colors.white),
+                          SizedBox(width: 3),
+                          Text(
+                            'REVISION',
                             style: TextStyle(
                               color: Colors.white,
                               fontSize: 9,
@@ -1778,6 +1816,61 @@ class _DashboardScreenState extends State<DashboardScreen>
                   ],
                 ),
                 const SizedBox(height: 6),
+              ],
+              if (task.notes.trim().isNotEmpty && !isDone) ...[
+                Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFF8E1),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: hasRevision ? Colors.orange.shade400 : Colors.amber.shade300,
+                      width: 1,
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            hasRevision ? Icons.assignment_return_rounded : Icons.comment_rounded,
+                            size: 12,
+                            color: Colors.deepOrange.shade800,
+                          ),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              hasRevision
+                                  ? 'Sent Back by ${task.latestRevisionSender.isNotEmpty ? task.latestRevisionSender : "Reviewer"}:'
+                                  : 'Notes / Remarks:',
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.deepOrange.shade900,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        task.latestRevisionCleanRemark,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF3E2723),
+                          height: 1.25,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
               ],
               Row(
                 children: [
@@ -2846,8 +2939,42 @@ class _DashboardScreenState extends State<DashboardScreen>
                           isDone ? Icons.check_circle : Icons.pending_actions,
                           color: isDone ? Colors.green : Colors.orange,
                         ),
-                        title: Text(t.stage),
-                        subtitle: Text(displayStatus + assigneeInfo),
+                        title: Row(
+                          children: [
+                            Text(t.stage),
+                            if (t.hasRevisionRemarks && !isDone) ...[
+                              const SizedBox(width: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                decoration: BoxDecoration(
+                                  color: Colors.deepOrange,
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: const Text(
+                                  'REVISION',
+                                  style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(displayStatus + assigneeInfo),
+                            if (t.notes.trim().isNotEmpty && !isDone) ...[
+                              const SizedBox(height: 3),
+                              Text(
+                                '💬 Remarks: ${t.latestRevisionCleanRemark}',
+                                style: TextStyle(
+                                  color: Colors.deepOrange.shade900,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
                         trailing: t.docLink.isNotEmpty
                             ? IconButton(
                                 icon: const Icon(Icons.description, color: Colors.blue),
@@ -3778,8 +3905,42 @@ class _DashboardScreenState extends State<DashboardScreen>
                           isDone ? Icons.check_circle : Icons.pending_actions,
                           color: isDone ? Colors.green : Colors.orange,
                         ),
-                        title: Text(t.stage),
-                        subtitle: Text(displayStatus + assigneeInfo),
+                        title: Row(
+                          children: [
+                            Text(t.stage),
+                            if (t.hasRevisionRemarks && !isDone) ...[
+                              const SizedBox(width: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                decoration: BoxDecoration(
+                                  color: Colors.deepOrange,
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: const Text(
+                                  'REVISION',
+                                  style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(displayStatus + assigneeInfo),
+                            if (t.notes.trim().isNotEmpty && !isDone) ...[
+                              const SizedBox(height: 3),
+                              Text(
+                                '💬 Remarks: ${t.latestRevisionCleanRemark}',
+                                style: TextStyle(
+                                  color: Colors.deepOrange.shade900,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
                       );
                     }).toList(),
                   ],

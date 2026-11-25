@@ -2806,6 +2806,7 @@ function handleReverseTask(payload) {
   var postNo = payload.postNo;
   var currentStage = payload.currentStage;
   var reason = payload.reason || '';
+  var senderName = payload.senderName || '';
   var targetStage = payload.targetStage;
   
   var stageCol = headers.indexOf('Stage');
@@ -2869,7 +2870,8 @@ function handleReverseTask(payload) {
         }
         if (notesCol !== -1 && reason) {
           var existingNote = data[r][notesCol] || '';
-          var newNote = (existingNote ? existingNote + '\n' : '') + '[Revision: ' + new Date().toLocaleDateString() + ']: ' + reason;
+          var authorStr = senderName ? currentStage + ' (' + senderName + ')' : currentStage;
+          var newNote = (existingNote ? existingNote + '\n\n' : '') + '[Revision from ' + authorStr + ' on ' + new Date().toLocaleDateString() + ']: ' + reason;
           taskSheet.getRange(r + 1, notesCol + 1).setValue(newNote);
         }
         reversed = true;
