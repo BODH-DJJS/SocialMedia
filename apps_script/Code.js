@@ -323,6 +323,8 @@ function doPost(e) {
       return respond(syncSupabaseUpdatesToSheet());
     } else if (action === 'syncAllToSupabase') {
       return respond(syncAllToSupabase());
+    } else if (action === 'syncUsersToSupabase') {
+      return respond(syncAllUsersToSupabase());
     } else {
       return respond({success: false, message: 'Unknown action'});
     }
@@ -2923,6 +2925,8 @@ function doGet(e) {
         return ContentService.createTextOutput(JSON.stringify(syncSupabaseUpdatesToSheet())).setMimeType(ContentService.MimeType.JSON);
       } else if (action === 'syncAllToSupabase') {
         return ContentService.createTextOutput(JSON.stringify(syncAllToSupabase())).setMimeType(ContentService.MimeType.JSON);
+      } else if (action === 'syncUsersToSupabase') {
+        return ContentService.createTextOutput(JSON.stringify(syncAllUsersToSupabase())).setMimeType(ContentService.MimeType.JSON);
       }
     }
   } catch(err) {
@@ -4684,16 +4688,69 @@ var SUPABASE_SYNC_CONFIG = {
 };
 
 /**
- * Sync all Posts and Tasks in fast batches from Google Sheets to Supabase.
+ * Sync all Posts, Tasks, and Users in fast batches from Google Sheets to Supabase.
  * Call this function from Apps Script editor to do initial or complete sync.
  */
 function syncAllToSupabase() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var syncPostsResult = syncAllPostsToSupabase(ss);
   var syncTasksResult = syncAllTasksToSupabase(ss);
+  var syncUsersResult = syncAllUsersToSupabase(ss);
   
-  Logger.log("🎉 Complete Sync Done! Posts: " + JSON.stringify(syncPostsResult) + ", Tasks: " + JSON.stringify(syncTasksResult));
-  return { posts: syncPostsResult, tasks: syncTasksResult };
+  Logger.log("🎉 Complete Sync Done! Posts: " + JSON.stringify(syncPostsResult) + ", Tasks: " + JSON.stringify(syncTasksResult) + ", Users: " + JSON.stringify(syncUsersResult));
+  return { posts: syncPostsResult, tasks: syncTasksResult, users: syncUsersResult };
+}
+
+function syncAllUsersToSupabase(ss) {
+  ss = ss || SpreadsheetApp.getActiveSpreadsheet();
+  var usersMap = {};
+
+  // 1. Read main Users sheet
+  var usersSheet = ss.getSheetByName(USERS_SHEET);
+  if (usersSheet && usersSheet.getLastRow() >= 2) {
+    var uData = usersSheet.getDataRange().getValues();
+    for (var i = 1; i < uData.length; i++) {
+      var email = String(uData[i][0] || '').trim().toLowerCase();
+      if (!email || email === 'email') continue;
+      usersMap[email] = {
+        email: email,
+        name: String(uData[i][1] || '').trim() || email,
+        role: String(uData[i][2] || 'User').trim(),
+        category: '',
+        sheet_type: 'Users',
+        row_index: i + 1,
+        updated_at: new Date().toISOString()
+      };
+    }
+  }
+
+  // 2. Read Dev_Users sheet (merge or add)
+  var devUsersSheet = ss.getSheetByName(DEV_USERS_SHEET);
+  if (devUsersSheet && devUsersSheet.getLastRow() >= 2) {
+    var dData = devUsersSheet.getDataRange().getValues();
+    for (var j = 1; j < dData.length; j++) {
+      var dEmail = String(dData[j][0] || '').trim().toLowerCase();
+      if (!dEmail || dEmail === 'email') continue;
+      if (usersMap[dEmail]) {
+        usersMap[dEmail].category = String(dData[j][3] || '').trim();
+        usersMap[dEmail].sheet_type = 'Both';
+      } else {
+        usersMap[dEmail] = {
+          email: dEmail,
+          name: String(dData[j][1] || '').trim() || dEmail,
+          role: String(dData[j][2] || 'User').trim(),
+          category: String(dData[j][3] || '').trim(),
+          sheet_type: 'Dev_Users',
+          row_index: j + 1,
+          updated_at: new Date().toISOString()
+        };
+      }
+    }
+  }
+
+  var usersList = Object.keys(usersMap).map(function(k) { return usersMap[k]; });
+  if (usersList.length === 0) return { count: 0, status: 'No users data' };
+  return _pushBatchesToSupabase('users?on_conflict=email', usersList);
 }
 
 function syncAllPostsToSupabase(ss) {
@@ -4890,25 +4947,42 @@ function onEdit(e) {
       _pushBatchesToSupabase('tasks', taskPayload);
     } else if (sheetName === USERS_SHEET || sheetName === DEV_USERS_SHEET) {
       var rowData = sheet.getRange(row, 1, 1, sheet.getLastColumn()).getValues()[0];
-      var userEmail = String(rowData[0] || '').trim();
+      var userEmail = String(rowData[0] || '').trim().toLowerCase();
       var userName = String(rowData[1] || '').trim();
-      if (userEmail && userName && SUPABASE_SYNC_CONFIG && SUPABASE_SYNC_CONFIG.url) {
-        var supaPatch = {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-            "apikey": SUPABASE_SYNC_CONFIG.secretKey,
-            "Authorization": "Bearer " + SUPABASE_SYNC_CONFIG.secretKey,
-            "Prefer": "return=minimal",
-            "User-Agent": "Google-Apps-Script"
-          },
-          payload: JSON.stringify({
-            assignee_name: userName,
-            updated_at: new Date().toISOString()
-          }),
-          muteHttpExceptions: true
-        };
-        UrlFetchApp.fetch(SUPABASE_SYNC_CONFIG.url + "/rest/v1/tasks?assignee=ilike." + encodeURIComponent(userEmail), supaPatch);
+      var userRole = String(rowData[2] || 'User').trim();
+      var userCategory = sheetName === DEV_USERS_SHEET ? String(rowData[3] || '').trim() : '';
+
+      if (userEmail && SUPABASE_SYNC_CONFIG && SUPABASE_SYNC_CONFIG.url) {
+        // 1. Upsert user to Supabase users table
+        _pushBatchesToSupabase('users?on_conflict=email', [{
+          email: userEmail,
+          name: userName || userEmail,
+          role: userRole,
+          category: userCategory,
+          sheet_type: sheetName,
+          row_index: row,
+          updated_at: new Date().toISOString()
+        }]);
+
+        // 2. Patch assignee_name on existing tasks in Supabase
+        if (userName) {
+          var supaPatch = {
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json",
+              "apikey": SUPABASE_SYNC_CONFIG.secretKey,
+              "Authorization": "Bearer " + SUPABASE_SYNC_CONFIG.secretKey,
+              "Prefer": "return=minimal",
+              "User-Agent": "Google-Apps-Script"
+            },
+            payload: JSON.stringify({
+              assignee_name: userName,
+              updated_at: new Date().toISOString()
+            }),
+            muteHttpExceptions: true
+          };
+          UrlFetchApp.fetch(SUPABASE_SYNC_CONFIG.url + "/rest/v1/tasks?assignee=ilike." + encodeURIComponent(userEmail), supaPatch);
+        }
       }
     }
   } catch(err) {

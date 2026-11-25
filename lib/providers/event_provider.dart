@@ -594,6 +594,43 @@ class EventProvider with ChangeNotifier {
 
   Future<void> fetchUsers() async {
     try {
+      // 1. Try fast Supabase users read (~50ms)
+      final supaUsers = await _apiService.fetchUsersFromSupabase();
+      if (supaUsers.isNotEmpty) {
+        // Count active tasks per user from loaded events
+        final activeCounts = <String, int>{};
+        for (final e in _events) {
+          if (e.status.trim().toLowerCase() != 'done' && e.assignee.trim().isNotEmpty) {
+            final key = e.assignee.trim().toLowerCase();
+            activeCounts[key] = (activeCounts[key] ?? 0) + 1;
+          }
+        }
+
+        final mainUsers = <Map<String, dynamic>>[];
+        final devUsers = <Map<String, dynamic>>[];
+        for (final u in supaUsers) {
+          final email = (u['email'] ?? '').toString().trim().toLowerCase();
+          final active = activeCounts[email] ?? 0;
+          final enriched = Map<String, dynamic>.from(u)
+            ..['activeTasks'] = active
+            ..['status'] = active > 0 ? 'Engaged' : 'Available';
+          final sheetType = (u['sheet_type'] ?? 'Users').toString();
+          if (sheetType != 'Dev_Users') {
+            mainUsers.add(enriched);
+          }
+          if (sheetType == 'Dev_Users' || sheetType == 'Both') {
+            devUsers.add(enriched);
+          }
+        }
+
+        if (mainUsers.isNotEmpty) _users = mainUsers;
+        if (devUsers.isNotEmpty) _devUsers = devUsers;
+        _updateEventAssigneeNames();
+        notifyListeners();
+        return;
+      }
+
+      // 2. Fallback to Google Apps Script if Supabase users table is empty / not created yet
       final response = await _apiService.postData({'action': 'getUsers'});
       if (response['success'] == true) {
         final List<dynamic> usersData = response['users'];

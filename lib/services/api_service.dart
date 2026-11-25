@@ -218,6 +218,33 @@ class ApiService {
     }
   }
 
+  /// Fetches users from Supabase in ~50ms (returns empty list if table doesn't exist yet)
+  Future<List<Map<String, dynamic>>> fetchUsersFromSupabase() async {
+    final uri = Uri.parse('$supabaseUrl/rest/v1/users?select=*&order=name.asc');
+    try {
+      final response = await http.get(
+        uri,
+        headers: {
+          'apikey': supabaseAnonKey,
+          'Authorization': 'Bearer $supabaseAnonKey',
+          'Accept': 'application/json',
+        },
+      );
+      if (response.statusCode == 200) {
+        final List<dynamic> list = json.decode(response.body);
+        return list.map((raw) {
+          final m = Map<String, dynamic>.from(raw as Map);
+          m['username'] = m['email'];
+          return m;
+        }).toList();
+      }
+      return [];
+    } catch (e) {
+      debugPrint('⚠️ [Supabase Users Exception]: $e');
+      return [];
+    }
+  }
+
   /// Fetches a single post and its associated tasks from Supabase in ~50-80ms
   Future<Map<String, dynamic>?> fetchSinglePostFromSupabase(
     String postNo, {
