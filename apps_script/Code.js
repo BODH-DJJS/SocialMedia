@@ -1203,6 +1203,7 @@ function fixStuckTasks(ss) {
           if (allDone) {
             taskSheet.getRange(task.rowIdx, statusCol + 1).setValue('Ready');
             task.status = 'Ready';
+            try { _syncTaskToSupabase(taskSheet, task.rowIdx, headers); } catch(se) {}
           }
         } else if (task.status === 'Ready') {
           // Revert premature Ready status back to Waiting if any prerequisite dependency is not yet Done
@@ -1210,6 +1211,7 @@ function fixStuckTasks(ss) {
           if (!allDone) {
             taskSheet.getRange(task.rowIdx, statusCol + 1).setValue('Waiting');
             task.status = 'Waiting';
+            try { _syncTaskToSupabase(taskSheet, task.rowIdx, headers); } catch(se) {}
           }
         }
       }

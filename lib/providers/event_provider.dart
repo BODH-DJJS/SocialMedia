@@ -377,6 +377,9 @@ class EventProvider with ChangeNotifier {
     // ── Instant Supabase Write (takes ~50ms) ──
     try {
       _apiService.updateTaskInSupabase(event.taskId, updates);
+      if (updates['Status']?.toString().trim().toLowerCase() == 'done') {
+        _unlockDependentTasks(event);
+      }
     } catch (_) {}
 
     try {
@@ -409,6 +412,72 @@ class EventProvider with ChangeNotifier {
       // Treat network/timeout exceptions as success because GAS scripts usually succeed in the background.
       return 'timeout'; 
     }
+  }
+
+  /// Immediately unlocks any Waiting dependent stages in memory & Supabase when a task is marked Done
+  void _unlockDependentTasks(Event completedEvent) {
+    final pNo = completedEvent.postNo.trim().toLowerCase();
+    if (pNo.isEmpty) return;
+
+    String normStage(String s) {
+      final n = s.trim().toLowerCase().replaceAll(' ', '');
+      if (n == 'crosscheck') return 'textcrosscheck';
+      if (n == 'thumbnailcrosscheck') return 'thumbnailcrosschecking';
+      if (n == 'mediafinalcrosschecking') return 'mediafinalcrosscheck';
+      return n;
+    }
+
+    const depsMap = <String, List<String>>{
+      'editing': ['writing'],
+      'proofreading': ['editing'],
+      'textcrosscheck': ['proofreading'],
+      'thumbnailprocessing': ['thumbnailselection'],
+      'thumbnailcrosschecking': ['thumbnailprocessing'],
+      'mediacrosscheck': ['photoediting', 'videoediting'],
+      'mediafinalcrosscheck': ['proofreading', 'mediacrosscheck', 'thumbnailcrosschecking'],
+      'readytopost': ['textcrosscheck', 'mediafinalcrosscheck'],
+      'photosclean': ['readytopost'],
+    };
+
+    final postTasks = _events.where((t) => t.postNo.trim().toLowerCase() == pNo).toList();
+    if (postTasks.isEmpty) return;
+
+    final byNormStage = <String, Event>{};
+    for (final t in postTasks) {
+      byNormStage[normStage(t.stage)] = t;
+    }
+
+    bool changed = false;
+    for (final t in postTasks) {
+      final st = t.status.trim().toLowerCase();
+      if (st != 'waiting' && st.isNotEmpty) continue;
+
+      final tNorm = normStage(t.stage);
+      final reqs = depsMap[tNorm];
+      if (reqs == null || reqs.isEmpty) continue;
+
+      bool allDone = true;
+      for (final req in reqs) {
+        final reqTask = byNormStage[req];
+        if (reqTask != null && reqTask.status.trim().toLowerCase() != 'done') {
+          allDone = false;
+          break;
+        }
+      }
+
+      if (allDone) {
+        t.status = 'Ready';
+        changed = true;
+        final supaUpdates = <String, dynamic>{'Status': 'Ready'};
+        if (completedEvent.docLink.isNotEmpty && t.docLink.isEmpty &&
+            (tNorm == 'editing' || tNorm == 'proofreading' || tNorm == 'textcrosscheck' || tNorm == 'readytopost')) {
+          supaUpdates['DocLink'] = completedEvent.docLink;
+        }
+        _apiService.updateTaskInSupabase(t.taskId, supaUpdates);
+      }
+    }
+
+    if (changed) notifyListeners();
   }
 
   Future<bool> reverseTask({
