@@ -2664,8 +2664,73 @@ function createTasksForPostV2(payload) {
     }
   }
   
+  try {
+    _syncPostTasksToSupabase(ss, postNo);
+  } catch (syncErr) {
+    Logger.log('createTasksForPostV2 Supabase sync err: ' + syncErr);
+  }
+
   var msg = isUpdate ? 'Tasks updated for ' + postNo : 'Tasks created for ' + postNo + ' with assignees, folders, and docs';
   return {success: true, message: msg};
+}
+
+function _syncPostTasksToSupabase(ss, postNo) {
+  if (!SUPABASE_SYNC_CONFIG || !SUPABASE_SYNC_CONFIG.url) return;
+  ss = ss || SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(TASKS_SHEET);
+  if (!sheet || sheet.getLastRow() < 2) return;
+
+  var data = sheet.getDataRange().getValues();
+  var headers = data[0];
+  var taskIdCol = headers.indexOf('TaskID');
+  var postNoCol = headers.indexOf('PostNo');
+  var stageCol = headers.indexOf('Stage');
+  var assigneeCol = headers.indexOf('Assignee');
+  var statusCol = headers.indexOf('Status');
+  var startedCol = headers.indexOf('StartedAt');
+  var completedCol = headers.indexOf('CompletedAt');
+  var docCol = headers.indexOf('DocLink');
+  var allottedCol = headers.indexOf('AllottedDate');
+  var dueCol = headers.indexOf('DueDate');
+  var notesCol = headers.indexOf('Notes');
+  var canvaCol = headers.indexOf('CanvaLink');
+
+  var usersData = ss.getSheetByName(USERS_SHEET) ? ss.getSheetByName(USERS_SHEET).getDataRange().getValues() : [];
+  var userMap = {};
+  for (var u = 1; u < usersData.length; u++) {
+    if (usersData[u][0]) {
+      userMap[String(usersData[u][0]).trim().toLowerCase()] = String(usersData[u][1] || usersData[u][0]).trim();
+    }
+  }
+
+  var target = String(postNo || '').trim();
+  var batch = [];
+  for (var r = 1; r < data.length; r++) {
+    if (String(data[r][postNoCol] || '').trim() !== target) continue;
+    var tid = String(data[r][taskIdCol] || '').trim();
+    if (!tid) continue;
+    var email = String(data[r][assigneeCol] || '').trim();
+    batch.push({
+      task_id: tid,
+      post_no: target,
+      stage: String(data[r][stageCol] || '').trim(),
+      assignee: email,
+      assignee_name: userMap[email.toLowerCase()] || email,
+      status: String(data[r][statusCol] || '').trim(),
+      started_at: startedCol !== -1 ? String(data[r][startedCol] || '') : '',
+      completed_at: completedCol !== -1 ? String(data[r][completedCol] || '') : '',
+      doc_link: docCol !== -1 ? String(data[r][docCol] || '') : '',
+      canva_link: canvaCol !== -1 ? String(data[r][canvaCol] || '') : '',
+      allotted_date: allottedCol !== -1 ? String(data[r][allottedCol] || '') : '',
+      due_date: dueCol !== -1 ? formatDate(data[r][dueCol]) : '',
+      notes: notesCol !== -1 ? String(data[r][notesCol] || '') : '',
+      row_index: r + 1,
+      updated_at: new Date().toISOString()
+    });
+  }
+  if (batch.length > 0) {
+    _pushBatchesToSupabase('tasks?on_conflict=task_id', batch);
+  }
 }
 
 function copyThumbnailFile(postNo) {
