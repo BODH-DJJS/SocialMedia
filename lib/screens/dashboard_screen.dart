@@ -748,7 +748,7 @@ class _DashboardScreenState extends State<DashboardScreen>
 
     final sections = <String, Map<String, List<Event>>>{
       '✍️ Writing': {},
-      '✂️ Editing': {},
+      '📝 Editing': {},
       '🔍 Proofreading': {},
       '🔎 Text Crosscheck': {},
       '🖼️ Thumbnail Stages': {},
@@ -763,7 +763,7 @@ class _DashboardScreenState extends State<DashboardScreen>
       if (stage == 'writing') {
         sectionKey = '✍️ Writing';
       } else if (stage == 'editing') {
-        sectionKey = '✂️ Editing';
+        sectionKey = '📝 Editing';
       } else if (stage == 'proofreading') {
         sectionKey = '🔍 Proofreading';
       } else if (stage.contains('crosscheck') || stage.contains('cross check')) {
