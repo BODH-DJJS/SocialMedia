@@ -801,6 +801,7 @@ class _DashboardScreenState extends State<DashboardScreen>
     final now = DateTime.now();
     final dateStr = '${now.day} ${_monthName(now.month)} ${now.year}';
     final buffer = StringBuffer();
+    buffer.writeln('Jmjk🙏\n');
     buffer.writeln('📊 *BODH Social Media - Daily Pending Tasks Report*');
     buffer.writeln('📅 _Date: ${dateStr}_\n');
 
@@ -826,12 +827,37 @@ class _DashboardScreenState extends State<DashboardScreen>
     final dateStr = '${now.day} ${_monthName(now.month)} ${now.year}';
     final buffer = StringBuffer();
     int sectionTotal = userMap.values.fold(0, (sum, list) => sum + list.length);
+    buffer.writeln('Jmjk🙏\n');
     buffer.writeln('*$sectionTitle* (Total: $sectionTotal) - $dateStr\n');
     userMap.forEach((userName, events) {
       final postNos = events.map((e) => '#${e.postNo}').toSet().join(', ');
       buffer.writeln('• *$userName* (${events.length} task${events.length > 1 ? 's' : ''}): $postNos');
     });
     buffer.writeln('\n🙏 _Please complete your respective tasks at the earliest._');
+    return buffer.toString();
+  }
+
+  String _generateMultiSectionWhatsApp(
+    Map<String, Map<String, List<Event>>> sectionMap,
+    Set<String> selectedSections,
+  ) {
+    final now = DateTime.now();
+    final dateStr = '${now.day} ${_monthName(now.month)} ${now.year}';
+    final buffer = StringBuffer();
+    buffer.writeln('Jmjk🙏\n');
+
+    sectionMap.forEach((sectionTitle, userMap) {
+      if (!selectedSections.contains(sectionTitle) || userMap.isEmpty) return;
+      int sectionTotal = userMap.values.fold(0, (sum, list) => sum + list.length);
+      buffer.writeln('*$sectionTitle* (Total: $sectionTotal) - $dateStr\n');
+      userMap.forEach((userName, events) {
+        final postNos = events.map((e) => '#${e.postNo}').toSet().join(', ');
+        buffer.writeln('• *$userName* (${events.length} task${events.length > 1 ? 's' : ''}): $postNos');
+      });
+      buffer.writeln('');
+    });
+
+    buffer.writeln('🙏 _Please complete your respective tasks at the earliest._');
     return buffer.toString();
   }
 
@@ -842,9 +868,12 @@ class _DashboardScreenState extends State<DashboardScreen>
       userMap.forEach((_, list) => totalPending += list.length);
     });
 
+    final selectedSections = <String>{};
+
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
         titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 10),
         contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -900,22 +929,52 @@ class _DashboardScreenState extends State<DashboardScreen>
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'Copy entire report or individual sections directly to WhatsApp team groups.',
-                        style: TextStyle(fontSize: 12, color: Colors.grey),
+                      Row(
+                        children: [
+                          const Expanded(
+                            child: Text(
+                              'Select one or more sections to copy together, or copy an individual section.',
+                              style: TextStyle(fontSize: 12, color: Colors.grey),
+                            ),
+                          ),
+                          TextButton(
+                            onPressed: () {
+                              setDialogState(() {
+                                if (selectedSections.length == sectionMap.length) {
+                                  selectedSections.clear();
+                                } else {
+                                  selectedSections.addAll(sectionMap.keys);
+                                }
+                              });
+                            },
+                            style: TextButton.styleFrom(
+                              visualDensity: VisualDensity.compact,
+                              padding: const EdgeInsets.symmetric(horizontal: 8),
+                            ),
+                            child: Text(
+                              selectedSections.length == sectionMap.length ? 'Clear All' : 'Select All',
+                              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 14),
+                      const SizedBox(height: 10),
                       ...sectionMap.entries.map((entry) {
                         final sectionTitle = entry.key;
                         final userMap = entry.value;
                         final secCount = userMap.values.fold(0, (sum, list) => sum + list.length);
+                        final isSelected = selectedSections.contains(sectionTitle);
 
                         return Card(
                           margin: const EdgeInsets.only(bottom: 14),
                           elevation: 0.5,
+                          color: isSelected ? Colors.green.shade50.withOpacity(0.5) : null,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
-                            side: BorderSide(color: Colors.grey.shade300),
+                            side: BorderSide(
+                              color: isSelected ? const Color(0xFF2E7D32) : Colors.grey.shade300,
+                              width: isSelected ? 1.5 : 1,
+                            ),
                           ),
                           child: Padding(
                             padding: const EdgeInsets.all(12),
@@ -924,27 +983,52 @@ class _DashboardScreenState extends State<DashboardScreen>
                               children: [
                                 Row(
                                   children: [
+                                    Checkbox(
+                                      value: isSelected,
+                                      activeColor: const Color(0xFF2E7D32),
+                                      visualDensity: VisualDensity.compact,
+                                      onChanged: (val) {
+                                        setDialogState(() {
+                                          if (val == true) {
+                                            selectedSections.add(sectionTitle);
+                                          } else {
+                                            selectedSections.remove(sectionTitle);
+                                          }
+                                        });
+                                      },
+                                    ),
                                     Expanded(
-                                      child: Row(
-                                        children: [
-                                          Text(
-                                            sectionTitle,
-                                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                                          ),
-                                          const SizedBox(width: 8),
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                                            decoration: BoxDecoration(
-                                              color: Colors.blue.shade50,
-                                              borderRadius: BorderRadius.circular(10),
-                                              border: Border.all(color: Colors.blue.shade200),
+                                      child: InkWell(
+                                        onTap: () {
+                                          setDialogState(() {
+                                            if (isSelected) {
+                                              selectedSections.remove(sectionTitle);
+                                            } else {
+                                              selectedSections.add(sectionTitle);
+                                            }
+                                          });
+                                        },
+                                        child: Row(
+                                          children: [
+                                            Text(
+                                              sectionTitle,
+                                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                                             ),
-                                            child: Text(
-                                              '$secCount',
-                                              style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.blue.shade900),
+                                            const SizedBox(width: 8),
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                              decoration: BoxDecoration(
+                                                color: Colors.blue.shade50,
+                                                borderRadius: BorderRadius.circular(10),
+                                                border: Border.all(color: Colors.blue.shade200),
+                                              ),
+                                              child: Text(
+                                                '$secCount',
+                                                style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.blue.shade900),
+                                              ),
                                             ),
-                                          ),
-                                        ],
+                                          ],
+                                        ),
                                       ),
                                     ),
                                     TextButton.icon(
@@ -1050,6 +1134,28 @@ class _DashboardScreenState extends State<DashboardScreen>
             onPressed: () => Navigator.pop(ctx),
             child: const Text('Close'),
           ),
+          if (selectedSections.isNotEmpty)
+            ElevatedButton.icon(
+              onPressed: () {
+                final text = _generateMultiSectionWhatsApp(sectionMap, selectedSections);
+                Clipboard.setData(ClipboardData(text: text));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('📋 Copied ${selectedSections.length} selected section(s) to clipboard!'),
+                    duration: const Duration(seconds: 2),
+                    backgroundColor: const Color(0xFF2E7D32),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.checklist_rounded, size: 16),
+              label: Text('Copy Selected (${selectedSections.length})'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.indigo.shade700,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+            ),
           if (sectionMap.isNotEmpty)
             ElevatedButton.icon(
               onPressed: () {
@@ -1074,6 +1180,7 @@ class _DashboardScreenState extends State<DashboardScreen>
               ),
             ),
         ],
+        ),
       ),
     );
   }
