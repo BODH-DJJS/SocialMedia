@@ -50530,11 +50530,11 @@ A.d2(s,s,!0,s,new A.ays(this,a,new A.cz(new A.cf(b,B.bh,B.aB),r),new A.cz(new A.
 ac4(a){var s,r,q,p,o,n,m,l="\ud83d\udd0e Text Crosscheck",k="\ud83d\uddbc\ufe0f Thumbnail Stages",j="\ud83c\udfac Media & Video Stages",i="\ud83d\ude80 Ready to Post",h="\ud83d\udccc Other Pending Stages",g=A.N(a).i("D<1>"),f=A.C(new A.D(a,new A.ax7(),g),!0,g.i("n.E"))
 g=t.N
 s=t.yI
-r=A.A(["\u270d\ufe0f Writing",A.x(g,s),"\u2702\ufe0f Editing",A.x(g,s),"\ud83d\udd0d Proofreading",A.x(g,s),l,A.x(g,s),k,A.x(g,s),j,A.x(g,s),i,A.x(g,s),h,A.x(g,s)],g,t.dG)
+r=A.A(["\u270d\ufe0f Writing",A.x(g,s),"\ud83d\udcdd Editing",A.x(g,s),"\ud83d\udd0d Proofreading",A.x(g,s),l,A.x(g,s),k,A.x(g,s),j,A.x(g,s),i,A.x(g,s),h,A.x(g,s)],g,t.dG)
 for(g=f.length,q=0;q<g;++q){p=f[q]
 o=B.b.E(p.c).toLowerCase()
 if(o==="writing")n="\u270d\ufe0f Writing"
-else if(o==="editing")n="\u2702\ufe0f Editing"
+else if(o==="editing")n="\ud83d\udcdd Editing"
 else if(o==="proofreading")n="\ud83d\udd0d Proofreading"
 else{n=j
 if(!A.f6(o,"crosscheck",0))s=A.f6(o,"cross check",0)
