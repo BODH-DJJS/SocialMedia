@@ -2171,11 +2171,12 @@ function handleGroupPosts(payload) {
   for (var i = 1; i < data.length; i++) {
     if (postNos.indexOf(data[i][0].toString()) !== -1 || postNos.indexOf(Number(data[i][0])) !== -1) {
       sheet.getRange(i + 1, 38).setValue(groupId); // Column AL (38)
-      // If post was marked 'Data Unavailable', reset PostStatus so it becomes clean/active under group
+      // Reset Inactive/Skip PostStatus when re-grouping, but preserve 'Data Unavailable'
       var curStatus = (data[i][40] || '').toString().trim().toLowerCase();
-      if (curStatus === 'data unavailable' || curStatus === 'dataunavailable') {
+      if (curStatus === 'inactive' || curStatus === 'skip') {
         sheet.getRange(i + 1, 41).setValue(''); // Column AO (41) PostStatus
       }
+      sheet.getRange(i + 1, 37).setValue('Combined'); // Column AK (37) PostType
       updated++;
     }
   }
@@ -5002,7 +5003,34 @@ function onEdit(e) {
         updated_at: new Date().toISOString()
       }];
       
-      _pushBatchesToSupabase('tasks', taskPayload);
+      _pushBatchesToSupabase('tasks?on_conflict=task_id', taskPayload);
+    } else if (sheetName === POSTS_SHEET) {
+      var pRow = sheet.getRange(row, 1, 1, sheet.getLastColumn()).getValues()[0];
+      if (!pRow[0]) return;
+      var postObj = buildPostObj(pRow);
+      var postPayload = [{
+        post_no: String(postObj.PostNo),
+        program: String(postObj.Program || ''),
+        branch: String(postObj.Branch || ''),
+        state: String(postObj.State || ''),
+        venue: String(postObj.Venue || ''),
+        theme: String(postObj.Theme || ''),
+        date: String(postObj.Date || ''),
+        timings: String(postObj.Timings || ''),
+        male: parseInt(postObj.Male) || 0,
+        female: parseInt(postObj.Female) || 0,
+        children: parseInt(postObj.Children) || 0,
+        total_beneficiary: parseInt(postObj.TotalBeneficiary) || 0,
+        publish_platform: String(postObj.PublishPlatform || ''),
+        post_type: String(postObj.PostType || ''),
+        group_id: String(postObj.GroupID || ''),
+        media_mode: String(postObj.MediaMode || ''),
+        description: String(postObj.Description || ''),
+        post_status: String(postObj.PostStatus || ''),
+        row_index: row,
+        updated_at: new Date().toISOString()
+      }];
+      _pushBatchesToSupabase('posts?on_conflict=post_no', postPayload);
     } else if (sheetName === USERS_SHEET || sheetName === DEV_USERS_SHEET) {
       var rowData = sheet.getRange(row, 1, 1, sheet.getLastColumn()).getValues()[0];
       var userEmail = String(rowData[0] || '').trim().toLowerCase();

@@ -810,7 +810,7 @@ class EventProvider with ChangeNotifier {
         p['PostType'] = 'Combined';
         p['post_type'] = 'Combined';
         final curStatus = p['PostStatus']?.toString().trim().toLowerCase() ?? '';
-        if (curStatus == 'data unavailable' || curStatus == 'dataunavailable') {
+        if (curStatus == 'inactive' || curStatus == 'skip') {
           p['PostStatus'] = '';
           p['post_status'] = '';
         }

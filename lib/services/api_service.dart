@@ -507,7 +507,8 @@ class ApiService {
 
   /// Updates post metadata (e.g. clearing 'Skip' or 'Inactive' post_status) in Supabase instantly
   Future<bool> updatePostInSupabase(String postNo, Map<String, dynamic> updates) async {
-    final uri = Uri.parse('$supabaseUrl/rest/v1/posts?post_no=eq.${Uri.encodeComponent(postNo)}');
+    final encoded = Uri.encodeComponent(postNo);
+    final uri = Uri.parse('$supabaseUrl/rest/v1/posts?or=(post_no.eq.$encoded,group_id.eq.$encoded)');
     final payload = <String, dynamic>{
       'updated_at': DateTime.now().toIso8601String(),
     };
@@ -606,6 +607,7 @@ class ApiService {
           body: json.encode({
             'group_id': groupId.trim(),
             'post_type': 'Combined',
+            'post_status': '',
             'updated_at': DateTime.now().toIso8601String(),
           }),
         );
