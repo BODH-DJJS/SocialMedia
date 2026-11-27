@@ -2265,6 +2265,7 @@ class _DashboardScreenState extends State<DashboardScreen>
   }
 
   void _groupSelectedPosts() {
+    final provider = context.read<EventProvider>();
     final selectedList = _selectedPosts.toList();
     // Sort selected post numbers
     selectedList.sort((a, b) {
@@ -2272,6 +2273,14 @@ class _DashboardScreenState extends State<DashboardScreen>
       final intB = int.tryParse(b) ?? 0;
       return intA.compareTo(intB);
     });
+
+    for (final pNo in selectedList) {
+      final lockedStage = _getModificationLockStage(pNo, provider);
+      if (lockedStage != null) {
+        _showModificationLockedPopup('Post #$pNo', lockedStage);
+        return;
+      }
+    }
 
     // Auto-generate default name: format Combined_Post(373, 374) or Combined Post(45, 56, 78) - branch name not required
     final defaultGroupName = 'Combined_Post(${selectedList.join(', ')})';
@@ -3311,8 +3320,77 @@ class _DashboardScreenState extends State<DashboardScreen>
     );
   }
 
+  /// Checks if a post or combined group has already reached Proofreading, Media Cross Check, or any later stage.
+  /// Returns the reached stage name if locked, or null if still modifiable.
+  String? _getModificationLockStage(String postOrGroupId, EventProvider provider) {
+    final tasks = provider.events.where((t) => t.postNo.trim() == postOrGroupId.trim()).toList();
+    if (tasks.isEmpty) return null;
+
+    const lockedStages = {
+      'proofreading',
+      'mediacrosscheck',
+      'textcrosscheck',
+      'crosscheck',
+      'mediafinalcrosscheck',
+      'mediafinalcrosschecking',
+      'readytopost',
+      'photosclean',
+    };
+
+    for (final t in tasks) {
+      final stgNorm = t.stage.trim().toLowerCase().replaceAll(' ', '');
+      final statusNorm = t.status.trim().toLowerCase();
+      if (lockedStages.contains(stgNorm) && statusNorm.isNotEmpty && statusNorm != 'waiting') {
+        return t.stage;
+      }
+    }
+    return null;
+  }
+
+  void _showModificationLockedPopup(String postOrGroupId, String reachedStage) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Icon(Icons.lock_outline_rounded, color: Colors.orange.shade800, size: 26),
+            const SizedBox(width: 8),
+            const Expanded(
+              child: Text(
+                'Cannot Modify Post',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          '"$postOrGroupId" has already reached the "$reachedStage" stage.\n\n'
+          'Once a post reaches Proofreading or Media Cross Check, it cannot be modified or have new posts added to it.',
+          style: const TextStyle(fontSize: 14, height: 1.4),
+        ),
+        actions: [
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.orange.shade800,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _showEditCombinedGroupDialog(Map<String, dynamic> group, EventProvider provider, AuthProvider auth) {
     final oldGroupId = group['GroupID']?.toString() ?? '';
+    final lockedStage = _getModificationLockStage(oldGroupId, provider);
+    if (lockedStage != null) {
+      _showModificationLockedPopup(oldGroupId, lockedStage);
+      return;
+    }
+
     final List<Map<String, dynamic>> currentPosts = (group['Posts'] as List<dynamic>?)?.cast<Map<String, dynamic>>() ?? [];
     final currentPostNos = currentPosts.map((p) => p['PostNo']?.toString() ?? '').where((n) => n.isNotEmpty).toSet();
 
@@ -3502,6 +3580,15 @@ class _DashboardScreenState extends State<DashboardScreen>
                 onPressed: () async {
                   final newName = nameController.text.trim();
                   if (newName.isEmpty) return;
+
+                  for (final pNo in selectedToAdd) {
+                    final addLock = _getModificationLockStage(pNo, provider);
+                    if (addLock != null) {
+                      Navigator.pop(ctx);
+                      _showModificationLockedPopup('Post #$pNo', addLock);
+                      return;
+                    }
+                  }
 
                   Navigator.pop(ctx);
                   final messenger = ScaffoldMessenger.of(context);
