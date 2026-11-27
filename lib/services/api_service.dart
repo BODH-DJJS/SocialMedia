@@ -505,6 +505,28 @@ class ApiService {
     }
   }
 
+  /// Upserts newly created/updated tasks directly into Supabase (~50ms)
+  Future<bool> upsertTasksInSupabase(List<Map<String, dynamic>> tasks) async {
+    if (tasks.isEmpty) return true;
+    final uri = Uri.parse('$supabaseUrl/rest/v1/tasks?on_conflict=task_id');
+    try {
+      final response = await http.post(
+        uri,
+        headers: {
+          'apikey': supabaseAnonKey,
+          'Authorization': 'Bearer $supabaseAnonKey',
+          'Content-Type': 'application/json',
+          'Prefer': 'resolution=merge-duplicates,return=minimal',
+        },
+        body: json.encode(tasks),
+      );
+      return response.statusCode == 200 || response.statusCode == 201 || response.statusCode == 204;
+    } catch (e) {
+      debugPrint('⚠️ [Supabase Task Upsert Error]: $e');
+      return false;
+    }
+  }
+
   /// Updates post metadata (e.g. clearing 'Skip' or 'Inactive' post_status) in Supabase instantly
   Future<bool> updatePostInSupabase(String postNo, Map<String, dynamic> updates) async {
     final encoded = Uri.encodeComponent(postNo);

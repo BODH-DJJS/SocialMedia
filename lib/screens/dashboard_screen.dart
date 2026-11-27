@@ -34,6 +34,7 @@ class _DashboardScreenState extends State<DashboardScreen>
   final Set<String> _selectedPosts = {};
   bool _isSelectionMode = false;
   final TextEditingController _searchController = TextEditingController();
+  final FocusNode _searchFocusNode = FocusNode();
   final TextEditingController _workflowSearchController = TextEditingController();
   String _myQueueFilter = 'All Tasks';
 
@@ -190,6 +191,7 @@ class _DashboardScreenState extends State<DashboardScreen>
     _refreshTimer?.cancel();
     _searchDebounce?.cancel();
     _searchController.dispose();
+    _searchFocusNode.dispose();
     _workflowSearchController.dispose();
     _horizontalScrollController.dispose();
     _verticalScrollController.dispose();
@@ -293,8 +295,9 @@ class _DashboardScreenState extends State<DashboardScreen>
               width: 220,
               height: 38,
               margin: const EdgeInsets.symmetric(vertical: 8),
-              child: TextField(
-                controller: _workflowSearchController,
+              child: SelectionContainer.disabled(
+                child: TextField(
+                  controller: _workflowSearchController,
                 style: const TextStyle(color: Colors.white, fontSize: 13),
                 decoration: InputDecoration(
                   hintText: 'Search Post No or Branch...',
@@ -315,6 +318,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                       : null,
                 ),
                 onChanged: (_) => setState(() {}),
+                ),
               ),
             ),
             const SizedBox(width: 8),
@@ -2081,8 +2085,10 @@ class _DashboardScreenState extends State<DashboardScreen>
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             color: Colors.white,
-            child: TextField(
-              controller: _searchController,
+            child: SelectionContainer.disabled(
+              child: TextField(
+                controller: _searchController,
+                focusNode: _searchFocusNode,
               decoration: InputDecoration(
                 hintText: 'Search by Post No, Branch, Group ID, or Theme...',
                 prefixIcon: const Icon(Icons.search),
@@ -2119,6 +2125,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                   }
                 });
               },
+              ),
             ),
           ),
           // Filter chips

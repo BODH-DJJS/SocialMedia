@@ -1083,6 +1083,7 @@ class EventProvider with ChangeNotifier {
     required String mediaMode,
   }) async {
     // ── Instant in-memory and Supabase update: Clear 'Skip' / 'Inactive' tag when assigned ──
+    final List<Map<String, dynamic>> matchedPosts = [];
     for (var p in _rawPosts) {
       if (p['PostNo']?.toString() == postNo || (p['GroupID']?.toString().isNotEmpty == true && p['GroupID']?.toString() == postNo)) {
         p['PostStatus'] = '';
@@ -1091,9 +1092,104 @@ class EventProvider with ChangeNotifier {
         p['PublishPlatform'] = publishPlatform;
         p['PostType'] = postType;
         p['MediaMode'] = mediaMode;
+        matchedPosts.add(p);
       }
     }
+
+    // Build user name lookup
+    final userNames = <String, String>{};
+    for (final u in _users) {
+      final em = (u['email'] ?? u['Email'] ?? u['username'])?.toString().trim().toLowerCase() ?? '';
+      final nm = (u['name'] ?? u['Name'])?.toString().trim() ?? '';
+      if (em.isNotEmpty && nm.isNotEmpty) userNames[em] = nm;
+    }
+
+    // Build optimistic tasks in memory & push to Supabase immediately (~50ms)
+    const rootStages = {'writing', 'thumbnailselection', 'photoediting', 'videoediting'};
+    final nowIso = DateTime.now().toIso8601String();
+    final nowStr = DateTime.now().toString();
+    final supaTasksBatch = <Map<String, dynamic>>[];
+
+    final firstPost = matchedPosts.isNotEmpty ? matchedPosts.first : <String, dynamic>{};
+    final isCombinedPost = postType.toLowerCase() == 'combined' || matchedPosts.length > 1;
+
+    assignees.forEach((stage, assigneeEmail) {
+      final cleanEmail = assigneeEmail.trim();
+      final taskId = '$postNo-$stage';
+      final normStg = stage.trim().toLowerCase().replaceAll(' ', '');
+      final existingIdx = _events.indexWhere((t) => t.taskId == taskId || (t.postNo == postNo && t.stage.trim().toLowerCase().replaceAll(' ', '') == normStg));
+
+      final resolvedName = userNames[cleanEmail.toLowerCase()] ?? cleanEmail;
+      final dueRaw = dueDates[stage] ?? '';
+      String dueStr = '';
+      if (dueRaw.isNotEmpty) {
+        try {
+          dueStr = DateFormat('dd-MMM-yyyy').format(DateTime.parse(dueRaw));
+        } catch (_) {
+          dueStr = dueRaw;
+        }
+      }
+
+      if (existingIdx != -1) {
+        final existing = _events[existingIdx];
+        existing.assignee = cleanEmail;
+        existing.assigneeName = resolvedName;
+        _apiService.updateTaskInSupabase(existing.taskId, {
+          'Assignee': cleanEmail,
+          'AssigneeName': resolvedName,
+          if (dueStr.isNotEmpty) 'DueDate': dueStr,
+        });
+      } else {
+        final initialStatus = rootStages.contains(normStg)
+            ? (cleanEmail.isNotEmpty ? 'Ready' : 'Waiting')
+            : 'Waiting';
+        final merged = Map<String, dynamic>.from(firstPost);
+        merged['TaskID'] = taskId;
+        merged['task_id'] = taskId;
+        merged['PostNo'] = postNo;
+        merged['post_no'] = postNo;
+        merged['Stage'] = stage;
+        merged['stage'] = stage;
+        merged['Assignee'] = cleanEmail;
+        merged['assignee'] = cleanEmail;
+        merged['AssigneeName'] = resolvedName;
+        merged['assignee_name'] = resolvedName;
+        merged['Status'] = initialStatus;
+        merged['status'] = initialStatus;
+        merged['DueDate'] = dueStr;
+        merged['due_date'] = dueStr;
+        merged['AllottedDate'] = cleanEmail.isNotEmpty ? nowStr : '';
+        merged['allotted_date'] = cleanEmail.isNotEmpty ? nowStr : '';
+        merged['Description'] = description;
+        merged['PublishPlatform'] = publishPlatform;
+        merged['PostType'] = postType;
+        merged['MediaMode'] = mediaMode;
+        if (isCombinedPost) {
+          merged['is_combined'] = true;
+          merged['isCombined'] = true;
+          merged['theme'] = postNo;
+          merged['Theme'] = postNo;
+          merged['combined_posts'] = matchedPosts;
+          merged['CombinedPosts'] = matchedPosts;
+        }
+        _events.add(Event.fromJson(merged));
+
+        supaTasksBatch.add({
+          'task_id': taskId,
+          'post_no': postNo,
+          'stage': stage,
+          'assignee': cleanEmail,
+          'assignee_name': resolvedName,
+          'status': initialStatus,
+          'allotted_date': cleanEmail.isNotEmpty ? nowStr : '',
+          'due_date': dueStr,
+          'updated_at': nowIso,
+        });
+      }
+    });
+
     notifyListeners();
+    _saveRawPostsToCache();
 
     try {
       _apiService.updatePostInSupabase(postNo, {
@@ -1103,6 +1199,9 @@ class EventProvider with ChangeNotifier {
         'postType': postType,
         'mediaMode': mediaMode,
       });
+      if (supaTasksBatch.isNotEmpty) {
+        _apiService.upsertTasksInSupabase(supaTasksBatch);
+      }
     } catch (_) {}
 
     try {
