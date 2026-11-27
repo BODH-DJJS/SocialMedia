@@ -50991,16 +50991,14 @@ h.toString
 h=A.R(h).ax.y}h=A.aR(i,h,e,e)
 i=q?"Edit Combined Workflow":"Assign & Setup Workflow"
 g=t.p
-i=A.a([o,B.y,m,B.aK,l,k,j,A.cq(e,e,e,h,e,e,new A.avs(f,d,q,b,c),e,e,e,i)],g)
-if(q)i.push(A.cq(e,e,e,A.aR(B.ds,B.dm,e,e),e,e,new A.avt(f,a,a0,a1),e,e,e,"Delete Combined Post (Make Inactive)"))
-o=A.Z(i,B.j,B.e,B.h,e)
-m=n.di(c,new A.avu(),t.dT)
-m=A.a([o,B.aU,A.i0(A.C(m,!0,m.$ti.i("ai.E")),8,8)],g)
+i=A.Z(A.a([o,B.y,m,B.aK,l,k,j,A.cq(e,e,e,h,e,e,new A.avs(f,d,q,b,c),e,e,e,i),A.cq(e,e,e,A.aR(B.ds,B.dm,e,e),e,e,new A.avt(f,a,a0,a1),e,e,e,"Delete Combined Post (Ungroup / Make Inactive)")],g),B.j,B.e,B.h,e)
+h=n.di(c,new A.avu(),t.dT)
+h=A.a([i,B.aU,A.i0(A.C(h,!0,h.$ti.i("ai.E")),8,8)],g)
 if(q){o=f.lu("Writing",s.dG(b,new A.avv())?"Yes":"")
-l=f.lu("Editing",s.dG(b,new A.avw())?"Yes":"")
-o=A.i0(A.a([o,l,f.lu("Proof",s.dG(b,new A.avx())?"Yes":"")],g),6,6)
+m=f.lu("Editing",s.dG(b,new A.avw())?"Yes":"")
+o=A.i0(A.a([o,m,f.lu("Proof",s.dG(b,new A.avx())?"Yes":"")],g),6,6)
 n=n.di(c,new A.avy(f),t.Mp)
-B.c.C(m,A.a([B.aE,o,B.aE,B.abw,B.au,A.dG(A.Z(A.C(n,!0,n.$ti.i("ai.E")),B.j,B.e,B.h,e),e,B.z,e,e,B.a1)],g))}return A.dO(A.bp(!1,p,!0,new A.aq(B.as,A.ap(m,B.t,B.e,B.h),e),e,!0,e,e,e,e,e,e,e,e,e,e,e,new A.avz(f,d,a),new A.avr(f,a,a0),e,e,e,e,e,e,e),e,e,B.fK,e,new A.aD(r,B.l))},
+B.c.C(h,A.a([B.aE,o,B.aE,B.abw,B.au,A.dG(A.Z(A.C(n,!0,n.$ti.i("ai.E")),B.j,B.e,B.h,e),e,B.z,e,e,B.a1)],g))}return A.dO(A.bp(!1,p,!0,new A.aq(B.as,A.ap(h,B.t,B.e,B.h),e),e,!0,e,e,e,e,e,e,e,e,e,e,e,new A.avz(f,d,a),new A.avr(f,a,a0),e,e,e,e,e,e,e),e,e,B.fK,e,new A.aD(r,B.l))},
 wh(a){return this.alc(a)},
 alc(a){var s=0,r=A.G(t.H),q
 var $async$wh=A.H(function(b,c){if(b===1)return A.D(c,r)
@@ -52317,31 +52315,31 @@ A.ayY.prototype={
 $1(a){return a.b===this.a},
 $S:2}
 A.ayZ.prototype={
-$1(a){var s,r=this,q=null,p=r.b,o=A.u("Group: "+p,q,q,q,q,q,q,q,q),n=r.c,m=n?B.bj:B.cE,l=A.w(6),k=A.aP(n?B.aR:B.ba,1),j=n?"Active":"Inactive",i=t.p
-l=A.Z(A.a([o,B.ci,A.a3(q,A.u(j,q,q,q,q,A.af(q,q,n?B.fG:B.bp,q,q,q,q,q,q,q,q,12,q,q,B.v,q,q,!0,q,q,q,q,q,q,q,q),q,q,q),B.k,q,q,new A.a4(m,q,k,l,q,q,B.n),q,q,q,B.cq,q,q,q)],i),B.j,B.e,B.h,q)
-k=r.d
-m=J.a_(k)
-j=A.a([A.u("Combined Events ("+m.gt(k)+"):",q,q,q,q,B.b2,q,q,q),B.au],i)
-m=m.di(k,new A.ayR(),t.dT)
-B.c.C(j,A.C(m,!0,m.$ti.i("ai.E")))
-j.push(B.ke)
-if(!n){o=A.w(8)
-m=A.aP(B.eG,1)
-B.c.C(j,A.a([A.a3(q,A.Z(A.a([A.aR(B.eg,B.bp,q,q),B.y,A.aC(A.u('Combined workflow has not been assigned yet. Click "Assign Workflow" below to assign users.',q,q,q,q,A.af(q,q,B.cC,q,q,q,q,q,q,q,q,13,q,q,q,q,q,!0,q,q,q,q,q,q,q,q),q,q,q),1)],i),B.j,B.e,B.h,q),B.k,q,q,new A.a4(B.cE,q,m,o,q,q,B.n),q,q,q,B.bm,q,q,q)],i))}else{o=A.a([B.G0,B.a5],i)
-m=r.e
-s=A.N(m).i("a5<1,jM>")
-B.c.C(o,A.C(new A.a5(m,new A.ayS(),s),!0,s.i("ai.E")))
-B.c.C(j,o)}o=A.aX(A.dG(A.ap(j,B.t,B.e,B.A),q,B.z,q,q,B.a2),q,17976931348623157e292)
-i=A.a([],i)
-if(n)i.push(A.hX(B.iw,B.a9h,new A.ayT(r.a,a,r.f,r.r),q,q))
-m=r.a
-i.push(A.hX(B.Ro,B.abs,new A.ayU(m,a,r.f,r.r),q,q))
-i.push(A.hX(B.l_,B.FO,new A.ayV(m,a,p),q,q))
-i.push(A.dc(!1,B.jl,q,q,q,q,q,q,new A.ayW(a),q,q))
-j=A.aR(n?B.eU:B.nS,q,q,q)
-s=A.u(n?"Update Setup / Assignees":"Assign Workflow",q,q,q,q,q,q,q,q)
-i.push(A.cW(j,s,new A.ayX(m,a,p,n,r.e,k),A.c5(q,q,n?B.aR:B.cB,q,q,q,q,q,q,B.i,q,q,q,q,q,q,q,q,q)))
-return A.dw(i,q,o,q,q,l,q)},
+$1(a){var s,r,q,p,o,n=this,m=null,l=n.b,k=A.u("Group: "+l,m,m,m,m,m,m,m,m),j=n.c,i=j?B.bj:B.cE,h=A.w(6),g=A.aP(j?B.aR:B.ba,1),f=j?"Active":"Inactive",e=t.p
+h=A.Z(A.a([k,B.ci,A.a3(m,A.u(f,m,m,m,m,A.af(m,m,j?B.fG:B.bp,m,m,m,m,m,m,m,m,12,m,m,B.v,m,m,!0,m,m,m,m,m,m,m,m),m,m,m),B.k,m,m,new A.a4(i,m,g,h,m,m,B.n),m,m,m,B.cq,m,m,m)],e),B.j,B.e,B.h,m)
+g=n.d
+i=J.a_(g)
+f=A.a([A.u("Combined Events ("+i.gt(g)+"):",m,m,m,m,B.b2,m,m,m),B.au],e)
+i=i.di(g,new A.ayR(),t.dT)
+B.c.C(f,A.C(i,!0,i.$ti.i("ai.E")))
+f.push(B.ke)
+if(!j){k=A.w(8)
+i=A.aP(B.eG,1)
+B.c.C(f,A.a([A.a3(m,A.Z(A.a([A.aR(B.eg,B.bp,m,m),B.y,A.aC(A.u('Combined workflow has not been assigned yet. Click "Assign Workflow" below to assign users.',m,m,m,m,A.af(m,m,B.cC,m,m,m,m,m,m,m,m,13,m,m,m,m,m,!0,m,m,m,m,m,m,m,m),m,m,m),1)],e),B.j,B.e,B.h,m),B.k,m,m,new A.a4(B.cE,m,i,k,m,m,B.n),m,m,m,B.bm,m,m,m)],e))}else{k=A.a([B.G0,B.a5],e)
+i=n.e
+s=A.N(i).i("a5<1,jM>")
+B.c.C(k,A.C(new A.a5(i,new A.ayS(),s),!0,s.i("ai.E")))
+B.c.C(f,k)}k=A.aX(A.dG(A.ap(f,B.t,B.e,B.A),m,B.z,m,m,B.a2),m,17976931348623157e292)
+i=n.a
+f=n.f
+s=n.r
+r=A.hX(B.iw,B.a9h,new A.ayT(i,a,f,s),m,m)
+s=A.hX(B.Ro,B.abs,new A.ayU(i,a,f,s),m,m)
+f=A.hX(B.l_,B.FO,new A.ayV(i,a,l),m,m)
+q=A.dc(!1,B.jl,m,m,m,m,m,m,new A.ayW(a),m,m)
+p=A.aR(j?B.eU:B.nS,m,m,m)
+o=A.u(j?"Update Setup / Assignees":"Assign Workflow",m,m,m,m,m,m,m,m)
+return A.dw(A.a([r,s,f,q,A.cW(p,o,new A.ayX(i,a,l,j,n.e,g),A.c5(m,m,j?B.aR:B.cB,m,m,m,m,m,m,B.i,m,m,m,m,m,m,m,m,m))],e),m,k,m,m,h,m)},
 $S:19}
 A.ayR.prototype={
 $1(a){var s,r,q,p,o=null,n=J.a_(a),m=n.h(a,"PostNo"),l=m==null?o:J.h(m)
@@ -52897,8 +52895,7 @@ a0=A.cq(a4,B.dI,a4,A.aR(B.eV,B.b5,a4,18),a4,a4,new A.avS(q,b2,b0,a7),B.Y,a4,a4,"
 a1=A.aR(i?B.eU:B.nS,B.ca,a4,18)
 a2=i?"Edit Workflow":"Assign Workflow"
 a2=A.a([a,B.a7,a0,B.a7,A.cq(a4,B.dI,a4,a1,a4,a4,new A.avT(b1,a7,i,k,s),B.Y,a4,a4,a2)],j)
-if(a8)B.c.C(a2,A.a([B.a7,A.cq(a4,B.dI,a4,A.aR(B.o4,B.b5,a4,18),a4,a4,new A.avU(q,b2,b0),B.Y,a4,a4,"Edit Beneficiaries")],j))
-if(i)B.c.C(a2,A.a([B.a7,A.cq(a4,B.dI,a4,A.aR(B.ds,B.dm,a4,18),a4,a4,new A.avV(q,b2,b0,a7),B.Y,a4,a4,"Delete Combined Workflow (Make Inactive)")],j))
+if(a8)B.c.C(a2,A.a([B.a7,A.cq(a4,B.dI,a4,A.aR(B.o4,B.b5,a4,18),a4,a4,new A.avU(q,b2,b0),B.Y,a4,a4,"Edit Beneficiaries"),B.a7,A.cq(a4,B.dI,a4,A.aR(B.ds,B.dm,a4,18),a4,a4,new A.avV(q,b2,b0,a7),B.Y,a4,a4,"Delete Combined Group / Workflow")],j))
 return A.aWl(A.a([g,e,a9,f,d,c,b,A.hL(A.Z(a2,B.j,B.e,B.A,a4))],t.sa),a4,!1)},
 $S:219}
 A.avA.prototype={
