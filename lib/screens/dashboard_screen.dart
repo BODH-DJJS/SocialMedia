@@ -3956,15 +3956,14 @@ class _DashboardScreenState extends State<DashboardScreen>
             ),
           ),
           actions: [
-            if (isInitialized)
-              TextButton.icon(
-                icon: const Icon(Icons.delete_outline, color: Colors.red, size: 18),
-                label: const Text('Delete Combined Post', style: TextStyle(color: Colors.red)),
-                onPressed: () {
-                  Navigator.pop(ctx);
-                  _confirmDeleteCombinedWorkflow(group, provider, context.read<AuthProvider>());
-                },
-              ),
+            TextButton.icon(
+              icon: const Icon(Icons.delete_outline, color: Colors.red, size: 18),
+              label: const Text('Delete Combined Post', style: TextStyle(color: Colors.red)),
+              onPressed: () {
+                Navigator.pop(ctx);
+                _confirmDeleteCombinedWorkflow(group, provider, context.read<AuthProvider>());
+              },
+            ),
             TextButton.icon(
               icon: const Icon(Icons.edit, size: 18, color: Colors.purple),
               label: const Text('Edit Group (Posts & Name)', style: TextStyle(color: Colors.purple)),
@@ -4820,12 +4819,10 @@ class _DashboardScreenState extends State<DashboardScreen>
                                 constraints: const BoxConstraints(minWidth: 26, minHeight: 26),
                                 onPressed: () => _showEditCombinedBeneficiariesDialog(group, provider),
                               ),
-                            ],
-                            if (isInitialized) ...[
                               const SizedBox(width: 4),
                               IconButton(
                                 icon: Icon(Icons.delete_outline, size: 18, color: Colors.red.shade600),
-                                tooltip: 'Delete Combined Workflow (Make Inactive)',
+                                tooltip: 'Delete Combined Group / Workflow',
                                 padding: EdgeInsets.zero,
                                 constraints: const BoxConstraints(minWidth: 26, minHeight: 26),
                                 onPressed: () => _confirmDeleteCombinedWorkflow(group, provider, context.read<AuthProvider>()),
@@ -5306,12 +5303,11 @@ class _DashboardScreenState extends State<DashboardScreen>
                       );
                     },
                   ),
-                  if (isInitialized)
-                    IconButton(
-                      icon: Icon(Icons.delete_outline, color: Colors.red.shade600),
-                      tooltip: 'Delete Combined Post (Make Inactive)',
-                      onPressed: () => _confirmDeleteCombinedWorkflow(group, provider, auth),
-                    ),
+                  IconButton(
+                    icon: Icon(Icons.delete_outline, color: Colors.red.shade600),
+                    tooltip: 'Delete Combined Post (Ungroup / Make Inactive)',
+                    onPressed: () => _confirmDeleteCombinedWorkflow(group, provider, auth),
+                  ),
                 ],
               ),
               const SizedBox(height: 10),
