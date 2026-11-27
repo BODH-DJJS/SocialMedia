@@ -169,9 +169,9 @@ class EventProvider with ChangeNotifier {
             matched.sort(comparePostNumbers);
             int totalM = 0, totalF = 0, totalC = 0;
             for (final m in matched) {
-              totalM += (m['Male'] ?? m['male'] ?? 0) as int;
-              totalF += (m['Female'] ?? m['female'] ?? 0) as int;
-              totalC += (m['Children'] ?? m['children'] ?? 0) as int;
+              totalM += int.tryParse((m['Male'] ?? m['male'] ?? '0').toString()) ?? 0;
+              totalF += int.tryParse((m['Female'] ?? m['female'] ?? '0').toString()) ?? 0;
+              totalC += int.tryParse((m['Children'] ?? m['children'] ?? '0').toString()) ?? 0;
             }
             final firstP = matched.first;
             merged.addAll(firstP);
@@ -181,9 +181,13 @@ class EventProvider with ChangeNotifier {
             merged['theme'] = tPostNo;
             merged['Theme'] = tPostNo;
             merged['male'] = totalM;
+            merged['Male'] = totalM;
             merged['female'] = totalF;
+            merged['Female'] = totalF;
             merged['children'] = totalC;
+            merged['Children'] = totalC;
             merged['total_beneficiary'] = totalM + totalF + totalC;
+            merged['TotalBeneficiary'] = totalM + totalF + totalC;
             merged['is_combined'] = true;
             merged['isCombined'] = true;
             merged['combined_posts'] = matched;
@@ -1165,10 +1169,24 @@ class EventProvider with ChangeNotifier {
         merged['PostType'] = postType;
         merged['MediaMode'] = mediaMode;
         if (isCombinedPost) {
+          int totalM = 0, totalF = 0, totalC = 0;
+          for (final m in matchedPosts) {
+            totalM += int.tryParse((m['Male'] ?? m['male'] ?? '0').toString()) ?? 0;
+            totalF += int.tryParse((m['Female'] ?? m['female'] ?? '0').toString()) ?? 0;
+            totalC += int.tryParse((m['Children'] ?? m['children'] ?? '0').toString()) ?? 0;
+          }
           merged['is_combined'] = true;
           merged['isCombined'] = true;
           merged['theme'] = postNo;
           merged['Theme'] = postNo;
+          merged['male'] = totalM;
+          merged['Male'] = totalM;
+          merged['female'] = totalF;
+          merged['Female'] = totalF;
+          merged['children'] = totalC;
+          merged['Children'] = totalC;
+          merged['total_beneficiary'] = totalM + totalF + totalC;
+          merged['TotalBeneficiary'] = totalM + totalF + totalC;
           merged['combined_posts'] = matchedPosts;
           merged['CombinedPosts'] = matchedPosts;
         }
