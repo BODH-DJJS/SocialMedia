@@ -656,9 +656,48 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
   Future<void> _submit() async {
     final provider = context.read<EventProvider>();
     final isCombined = _postData['isCombined'] == true;
-    final postNo = isCombined ? _postData['postNo']?.toString() : _postData['PostNo']?.toString();
+    final postNo = (isCombined ? _postData['postNo']?.toString() : _postData['PostNo']?.toString())?.trim() ?? '';
     final isInitialized = _postData['isInitialized'] == true;
-    if (postNo == null) return;
+
+    if (!isInitialized && postNo.isNotEmpty) {
+      if (!isCombined) {
+        final matchingRaw = provider.rawPosts.where((p) => (p['PostNo'] ?? p['post_no'])?.toString().trim() == postNo).toList();
+        final existingGroup = matchingRaw.isNotEmpty ? ((matchingRaw.first['GroupID'] ?? matchingRaw.first['group_id'])?.toString().trim() ?? '') : '';
+        if (existingGroup.isNotEmpty) {
+          showDialog(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              title: const Text('Duplicate Assignment Blocked'),
+              content: Text('Post #$postNo is already part of Combined Group "$existingGroup" and cannot be assigned individually.\n\nPlease manage it from the Combined tab or remove it from the group first.'),
+              actions: [ElevatedButton(onPressed: () => Navigator.pop(ctx), child: const Text('OK'))],
+            ),
+          );
+          return;
+        }
+      } else {
+        final memberPostNos = provider.rawPosts
+            .where((p) => (p['GroupID'] ?? p['group_id'])?.toString().trim() == postNo)
+            .map((p) => (p['PostNo'] ?? p['post_no'])?.toString().trim() ?? '')
+            .where((n) => n.isNotEmpty)
+            .toSet();
+        final dupMember = memberPostNos.firstWhere(
+          (mNo) => provider.events.any((t) => t.postNo.trim() == mNo),
+          orElse: () => '',
+        );
+        if (dupMember.isNotEmpty) {
+          showDialog(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              title: const Text('Duplicate Assignment Blocked'),
+              content: Text('Member Post #$dupMember already has an active Individual workflow.\n\nPlease delete its Individual workflow before assigning this Combined Group.'),
+              actions: [ElevatedButton(onPressed: () => Navigator.pop(ctx), child: const Text('OK'))],
+            ),
+          );
+          return;
+        }
+      }
+    }
+    if (postNo.isEmpty) return;
     
     setState(() => _isLoading = true);
 

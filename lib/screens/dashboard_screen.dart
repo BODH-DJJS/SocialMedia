@@ -2280,6 +2280,25 @@ class _DashboardScreenState extends State<DashboardScreen>
         _showModificationLockedPopup('Post #$pNo', lockedStage);
         return;
       }
+      final hasIndivTasks = provider.events.any((t) => t.postNo.trim() == pNo);
+      if (hasIndivTasks) {
+        _showDuplicateAssignmentPopup(
+          'Duplicate Assignment Blocked',
+          'Post #$pNo already has an active Individual workflow.\n\nPlease delete its Individual workflow first before combining it into a group.',
+        );
+        return;
+      }
+      final existingGroup = provider.rawPosts
+          .where((p) => (p['PostNo'] ?? p['post_no'])?.toString().trim() == pNo)
+          .map((p) => (p['GroupID'] ?? p['group_id'])?.toString().trim() ?? '')
+          .firstWhere((g) => g.isNotEmpty, orElse: () => '');
+      if (existingGroup.isNotEmpty) {
+        _showDuplicateAssignmentPopup(
+          'Already in Combined Group',
+          'Post #$pNo is already part of "$existingGroup".\n\nRemove it from that group first before creating a new group.',
+        );
+        return;
+      }
     }
 
     // Auto-generate default name: format Combined_Post(373, 374) or Combined Post(45, 56, 78) - branch name not required
@@ -3383,6 +3402,41 @@ class _DashboardScreenState extends State<DashboardScreen>
     );
   }
 
+  void _showDuplicateAssignmentPopup(String title, String message) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Icon(Icons.content_copy_rounded, color: Colors.red.shade700, size: 26),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                title,
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          message,
+          style: const TextStyle(fontSize: 14, height: 1.4),
+        ),
+        actions: [
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red.shade700,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _showEditCombinedGroupDialog(Map<String, dynamic> group, EventProvider provider, AuthProvider auth) {
     final oldGroupId = group['GroupID']?.toString() ?? '';
     final lockedStage = _getModificationLockStage(oldGroupId, provider);
@@ -3586,6 +3640,15 @@ class _DashboardScreenState extends State<DashboardScreen>
                     if (addLock != null) {
                       Navigator.pop(ctx);
                       _showModificationLockedPopup('Post #$pNo', addLock);
+                      return;
+                    }
+                    final hasIndivTasks = provider.events.any((t) => t.postNo.trim() == pNo);
+                    if (hasIndivTasks) {
+                      Navigator.pop(ctx);
+                      _showDuplicateAssignmentPopup(
+                        'Duplicate Assignment Blocked',
+                        'Post #$pNo already has an active Individual workflow.\n\nPlease delete its Individual workflow first before adding it to this combined group.',
+                      );
                       return;
                     }
                   }
